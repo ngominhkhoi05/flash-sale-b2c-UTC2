@@ -71,7 +71,7 @@ logging:
 
 # --- Cấu hình JWT (JSON Web Token) ---
 jwt:
-  secret: ${JWT_SECRET:}
+  secret: ${JWT_SECRET:037f7fe6a78573fa5da54a56894babbc65a04cd73beb0fd7e37891658ffe668d65ae4ab65d3f74a7f60b0b98773307c1d8f870c21d33f4c82af0be34d7c11a7e}
   expiration-ms: ${JWT_EXPIRATION_MS:3600000} # 1 giờ
   refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000} # 7 ngày
 
