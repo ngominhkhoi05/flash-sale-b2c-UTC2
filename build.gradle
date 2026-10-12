@@ -79,4 +79,10 @@ compileJava {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	// Supabase Pooler (IPv4) + DbCleaner TRUNCATE cần serial forks.
+	// Mặc định Gradle chạy parallel — gây context load fail ở fork đầu,
+	// Spring's failure-threshold(1) skip tất cả instance còn lại → fail toàn bộ.
+	// forkEvery = 1L: mỗi test class chạy trong JVM riêng (an toàn cho full Spring context).
+	maxParallelForks = 1
+	forkEvery = 1L
 }
