@@ -3,6 +3,7 @@ package com.b2c.flash_sale_b2c_UTC2.store.service;
 import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.CreateStoreRequest;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.FeaturedStoreResponse;
+import com.b2c.flash_sale_b2c_UTC2.store.dto.SidebarSummaryResponse;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.StoreResponse;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.UpdateStoreRequest;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.UpdateStoreStatusRequest;
@@ -28,6 +29,12 @@ import com.b2c.flash_sale_b2c_UTC2.user.repository.UserRepository;
 import com.b2c.flash_sale_b2c_UTC2.user.repository.UserRoleRepository;
 import com.b2c.flash_sale_b2c_UTC2.wallet.entity.Wallet;
 import com.b2c.flash_sale_b2c_UTC2.wallet.repository.WalletRepository;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.repository.FlashSaleItemRepository;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.repository.FlashSaleSlotRepository;
+import com.b2c.flash_sale_b2c_UTC2.order.repository.OrderRepository;
+import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductRepository;
+import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductVariantRepository;
+import com.b2c.flash_sale_b2c_UTC2.review.repository.ProductReviewRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,6 +42,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 
 @Slf4j
@@ -49,6 +58,12 @@ public class StoreServiceImpl implements StoreService {
     private final WalletRepository walletRepository;
     private final AddressRepository addressRepository;
     private final ImageRepository imageRepository;
+    private final ProductRepository productRepository;
+    private final FlashSaleItemRepository flashSaleItemRepository;
+    private final FlashSaleSlotRepository flashSaleSlotRepository;
+    private final OrderRepository orderRepository;
+    private final ProductVariantRepository productVariantRepository;
+    private final ProductReviewRepository productReviewRepository;
     private final StoreMapper storeMapper;
     private final AddressMapper addressMapper;
     private final ImageService imageService;
@@ -345,5 +360,72 @@ public class StoreServiceImpl implements StoreService {
             resp.setLogoUrl(logo.getUrl());
         }
         return resp;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SidebarSummaryResponse getSidebarSummary(Long userId) {
+        Store store = getStoreByUserIdOrThrow(userId);
+        Long storeId = store.getId();
+
+        // Date boundaries
+        ZoneId zone = ZoneId.systemDefault();
+        LocalDate today = LocalDate.now(zone);
+        LocalDate monthStart = today.withDayOfMonth(1);
+        Instant todayStart = today.atStartOfDay(zone).toInstant();
+        Instant todayEnd = today.plusDays(1).atStartOfDay(zone).toInstant();
+        Instant monthStartInst = monthStart.atStartOfDay(zone).toInstant();
+
+        // Product count
+        long totalProducts = productRepository.countByStoreIdAndStatus(storeId, "ACTIVE");
+
+        // Active flash sales
+        long activeFlashSales = flashSaleItemRepository.countActiveByStoreId(storeId);
+
+        // Order counts
+        long pendingOrders = orderRepository.countByStoreIdAndStatus(storeId, "PENDING_PAYMENT");
+
+        // Today's orders
+        long todayOrders = orderRepository.countByStoreIdAndCreatedAtBetween(storeId, todayStart, todayEnd);
+
+        // Today's revenue (CONFIRMED + COMPLETED)
+        List<String> revenueStatuses = List.of("CONFIRMED", "COMPLETED");
+        BigDecimal todayRevenue = orderRepository.sumTotalAmountByStoreIdAndCreatedAtBetweenAndStatusIn(
+                storeId, todayStart, todayEnd, revenueStatuses);
+        if (todayRevenue == null) {
+            todayRevenue = BigDecimal.ZERO;
+        }
+
+        // Month revenue
+        BigDecimal monthRevenue = orderRepository.sumTotalAmountByStoreIdAndCreatedAtBetweenAndStatusIn(
+                storeId, monthStartInst, todayEnd, revenueStatuses);
+        if (monthRevenue == null) {
+            monthRevenue = BigDecimal.ZERO;
+        }
+
+        // Ratings
+        Double ratingAvg = productReviewRepository.avgRatingByStoreId(storeId);
+        if (ratingAvg == null) {
+            ratingAvg = 0.0;
+        }
+        long ratingCount = productReviewRepository.countByStoreId(storeId);
+
+        // Low stock products
+        long lowStockProducts = productVariantRepository.countByProductStoreIdAndStockQuantityLessThan(storeId, 10);
+
+        return SidebarSummaryResponse.builder()
+                .totalProducts(totalProducts)
+                .activeFlashSales(activeFlashSales)
+                .pendingOrders(pendingOrders)
+                .unpaidOrders(pendingOrders) // same as pending for this API design
+                .todayOrders(todayOrders)
+                .todayRevenue(todayRevenue)
+                .monthRevenue(monthRevenue)
+                .ratingAvg(ratingAvg)
+                .ratingCount(ratingCount)
+                .lowStockProducts(lowStockProducts)
+                .storeStatus(store.getStatus())
+                .tier(store.getTier().name())
+                .build();
     }
 }

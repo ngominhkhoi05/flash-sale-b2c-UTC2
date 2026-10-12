@@ -101,4 +101,9 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     Object[] findPriceRangeByProductId(@Param("productId") Long productId);
 
     boolean existsByIdAndStatus(Long id, String status);
+
+    /**
+     * Count active products for a store.
+     */
+    long countByStoreIdAndStatus(Long storeId, String status);
 }

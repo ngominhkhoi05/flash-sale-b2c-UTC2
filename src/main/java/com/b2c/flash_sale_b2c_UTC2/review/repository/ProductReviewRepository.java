@@ -62,4 +62,17 @@ public interface ProductReviewRepository extends JpaRepository<ProductReview, Lo
      */
     @Query("SELECT count(DISTINCT r) FROM ProductReview r JOIN com.b2c.flash_sale_b2c_UTC2.image.entity.Image i ON i.ownerType = 'REVIEW' AND i.ownerId = r.id WHERE r.product.id = :productId AND r.status = 'VISIBLE' AND i.status = 'ACTIVE'")
     long countByProductIdWithMedia(@Param("productId") Long productId);
+
+    /**
+     * Average rating for all visible reviews of all products belonging to a store.
+     * Returns null if no reviews exist.
+     */
+    @Query("SELECT AVG(r.rating) FROM ProductReview r WHERE r.product.store.id = :storeId AND r.status = 'VISIBLE'")
+    Double avgRatingByStoreId(@Param("storeId") Long storeId);
+
+    /**
+     * Count of visible reviews for all products belonging to a store.
+     */
+    @Query("SELECT COUNT(r) FROM ProductReview r WHERE r.product.store.id = :storeId AND r.status = 'VISIBLE'")
+    long countByStoreId(@Param("storeId") Long storeId);
 }
