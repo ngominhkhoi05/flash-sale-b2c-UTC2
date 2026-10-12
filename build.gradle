@@ -49,6 +49,8 @@ dependencies {
 	annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
 	annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
 
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'org.springframework.boot:spring-boot-test-autoconfigure'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-flyway-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
@@ -77,4 +79,10 @@ compileJava {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	// Supabase Pooler (IPv4) + DbCleaner TRUNCATE cần serial forks.
+	// Mặc định Gradle chạy parallel — gây context load fail ở fork đầu,
+	// Spring's failure-threshold(1) skip tất cả instance còn lại → fail toàn bộ.
+	// forkEvery = 1L: mỗi test class chạy trong JVM riêng (an toàn cho full Spring context).
+	maxParallelForks = 1
+	forkEvery = 1L
 }

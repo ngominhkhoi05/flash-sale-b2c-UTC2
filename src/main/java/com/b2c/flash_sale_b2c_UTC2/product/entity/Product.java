@@ -58,6 +58,10 @@ public class Product {
     @Builder.Default
     private String status = "ACTIVE";
 
+    @Column(name = "total_sold")
+    @Builder.Default
+    private Integer totalSold = 0;
+
     @Column(name = "created_at")
     private Instant createdAt;
 }

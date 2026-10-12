@@ -1,0 +1,11 @@
+-- V6: Create store_followers table
+CREATE TABLE store_followers (
+  id BIGSERIAL PRIMARY KEY,
+  store_id BIGINT NOT NULL REFERENCES stores(id) ON DELETE CASCADE,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_store_followers_store_user UNIQUE (store_id, user_id)
+);
+
+CREATE INDEX idx_store_followers_store ON store_followers(store_id);
+CREATE INDEX idx_store_followers_user ON store_followers(user_id);

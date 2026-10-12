@@ -1,0 +1,35 @@
+-- ===================================================================
+-- Flash Sale B2C - UTC2 Database Migration V5
+-- Create banners table for homepage carousel/hero/freeship banner.
+-- Module: banner (B2C storefront).
+-- ===================================================================
+
+CREATE TABLE banners (
+    id          BIGSERIAL       PRIMARY KEY,
+    type        VARCHAR(20)     NOT NULL,
+    position    INT             NOT NULL DEFAULT 0,
+    image_url   VARCHAR(500)    NOT NULL,
+    image_alt   VARCHAR(255),
+    cta_href    VARCHAR(255),
+    cta_text    VARCHAR(50),
+    is_active   BOOLEAN         NOT NULL DEFAULT TRUE,
+    start_date  TIMESTAMPTZ,
+    end_date    TIMESTAMPTZ,
+    created_at  TIMESTAMPTZ     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT chk_banners_type CHECK (
+        type IN ('HERO','FREESHIP','VOUCHER_NEW_SHOP','PROMOTION')
+    ),
+    CONSTRAINT chk_banners_position CHECK (position >= 0),
+    CONSTRAINT chk_banners_date_range CHECK (
+        start_date IS NULL OR end_date IS NULL OR start_date <= end_date
+    )
+);
+
+-- Index for findActiveBanners query (is_active, start_date, end_date).
+CREATE INDEX idx_banners_active_window
+    ON banners (is_active, start_date, end_date);
+
+-- Index for query by type + position.
+CREATE INDEX idx_banners_type_position
+    ON banners (type, position);
