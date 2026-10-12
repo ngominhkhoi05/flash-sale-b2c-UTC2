@@ -137,4 +137,30 @@ class UserServiceTest {
         assertEquals(UserErrorCode.OLD_PASSWORD_INCORRECT.getCode(), exception.getErrorCode().getCode());
         verify(userRepository, never()).save(any(User.class));
     }
+
+    @Test
+    @DisplayName("Lấy hồ sơ người dùng thất bại khi không tìm thấy USER_NOT_FOUND (404)")
+    void getProfile_ShouldThrowException_WhenUserNotFound() {
+        when(userRepository.findById(999L)).thenReturn(Optional.empty());
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> userService.getProfile(999L));
+        assertEquals(UserErrorCode.USER_NOT_FOUND.getCode(), exception.getErrorCode().getCode());
+    }
+
+    @Test
+    @DisplayName("Cập nhật hồ sơ thất bại khi số điện thoại bị trùng với người dùng khác")
+    void updateProfile_ShouldThrowException_WhenPhoneAlreadyExists() {
+        UpdateProfileRequest request = UpdateProfileRequest.builder()
+                .fullName("User Test")
+                .phone("0988888888")
+                .build();
+
+        User anotherUser = User.builder().id(2L).phone("0988888888").build();
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(sampleUser));
+        when(userRepository.findByPhone("0988888888")).thenReturn(Optional.of(anotherUser));
+
+        assertThrows(BusinessException.class, () -> userService.updateProfile(1L, request));
+        verify(userRepository, never()).save(any(User.class));
+    }
 }
