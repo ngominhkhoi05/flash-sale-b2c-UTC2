@@ -532,7 +532,13 @@ erDiagram
   | `description` | `TEXT` | NULL | Giới thiệu gian hàng |
   | `default_commission_rate` | `DECIMAL(5,4)` | DEFAULT 0.0500 | Tỷ lệ hoa hồng riêng (VD: `0.0500` = 5.00%) |
   | `status` | `VARCHAR(20)` | DEFAULT 'PENDING' | `PENDING`, `APPROVED`, `BANNED` |
+  | `tier` | `VARCHAR(20)` | **NOT NULL, DEFAULT 'NORMAL'** | Hạng gian hàng: `NORMAL`, `OFFICIAL_MALL`, `PREFERRED` (V8) |
+  | `last_active_at` | `TIMESTAMPTZ` | NULL | Thời điểm hoạt động cuối của gian hàng (V8) |
   | `created_at` | `TIMESTAMPTZ` | DEFAULT CURRENT_TIMESTAMP | Ngày đăng ký mở gian hàng |
+* **Ràng buộc toàn vẹn (V8):**
+  * `CHECK (tier IN ('NORMAL', 'OFFICIAL_MALL', 'PREFERRED'))`
+* **Chỉ mục tối ưu (V8):**
+  * `CREATE INDEX idx_stores_tier ON stores(tier) WHERE tier <> 'NORMAL';` — chỉ index hàng `OFFICIAL_MALL`/`PREFERRED`
 
 #### 10. Bảng `wallets` (Ví doanh thu của Gian hàng)
 * **Chức năng nghiệp vụ:** Quản lý số dư tiền bán hàng của Seller sau khi sàn đã cấn trừ hoa hồng.
@@ -574,8 +580,11 @@ erDiagram
   | `description` | `TEXT` | NULL | Bài viết mô tả chi tiết thông số |
 | `tier_variation_configs` | **`JSONB`** | NULL | Cấu hình các tầng lựa chọn (VD: `[{"name": "Màu sắc", "options": ["Đen", "Trắng", "Vàng"]}, {"name": "Kích thước", "options": ["S", "M", "L"]}]`). NULL nếu là hàng đơn không có phân loại |
 | `total_sold` | `INT` | DEFAULT 0 | Tổng số lượng đã bán (cập nhật khi đơn hàng COMPLETED). Dùng cho FE hiển thị "Đã bán X" |
+| `slug` | `VARCHAR(255)` | NULL | Chuỗi định danh URL SEO (VD: "ao-thun-unisex-utc2"). Backfill từ `name` bằng REGEXP_REPLACE (V8) |
 | `status` | `VARCHAR(20)` | DEFAULT 'ACTIVE' | `ACTIVE`, `INACTIVE`, `OUT_OF_STOCK` |
 | `created_at` | `TIMESTAMPTZ` | DEFAULT CURRENT_TIMESTAMP | Ngày tạo sản phẩm |
+* **Chỉ mục tối ưu (V8):**
+  * `CREATE UNIQUE INDEX uq_products_slug ON products(slug) WHERE slug IS NOT NULL;` — partial unique index, cho phép nhiều product có slug NULL
 
 #### 13. Bảng `product_variants` (Chi tiết từng biến thể phân loại - SKU)
 * **Chức năng nghiệp vụ:** Quản lý từng biến thể SKU cụ thể sinh ra từ tổ hợp lựa chọn (VD: $3 \text{ màu} \times 3 \text{ size} = 9 \text{ SKUs}$). Là nơi thực tế quản lý mã định danh SKU, giá bán lẻ gốc và số lượng tồn kho theo chuẩn 3NF.

@@ -1911,7 +1911,7 @@ Nếu có lỗi:
 
 | Method | Endpoint | Access | Mô tả |
 |---|---|---|---|
-| `POST` | `/api/v1/stores` | Authenticated | Tạo Store (status `PENDING`, tạo Wallet 1-1) |
+| `POST` | `/api/v1/stores` | Authenticated | Tạo Store (status `PENDING`, tier `NORMAL`, tạo Wallet 1-1) |
 | `GET` | `/api/v1/stores/me` | Seller | Store của tôi |
 | `PUT` | `/api/v1/stores/me` | Seller | Cập nhật Store |
 | `GET` | `/api/v1/stores/{id}` | Public | Store public |
@@ -1921,6 +1921,8 @@ Nếu có lỗi:
 | `PUT` | `/api/v1/stores/me/addresses/{id}` | Seller | Cập nhật kho |
 | `DELETE` | `/api/v1/stores/me/addresses/{id}` | Seller | Xóa kho |
 | `PATCH` | `/api/v1/stores/me/addresses/{id}/default` | Seller | Set kho mặc định |
+
+> **V8 fields**: `Store.tier` (`NORMAL`, `OFFICIAL_MALL`, `PREFERRED`) + `Store.lastActiveAt` (Instant, nullable) — dùng cho Store Extended Response (Subplan 5).
 
 ### 46.7 Category (`/api/v1/categories` & `/api/v1/admin/categories`)
 
@@ -1944,6 +1946,8 @@ Nếu có lỗi:
 | `PUT` | `/api/v1/seller/products/{id}` | Seller | Cập nhật SPU + SKU. Chặn sửa giá/giảm tồn kho nếu SKU trong Flash Sale `ACTIVE`. Optimistic lock (`@Version`). |
 | `DELETE` | `/api/v1/seller/products/{id}` | Seller | Soft delete nếu có order/flash_sale reference, hard delete nếu chưa |
 | `PATCH` | `/api/v1/seller/products/{id}/status` | Seller | Đổi status `ACTIVE` / `INACTIVE` / `OUT_OF_STOCK` |
+
+> **V8 field**: `Product.slug` (`VARCHAR(255)`, nullable, unique partial index) — dùng cho SEO URL, backfill từ `name`.
 
 ### 46.9 Image (`/api/v1/images` & `/api/v1/admin/images`)
 
