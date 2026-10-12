@@ -203,6 +203,8 @@ erDiagram
 | 23 | **`cart_items`** | Chi tiết từng biến thể SKU nhặt vào giỏ hàng (`cart_id`, `variant_id`, `quantity`). |
 | 24 | **`product_reviews`** | Đánh giá sản phẩm đã mua (1-5 sao, nhận xét, `order_item_id UNIQUE` đảm bảo Verified Purchase 1-1, lưu `product_id` để tối ưu truy vấn đọc). Album ảnh feedback lưu ở bảng `images`. |
 | 25 | **`images`** | Quản lý ảnh đa đối tượng Polymorphic với Cloudinary (avatar User, logo Store, gallery Product/Variant, album Review). Cặp `(owner_type, owner_id)` tham chiếu mềm tới 5 bảng owner. Partial Unique Index cho User (1 avatar), Store (1 logo), Product/Variant (1 primary). Soft delete (`status='INACTIVE'`) + async Cloudinary cleanup + scheduled job dọn record >30 ngày. |
+| 26 | **`banners`** | Banner homepage cho B2C Storefront (HERO carousel, FREESHIP, VOUCHER_NEW_SHOP, PROMOTION). Hỗ trợ lên lịch hiển thị qua `start_date`/`end_date`, sắp xếp theo `position`. |
+| 27 | **`store_followers`** | Theo dõi gian hàng — cho phép Buyer theo dõi Store để nhận thông báo. Unique constraint `(store_id, user_id)` đảm bảo mỗi user chỉ theo dõi 1 store 1 lần. |
 
 ---
 
