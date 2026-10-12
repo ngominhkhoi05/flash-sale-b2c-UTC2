@@ -816,7 +816,7 @@ erDiagram
   | `order_item_id` | `BIGINT` | **NOT NULL, UNIQUE, FK** $\rightarrow$ `order_items(id)` ON DELETE CASCADE | Món hàng cụ thể trong đơn đã hoàn tất |
   | `rating` | `SMALLINT` | **NOT NULL, CHECK (rating >= 1 AND rating <= 5)** | Điểm số đánh giá (1 đến 5 sao) |
   | `comment` | `TEXT` | NULL | Lời nhận xét, trải nghiệm sản phẩm |
-  | `image_urls` | `JSONB` | NULL | Mảng URL ảnh thực tế do khách chụp feedback (VD: `["url1", "url2"]`) |
+  | `image_urls` | `VARCHAR` | NULL | **Đã xóa V4** — Album ảnh review dùng bảng `images` với `owner_type='REVIEW'` |
   | `seller_reply` | `TEXT` | NULL | Lời phản hồi chăm sóc khách hàng của chủ Shop |
   | `seller_reply_at` | `TIMESTAMPTZ` | NULL | Thời điểm chủ Shop gửi phản hồi |
   | `status` | `VARCHAR(20)` | DEFAULT 'VISIBLE' | Trạng thái: `VISIBLE`, `HIDDEN` (nếu vi phạm từ ngữ) |

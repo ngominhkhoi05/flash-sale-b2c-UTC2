@@ -834,16 +834,16 @@ Khi tạo Review phải kiểm tra:
 
 `product_id` có thể được giữ như **intentional denormalization / read optimization**.
 
-### Endpoint (đang implement)
+### Endpoint (Subplan 3 implemented: GET public)
 
 ```text
-POST   /api/v1/products/{productId}/reviews    # Authenticated
-GET    /api/v1/products/{productId}/reviews    # Public, paging
-GET    /api/v1/users/me/reviews                # Buyer xem review của mình
-DELETE /api/v1/reviews/{id}                    # Owner hoặc Admin
+POST   /api/v1/products/{productId}/reviews    # Authenticated (placeholder)
+GET    /api/v1/products/{productId}/reviews    # Public, paging, filter by rating/hasMedia, ratingDistribution + mediaCount (Subplan 3)
+GET    /api/v1/users/me/reviews                # Buyer xem review của mình (placeholder)
+DELETE /api/v1/reviews/{id}                    # Owner hoặc Admin (placeholder)
 ```
 
-> Lưu ý: `review/controller/` chỉ có `.gitkeep`. Sẽ bổ sung khi implement.
+> `review/controller/ProductReviewPublicController.java` đã implement GET public endpoint (Subplan 3). Review album ảnh dùng bảng `images` (owner_type=`REVIEW`) — không còn `product_reviews.image_urls JSONB` (đã xóa V4).
 
 ---
 

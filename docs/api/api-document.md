@@ -873,6 +873,118 @@ Lấy danh sách sản phẩm đề xuất theo 3 tab cho trang chủ (For You /
 
 ---
 
+## 13b. Product Review Module `/api/v1/products/{id}/reviews`
+
+> **Public API** · **Tag Swagger**: `Product Review - Public API`
+
+### Endpoint
+
+| Method | Endpoint | Access | Mô tả |
+|---|---|---|---|
+| `GET` | `/api/v1/products/{productId}/reviews` | Public | Danh sách review + rating distribution (Subplan 3) |
+| `POST` | `/api/v1/products/{productId}/reviews` | Authenticated | Tạo review (placeholder) |
+
+### 13b.1 `GET /api/v1/products/{productId}/reviews`
+
+Lấy danh sách review công khai của sản phẩm. Hỗ trợ lọc theo `rating` và `hasMedia`. Trả về kèm `ratingDistribution` (5 mức) và `mediaCount` (tổng số review có ảnh). Cả `ratingDistribution` và `mediaCount` luôn trả về full count — không bị ảnh hưởng bởi filter.
+
+**Path params:**
+
+| Field | Type | Required | Mô tả |
+|---|---|---|---|
+| `productId` | `long` | Có | ID sản phẩm |
+
+**Query params:**
+
+| Field | Type | Required | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `rating` | `integer` | Không | – | Lọc theo số sao: `1`–`5` |
+| `hasMedia` | `boolean` | Không | – | `true` = chỉ review có ảnh |
+| `page` | `integer` | Không | `0` | Trang (0-indexed) |
+| `size` | `integer` | Không | `10` | Số review mỗi trang (max 100) |
+| `sort` | `string` | Không | `createdAt,desc` | Sắp xếp: `createdAt,desc` hoặc `createdAt,asc` |
+
+**Response (`ProductReviewsPageResponse`):**
+
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "rating": 5,
+      "reviewText": "Sản phẩm rất tốt, giao hàng nhanh",
+      "username": "Nguyễn Văn A",
+      "variantSku": "AT-DEN-M",
+      "variantAttributes": { "Màu sắc": "Đen", "Size": "M" },
+      "albumUrls": [
+        "https://res.cloudinary.com/.../review1.jpg",
+        "https://res.cloudinary.com/.../review2.jpg"
+      ],
+      "sellerReply": "Cảm ơn bạn đã tin tưởng!",
+      "sellerRepliedAt": "2026-10-05T10:00:00.000Z",
+      "createdAt": "2026-10-03T08:30:00.000Z"
+    }
+  ],
+  "ratingDistribution": {
+    "stars5": 120,
+    "stars4": 45,
+    "stars3": 20,
+    "stars2": 8,
+    "stars1": 5
+  },
+  "mediaCount": 95,
+  "totalElements": 198,
+  "totalPages": 20,
+  "page": 0,
+  "size": 10
+}
+```
+
+**Response fields:**
+
+| Field | Type | Mô tả |
+|---|---|---|
+| `items` | `Array<ProductReviewResponse>` | Danh sách review |
+| `ratingDistribution` | `RatingDistributionDto` | Phân bố số sao (luôn đủ 5 mức, giá trị 0 nếu không có review sao đó) |
+| `mediaCount` | `long` | Tổng số review có ảnh (album), luôn full count |
+| `totalElements` | `long` | Tổng số review thỏa filter |
+| `totalPages` | `int` | Tổng số trang |
+| `page` | `int` | Trang hiện tại (0-indexed) |
+| `size` | `int` | Kích thước trang |
+
+**`ProductReviewResponse` fields:**
+
+| Field | Type | Mô tả |
+|---|---|---|
+| `id` | `long` | |
+| `rating` | `int` | Số sao: 1–5 |
+| `reviewText` | `String` | Nội dung review (nullable) |
+| `username` | `String` | Tên hiển thị của buyer (từ `users.full_name`) |
+| `variantSku` | `String` | SKU của variant đã mua (nullable) |
+| `variantAttributes` | `Map<String, String>` | Các thuộc tính của variant (nullable) |
+| `albumUrls` | `List<String>` | Danh sách ảnh album review (từ bảng `images`, owner_type=`REVIEW`) |
+| `sellerReply` | `String` | Phản hồi của seller (nullable) |
+| `sellerRepliedAt` | `Instant` | Thời gian seller phản hồi (nullable) |
+| `createdAt` | `Instant` | Thời gian tạo review |
+
+**`RatingDistributionDto` fields:**
+
+| Field | Type | Mô tả |
+|---|---|---|
+| `stars5` | `long` | Số review 5 sao |
+| `stars4` | `long` | Số review 4 sao |
+| `stars3` | `long` | Số review 3 sao |
+| `stars2` | `long` | Số review 2 sao |
+| `stars1` | `long` | Số review 1 sao |
+
+**Lỗi:**
+
+| HTTP | Code | ErrorCode | Message |
+|---|---|---|---|
+| 404 | `REVIEW_PRODUCT_NOT_FOUND` | Sản phẩm không tồn tại hoặc chưa được duyệt |
+
+---
+
 ## 14. Seller Product Module `/api/v1/seller/products`
 
 > Yêu cầu: **Role SELLER** · **Tag Swagger**: `Seller - Product Management API`
