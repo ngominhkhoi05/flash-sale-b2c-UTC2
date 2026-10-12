@@ -132,4 +132,50 @@ class AddressServiceTest {
         assertEquals(UserErrorCode.ADDRESS_ACCESS_DENIED.getCode(), exception.getErrorCode().getCode());
         verify(addressRepository, never()).delete(any());
     }
+
+    @Test
+    @DisplayName("Lấy danh sách địa chỉ của người dùng thành công")
+    void getUserAddresses_Success() {
+        when(addressRepository.findByUserId(1L)).thenReturn(new java.util.ArrayList<>(List.of(addressUser1)));
+        when(addressMapper.toResponseList(any())).thenReturn(List.of(AddressResponse.builder().id(100L).build()));
+
+        List<AddressResponse> responses = addressService.getUserAddresses(1L);
+
+        assertNotNull(responses);
+        assertEquals(1, responses.size());
+    }
+
+    @Test
+    @DisplayName("Cập nhật địa chỉ thành công khi là chủ sở hữu")
+    void updateAddress_Success() {
+        com.b2c.flash_sale_b2c_UTC2.user.dto.UpdateAddressRequest request = com.b2c.flash_sale_b2c_UTC2.user.dto.UpdateAddressRequest.builder()
+                .contactName("User Updated")
+                .phone("0999999999")
+                .isDefault(false)
+                .build();
+
+        when(addressRepository.findById(100L)).thenReturn(Optional.of(addressUser1));
+        when(addressRepository.save(any(Address.class))).thenReturn(addressUser1);
+        when(addressMapper.toResponse(any(Address.class))).thenReturn(AddressResponse.builder().id(100L).contactName("User Updated").build());
+
+        AddressResponse response = addressService.updateAddress(1L, 100L, request);
+
+        assertNotNull(response);
+        assertEquals("User Updated", response.getContactName());
+    }
+
+    @Test
+    @DisplayName("Thiết lập địa chỉ mặc định thành công")
+    void setDefaultAddress_Success() {
+        addressUser1.setIsDefault(false);
+        when(addressRepository.findById(100L)).thenReturn(Optional.of(addressUser1));
+        when(addressRepository.findByUserIdAndIsDefaultTrue(1L)).thenReturn(Optional.empty());
+        when(addressRepository.save(any(Address.class))).thenReturn(addressUser1);
+        when(addressMapper.toResponse(any(Address.class))).thenReturn(AddressResponse.builder().id(100L).isDefault(true).build());
+
+        AddressResponse response = addressService.setDefaultAddress(1L, 100L);
+
+        assertNotNull(response);
+        assertTrue(response.getIsDefault());
+    }
 }
