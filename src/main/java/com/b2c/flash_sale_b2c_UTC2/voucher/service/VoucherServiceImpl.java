@@ -185,4 +185,26 @@ public class VoucherServiceImpl implements VoucherService {
 
         return discount.min(subtotal).setScale(2, RoundingMode.HALF_UP);
     }
+
+    @Override
+    @Transactional
+    public void rollbackVoucherUsage(Long orderId) {
+        if (orderId == null) {
+            return;
+        }
+
+        voucherUsageRepository.findByOrderId(orderId).ifPresent(usage -> {
+            Voucher voucher = usage.getVoucher();
+            if (voucher != null) {
+                int currentUsed = voucher.getUsedQuantity() != null ? voucher.getUsedQuantity() : 1;
+                int newUsed = Math.max(0, currentUsed - 1);
+                voucher.setUsedQuantity(newUsed);
+                voucherRepository.save(voucher);
+                log.info("Bồi hoàn lượt dùng voucher id={}, code={}, usedQuantity giảm từ {} xuống {}",
+                        voucher.getId(), voucher.getCode(), currentUsed, newUsed);
+            }
+            voucherUsageRepository.delete(usage);
+            log.info("Đã xóa bản ghi voucher_usages liên kết với orderId={}", orderId);
+        });
+    }
 }
