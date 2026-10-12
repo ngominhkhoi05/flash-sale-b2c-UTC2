@@ -1,5 +1,6 @@
 package com.b2c.flash_sale_b2c_UTC2.product.dto;
 
+import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.ActiveFlashSaleDto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -30,23 +31,31 @@ public class ProductDetailResponse {
     private Instant createdAt;
     private List<ProductVariantResponse> variants;
 
-    // ─── Subplan 2: new fields for product detail gap ─────────────────────────────
-    /** Trung bình rating từ reviews VISIBLE (0.0 nếu không có review). */
+    // Subplan 2: new fields for product detail gap
+    /** Trung binh rating tu reviews VISIBLE (0.0 neu khong co review). */
     private Double ratingAvg;
-    /** Tổng số review VISIBLE. */
+    /** Tong so review VISIBLE. */
     private Integer ratingCount;
-    /** Tổng số đã bán (products.total_sold V7). */
+    /** Tong so da ban (products.total_sold V7). */
     private Integer soldCount;
-    /** Giá thấp nhất trong các variant ACTIVE. */
+    /** Gia thap nhat trong cac variant ACTIVE. */
     private BigDecimal minPrice;
-    /** Giá cao nhất trong các variant ACTIVE. */
+    /** Gia cao nhat trong cac variant ACTIVE. */
     private BigDecimal maxPrice;
     /**
-     * % giảm giá Flash Sale (làm tròn).
-     * null nếu sản phẩm không có Flash SaleItem ACTIVE.
-     * Tính: round((original - flashSale) / original * 100).
+     * % giam gia Flash Sale (lam tron).
+     * null neu san pham khong co Flash SaleItem ACTIVE.
+     * Tinh: round((original - flashSale) / original * 100).
      */
     private Integer discountPercent;
-    /** Danh sách ảnh sản phẩm (từ bảng images, sort theo displayOrder). */
+    /** Danh sach anh san pham (tu bang images, sort theo displayOrder). */
     private List<ProductImageDto> images;
+
+    // Part A Subplan 4: active flash sales list for product detail
+    /**
+     * Danh sach Flash Sale ACTIVE cua san pham nay.
+     * Populated in buildProductDetailResponse() via findActiveByProductId() + Redis stock.
+     * Sorted by flashSalePrice ASC.
+     */
+    private List<ActiveFlashSaleDto> flashSales;
 }

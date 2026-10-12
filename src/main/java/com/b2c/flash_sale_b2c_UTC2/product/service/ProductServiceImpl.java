@@ -2,6 +2,8 @@ package com.b2c.flash_sale_b2c_UTC2.product.service;
 
 import com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse;
 import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.ActiveFlashSaleDto;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.entity.FlashSaleItem;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.repository.FlashSaleItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType;
 import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
@@ -28,6 +30,8 @@ import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductRepository;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductVariantRepository;
 import com.b2c.flash_sale_b2c_UTC2.review.repository.ProductReviewRepository;
 import com.b2c.flash_sale_b2c_UTC2.store.entity.Store;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import com.b2c.flash_sale_b2c_UTC2.store.exception.StoreErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.store.repository.StoreRepository;
 import lombok.RequiredArgsConstructor;
@@ -61,6 +65,8 @@ public class ProductServiceImpl implements ProductService {
     private final ProductReviewRepository productReviewRepository;
     private final ProductVariantMapper productVariantMapper;
     private final ImageService imageService;
+
+    private final StringRedisTemplate redisTemplate;
 
     @Override
     @Transactional
@@ -462,12 +468,8 @@ public class ProductServiceImpl implements ProductService {
                 imageService.getPrimaryImage(ImageOwnerType.PRODUCT, productId));
 
         // Từng variant: 1 query / variant (chấp nhận N+1 nhỏ trong context detail)
-        Map<Long, String> variantImageMap = variants.stream()
-                .collect(Collectors.toMap(
-                                ProductVariant::getId,
-                                v -> nullSafeUrl(
-                                        imageService.getPrimaryImage(ImageOwnerType.VARIANT, v.getId())),
-                                (a, b) -> a));
+        // filterNullEntries prevents NPE in toMap when a variant has no image
+        Map<Long, String> variantImageMap = buildVariantImageMap(variants);
 
         List<ProductVariantResponse> variantResponses = variants.stream()
                 .map(v -> {
@@ -527,6 +529,9 @@ public class ProductServiceImpl implements ProductService {
                         .build())
                 .toList();
 
+        // Part A Subplan 4: populate active flash sales list
+        List<ActiveFlashSaleDto> flashSales = buildActiveFlashSales(activeItems);
+
         return ProductDetailResponse.builder()
                 .id(productId)
                 .storeId(product.getStore().getId())
@@ -548,11 +553,64 @@ public class ProductServiceImpl implements ProductService {
                 .maxPrice(maxPrice)
                 .discountPercent(discountPercent)
                 .images(images)
+                .flashSales(flashSales)
                 .build();
     }
 
     private String nullSafeUrl(com.b2c.flash_sale_b2c_UTC2.image.dto.ImageResponse r) {
         return r == null ? null : r.getUrl();
+    }
+
+    private Map<Long, String> buildVariantImageMap(List<ProductVariant> variants) {
+        Map<Long, String> result = new java.util.HashMap<>();
+        for (ProductVariant v : variants) {
+            String url = nullSafeUrl(imageService.getPrimaryImage(ImageOwnerType.VARIANT, v.getId()));
+            if (url != null) {
+                result.put(v.getId(), url);
+            }
+        }
+        return result;
+    }
+
+    private static final String STOCK_KEY_PREFIX = "flash_sale:stock:";
+
+    /**
+     * Build ActiveFlashSaleDto list from FlashSaleItem entities.
+     * Gets realtime stock from Redis with DB fallback.
+     */
+    private List<ActiveFlashSaleDto> buildActiveFlashSales(List<FlashSaleItem> items) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        return items.stream().map(item -> {
+            int displayStock = getRealtimeStock(item);
+            return ActiveFlashSaleDto.builder()
+                    .slotId(item.getSlot().getId())
+                    .slotStartTime(item.getSlot().getStartTime())
+                    .slotEndTime(item.getSlot().getEndTime())
+                    .slotStatus(item.getSlot().getStatus())
+                    .itemId(item.getId())
+                    .variantId(item.getVariant().getId())
+                    .originalPrice(item.getVariant().getOriginalPrice())
+                    .flashSalePrice(item.getFlashSalePrice())
+                    .stockAvailable(displayStock)
+                    .build();
+        }).toList();
+    }
+
+    private int getRealtimeStock(FlashSaleItem item) {
+        if (redisTemplate != null) {
+            try {
+                String stockVal = redisTemplate.opsForValue().get(STOCK_KEY_PREFIX + item.getId());
+                if (stockVal != null) {
+                    return Integer.parseInt(stockVal);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to fetch Redis stock for item ID: {}, falling back to DB: {}",
+                        item.getId(), e.getMessage());
+            }
+        }
+        return java.util.Optional.ofNullable(item.getAvailableStock()).orElse(0);
     }
 
     @Override

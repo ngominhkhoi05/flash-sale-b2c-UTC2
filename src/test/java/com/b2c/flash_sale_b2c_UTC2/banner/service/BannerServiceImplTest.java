@@ -4,6 +4,8 @@ import com.b2c.flash_sale_b2c_UTC2.banner.dto.BannerResponse;
 import com.b2c.flash_sale_b2c_UTC2.banner.dto.HomeBannersResponse;
 import com.b2c.flash_sale_b2c_UTC2.banner.entity.Banner;
 import com.b2c.flash_sale_b2c_UTC2.banner.enums.BannerType;
+import com.b2c.flash_sale_b2c_UTC2.banner.mapper.BannerMapper;
+import com.b2c.flash_sale_b2c_UTC2.banner.mapper.BannerMapperImpl;
 import com.b2c.flash_sale_b2c_UTC2.banner.repository.BannerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -11,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
@@ -25,6 +28,8 @@ class BannerServiceImplTest {
 
     @Mock
     private BannerRepository bannerRepository;
+    @Spy
+    private BannerMapper bannerMapper = new BannerMapperImpl();
 
     @InjectMocks
     private BannerServiceImpl bannerService;

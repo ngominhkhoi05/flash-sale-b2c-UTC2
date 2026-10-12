@@ -24,6 +24,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -42,6 +46,7 @@ import static org.mockito.Mockito.when;
  * Subplan 2: ratingAvg, ratingCount, soldCount, minPrice, maxPrice, discountPercent, images.
  */
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class ProductDetailResponseNewFieldsTest {
 
     @Mock
@@ -58,6 +63,9 @@ class ProductDetailResponseNewFieldsTest {
 
     @Mock
     private ImageService imageService;
+
+    @Mock
+    private StringRedisTemplate stringRedisTemplate;
 
     // Real mapper (no runtime deps)
     private final ProductVariantMapper productVariantMapper = new ProductVariantMapperImpl();
@@ -79,6 +87,11 @@ class ProductDetailResponseNewFieldsTest {
                 .build();
         category = Category.builder().id(1).name("Test Category").slug("test").build();
 
+        // Stub Redis: opsForValue() returns mock, get() returns null (Redis miss)
+        var valueOps = org.mockito.Mockito.mock(org.springframework.data.redis.core.ValueOperations.class);
+        org.mockito.Mockito.when(stringRedisTemplate.opsForValue()).thenReturn(valueOps);
+        org.mockito.Mockito.when(valueOps.get(org.mockito.ArgumentMatchers.any())).thenReturn(null);
+
         productService = new ProductServiceImpl(
                 productRepository,
                 productVariantRepository,
@@ -88,7 +101,8 @@ class ProductDetailResponseNewFieldsTest {
                 flashSaleItemRepository,
                 productReviewRepository,
                 productVariantMapper,
-                imageService
+                imageService,
+                stringRedisTemplate
         );
     }
 
