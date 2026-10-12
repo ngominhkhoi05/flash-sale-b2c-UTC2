@@ -39,6 +39,8 @@
 25. [WebSocket Realtime](#25-websocket-realtime)
 26. [Bảng Mã Lỗi Tổng Hợp](#26-bảng-mã-lỗi-tổng-hợp)
 27. [Phân Quyền Truy Cập Theo Role](#27-phân-quyền-truy-cập-theo-role)
+28. [Image Management Module (Polymorphic Storage - Cloudinary)](#28-image-management-module-polymorphic-storage---cloudinary)
+29. [Banner Module](#29-banner-module--apibanners)
 
 ---
 
@@ -178,19 +180,19 @@ Authorization: Bearer <access_token>
 
 ## 5. Danh Mục API
 
-Tổng cộng **64 endpoints** được nhóm theo 19 controller:
+Tổng cộng **69 endpoints** được nhóm theo 21 controller:
 
 | Module | Public | Buyer | Seller | Admin | Tổng |
 |---|---|---|---|---|---|
 | Auth | 4 | – | – | – | 4 |
-| User Profile | – | 3 | – | – | 3 |
+| User Profile | – | 4 | – | – | 4 |
 | Address Book | – | 6 | – | – | 6 |
-| Store | 1 | – | 9 | – | 10 |
+| Store | 2 | – | 10 | – | 12 |
 | Admin Store | – | – | – | 1 | 1 |
 | Category | 3 | – | – | – | 3 |
 | Admin Category | – | – | – | 3 | 3 |
-| Product (Public) | 2 | – | – | – | 2 |
-| Seller Product | – | – | 6 | – | 6 |
+| Product (Public) | 3 | – | – | – | 3 |
+| Seller Product | – | – | 8 | – | 8 |
 | Flash Sale Public | 1 | – | – | – | 1 |
 | Flash Sale Reservation | – | 1 | – | – | 1 |
 | Admin Flash Sale | – | – | – | 6 | 6 |
@@ -201,7 +203,8 @@ Tổng cộng **64 endpoints** được nhóm theo 19 controller:
 | Voucher | 3 | – | – | – | 3 |
 | Seller Voucher | – | – | 2 | – | 2 |
 | Admin Voucher | – | – | – | 1 | 1 |
-| **Tổng** | **14** | **19** | **20** | **11** | **64** |
+| Banner | 1 | – | – | – | 1 |
+| **Tổng** | **15** | **20** | **23** | **11** | **69** |
 
 ---
 ## 6. Auth Module `/api/v1/auth`
@@ -316,6 +319,7 @@ Tổng cộng **64 endpoints** được nhóm theo 19 controller:
 | `GET` | `/api/v1/users/me` | Authenticated | Lấy hồ sơ cá nhân |
 | `PUT` | `/api/v1/users/me` | Authenticated | Cập nhật hồ sơ |
 | `PUT` | `/api/v1/users/me/change-password` | Authenticated | Đổi mật khẩu |
+| `POST` | `/api/v1/users/me/avatar` | Authenticated | Upload avatar (multipart, soft-delete avatar cũ) |
 
 ### 7.1 `GET /api/v1/users/me`
 
@@ -362,6 +366,41 @@ Tổng cộng **64 endpoints** được nhóm theo 19 controller:
 | Code | ErrorCode | Message |
 |---|---|---|
 | 400 | `USER_400_OLD_PASSWORD` | Mật khẩu hiện tại không chính xác |
+
+### 7.4 `POST /api/v1/users/me/avatar`
+
+Upload ảnh đại diện (multipart/form-data). Tự động soft-delete avatar cũ thông qua partial unique index `(owner_type, owner_id)` WHERE `is_primary = true`.
+
+**Request Body (`multipart/form-data`):**
+
+| Field | Type | Required | Mô tả |
+|---|---|---|---|
+| `file` | `binary` | Có | File ảnh (jpg/png/webp), max 10MB |
+
+**HTTP Status:** 201 Created
+
+**Response (`ImageResponse`):**
+
+```json
+{
+  "id": 42,
+  "ownerType": "USER",
+  "ownerId": 5,
+  "url": "https://res.cloudinary.com/.../avatar.jpg",
+  "publicId": "abc123",
+  "isPrimary": true,
+  "displayOrder": 0,
+  "status": "ACTIVE",
+  "createdAt": "2026-10-12T..."
+}
+```
+
+**Lỗi:**
+
+| Code | ErrorCode | Message |
+|---|---|---|
+| 400 | `IMAGE_400` (`FILE_TOO_LARGE` / `INVALID_FORMAT`) | File không hợp lệ (>10MB hoặc không phải jpg/png/webp) |
+| 502 | `IMAGE_502` (`CLOUDINARY_FAILED`) | Cloudinary upload thất bại |
 
 ---
 
@@ -446,12 +485,14 @@ Khi set một địa chỉ làm mặc định, tất cả các địa chỉ khá
 | `POST` | `/api/v1/stores` | Authenticated | Đăng ký mở gian hàng mới |
 | `GET` | `/api/v1/stores/me` | Authenticated (Seller) | Lấy store của tôi |
 | `PUT` | `/api/v1/stores/me` | Authenticated (Seller) | Cập nhật store của tôi |
+| `GET` | `/api/v1/stores/featured` | **Public** | DS gian hàng nổi bật cho trang chủ (Vibe Mall) |
 | `GET` | `/api/v1/stores/{id}` | **Public** | Xem thông tin công khai |
 | `GET` | `/api/v1/stores/me/addresses` | Seller | DS địa chỉ kho |
 | `POST` | `/api/v1/stores/me/addresses` | Seller | Thêm địa chỉ kho |
 | `PUT` | `/api/v1/stores/me/addresses/{addressId}` | Seller | Cập nhật địa chỉ kho |
 | `DELETE` | `/api/v1/stores/me/addresses/{addressId}` | Seller | Xóa địa chỉ kho |
 | `PATCH` | `/api/v1/stores/me/addresses/{addressId}/default` | Seller | Đặt địa chỉ kho mặc định |
+| `POST` | `/api/v1/stores/me/logo` | Seller | Upload logo (multipart, soft-delete logo cũ) |
 
 > Lưu ý: Tất cả `/api/v1/seller/**` yêu cầu role `SELLER`. Store endpoints nằm tại `/api/v1/stores/me` dùng chung pattern này.
 
@@ -498,6 +539,58 @@ Khi set một địa chỉ làm mặc định, tất cả các địa chỉ khá
 | Code | ErrorCode | Message |
 |---|---|---|
 | 404 | `STORE_404_NOT_FOUND` | Không tìm thấy thông tin gian hàng |
+
+### 9.4a `GET /api/v1/stores/featured` — **Public**
+
+Lấy danh sách gian hàng nổi bật (APPROVED) cho section "Vibe Mall" trên trang chủ.
+
+**Query params:**
+
+| Field | Type | Required | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `limit` | `integer` | Không | `4` | Số lượng store trả về (cap theo business) |
+
+**Response item (`FeaturedStoreResponse`):**
+
+```json
+{
+  "id": 1,
+  "name": "Shop ABC",
+  "logoUrl": "https://res.cloudinary.com/.../logo.jpg",
+  "verified": true,
+  "rating": 4.7,
+  "totalRatings": 320,
+  "followers": 1500,
+  "productThumbnails": [
+    "https://.../p1.jpg",
+    "https://.../p2.jpg"
+  ],
+  "totalProducts": 120,
+  "createdAt": "2026-10-01T..."
+}
+```
+
+### 9.4b `POST /api/v1/stores/me/logo` — Seller
+
+Upload logo mới cho gian hàng. Tự động soft-delete logo cũ (partial unique index đảm bảo 1 store chỉ có 1 logo ACTIVE).
+
+**Request Body (`multipart/form-data`):**
+
+| Field | Type | Required | Mô tả |
+|---|---|---|---|
+| `file` | `binary` | Có | File ảnh (jpg/png/webp), max 10MB |
+
+**HTTP Status:** 201 Created
+
+**Response:** `ImageResponse` (xem mục 28.4).
+
+**Lỗi:**
+
+| Code | ErrorCode | Message |
+|---|---|---|
+| 404 | `STORE_404_NOT_FOUND` | Người dùng hiện tại chưa có gian hàng |
+| 400 | `IMAGE_400` | File không hợp lệ (>10MB hoặc sai định dạng) |
+| 502 | `IMAGE_502` | Cloudinary upload thất bại |
 
 ### 9.5–9.9 Store Address endpoints
 
@@ -608,10 +701,52 @@ Chặn nếu ngành hàng đang có ngành hàng con.
 
 | Method | Endpoint | Access | Mô tả |
 |---|---|---|---|
+| `GET` | `/api/v1/products/recommended` | Public | SP đề xuất (For You / Best Seller / Hot Deal) cho trang chủ |
 | `GET` | `/api/v1/products` | Public | Tìm kiếm, lọc, phân trang |
 | `GET` | `/api/v1/products/{id}` | Public | Chi tiết sản phẩm + SKU |
 
-### 13.1 `GET /api/v1/products`
+### 13.1 `GET /api/v1/products/recommended`
+
+Lấy danh sách sản phẩm đề xuất theo 3 tab cho trang chủ (For You / Best Seller / Hot Deal). Hỗ trợ lọc theo categoryId.
+
+**Query params:**
+
+| Field | Type | Required | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `tab` | `string` | Không | `all` | `all` / `for_you` / `best_seller` / `hot_deal`. `all` trả cả 3 danh sách, các giá trị còn lại trả 1 danh sách tương ứng |
+| `categoryId` | `long` | Không | – | Lọc theo categoryId (optional) |
+| `limit` | `integer` | Không | `10` | Số lượng sản phẩm tối đa mỗi tab |
+
+**Response (`RecommendedProductsResponse`):**
+
+```json
+{
+  "forYou": [
+    {
+      "id": 1,
+      "storeId": 2,
+      "storeName": "Shop ABC",
+      "name": "Áo thun nam",
+      "imageUrl": "https://...",
+      "minPrice": 99000,
+      "maxPrice": 199000,
+      "totalStock": 50,
+      "totalSold": 320,
+      "label": "For You"
+    }
+  ],
+  "bestSellers": [
+    { "...": "..." }
+  ],
+  "hotDeals": [
+    { "...": "..." }
+  ]
+}
+```
+
+**Lọc ngầm:** Chỉ trả sản phẩm `ACTIVE` thuộc store `APPROVED`.
+
+### 13.2 `GET /api/v1/products`
 
 **Query params (`ProductFilterRequest`):**
 
@@ -644,7 +779,7 @@ Chặn nếu ngành hàng đang có ngành hàng con.
 }
 ```
 
-### 13.2 `GET /api/v1/products/{id}`
+### 13.3 `GET /api/v1/products/{id}`
 
 **Response (`ProductDetailResponse`):**
 
@@ -702,6 +837,8 @@ Chặn nếu ngành hàng đang có ngành hàng con.
 | `PUT` | `/api/v1/seller/products/{id}` | Seller | Cập nhật SPU + SKU |
 | `DELETE` | `/api/v1/seller/products/{id}` | Seller | Xóa (Soft/Hard delete) |
 | `PATCH` | `/api/v1/seller/products/{id}/status` | Seller | Đổi trạng thái |
+| `POST` | `/api/v1/seller/products/{id}/images` | Seller | Upload ảnh gallery cho SPU (multipart) |
+| `POST` | `/api/v1/seller/products/{productId}/variants/{variantId}/images` | Seller | Upload ảnh gallery cho 1 SKU (multipart) |
 
 ### 14.1 `POST /api/v1/seller/products`
 
@@ -777,6 +914,41 @@ Chặn nếu ngành hàng đang có ngành hàng con.
 ### 14.6 `PATCH /api/v1/seller/products/{id}/status?status=...`
 
 **Query:** `status=ACTIVE|INACTIVE|OUT_OF_STOCK`
+
+### 14.7 `POST /api/v1/seller/products/{id}/images`
+
+Upload ảnh mới vào gallery SPU. Một SPU có thể có nhiều ảnh; partial unique index đảm bảo tối đa 1 ảnh `isPrimary=true` ACTIVE.
+
+**Request Body (`multipart/form-data`):**
+
+| Field | Type | Required | Mô tả |
+|---|---|---|---|
+| `file` | `binary` | Có | File ảnh (jpg/png/webp), max 10MB |
+| `isPrimary` | `boolean` | Không | Đánh dấu ảnh chính (mặc định `false`) |
+| `displayOrder` | `integer` | Không | Thứ tự hiển thị (mặc định `0`) |
+
+**HTTP Status:** 201 Created
+
+**Response:** `ImageResponse` (xem mục 28.4).
+
+**Lỗi:**
+
+| Code | ErrorCode | Message |
+|---|---|---|
+| 404 | `PROD_404_NOT_FOUND` | Không tìm thấy sản phẩm |
+| 403 | `PROD_403_ACCESS_DENIED` | Bạn không có quyền upload ảnh cho sản phẩm này |
+| 400 | `IMAGE_400` | File không hợp lệ (>10MB hoặc sai định dạng) |
+| 502 | `IMAGE_502` | Cloudinary upload thất bại |
+
+### 14.8 `POST /api/v1/seller/products/{productId}/variants/{variantId}/images`
+
+Upload ảnh mới vào gallery của một SKU cụ thể. Partial unique index áp dụng tương tự SPU.
+
+**Request Body (`multipart/form-data`):** giống 14.7.
+
+**HTTP Status:** 201 Created
+
+**Lỗi:** giống 14.7 (404 cho `variantId` dùng `PROD_404_VARIANT_NOT_FOUND`).
 
 ---
 ## 15. Flash Sale Public Module `/api/v1/flash-sales/slots`
@@ -1616,11 +1788,14 @@ stompClient.subscribe(
 | `GET /api/v1/categories/{id}` |
 | `GET /api/v1/categories/slug/{slug}` |
 | `GET /api/v1/products` |
+| `GET /api/v1/products/recommended` |
 | `GET /api/v1/products/{id}` |
 | `GET /api/v1/stores/{id}` |
+| `GET /api/v1/stores/featured` |
 | `GET /api/v1/flash-sales/slots` |
 | `GET /api/v1/vouchers/platform` |
 | `GET /api/v1/vouchers/store/{storeId}` |
+| `GET /api/v1/banners/home` |
 | `WS /ws/**` (auth xử lý ở interceptor) |
 | `/swagger-ui.html`, `/swagger-ui/**`, `/v3/api-docs/**` |
 
@@ -1701,35 +1876,40 @@ stompClient.subscribe(
 
 ## 28. Image Management Module (Polymorphic Storage - Cloudinary)
 
-> **Lưu ý:** Mục này mô tả API quản lý ảnh dự kiến (task sau). Migration V3 (tạo bảng `images`) đã được apply vào DB. Hiện tại chưa có Controller/Service tương ứng trong code Java.
+> Module `image` quản lý ảnh cho **mọi entity** (User avatar, Store logo, Product gallery, Variant gallery, Review album) qua cơ chế **polymorphic FK** (`owner_type`, `owner_id`).
 
 ### 28.1 Nguyên tắc
 
 - Tất cả ảnh của **5 loại đối tượng** (User avatar, Store logo, Product gallery, Variant gallery, Review album) đều quản lý qua **bảng `images`** với cặp khóa `(owner_type, owner_id)`.
-- Ảnh vật lý lưu trên **Cloudinary** (CDN). Bảng lưu `url` (hiển thị) và `cloudinary_public_id` (để xóa).
+- Ảnh vật lý lưu trên **Cloudinary** (CDN). Bảng lưu `secure_url` (hiển thị) và `public_id` (để xóa).
 - 1 user chỉ có 1 avatar ACTIVE; 1 store chỉ có 1 logo ACTIVE; 1 product/variant chỉ có 1 ảnh primary ACTIVE.
-- **Xóa ảnh**: soft delete (`status='INACTIVE'`) → async Cloudinary cleanup → scheduled job dọn record >30 ngày.
+- **Xóa ảnh**: `DELETE /api/v1/images/{id}` đặt `status='INACTIVE'` và phát event async để xóa trên Cloudinary.
 
-### 28.2 Endpoints dự kiếng
+### 28.2 Endpoints (ImageController)
 
 | Method | Endpoint | Access | Mô tả |
 | :--- | :--- | :--- | :--- |
-| `POST` | `/api/v1/images/upload` | Authenticated | Upload 1 ảnh mới lên Cloudinary. Body: `multipart/form-data` với field `file` + metadata (`ownerType`, `isPrimary?`). Trả về `{id, url, publicId}`. |
-| `GET` | `/api/v1/images` | Authenticated | Lấy danh sách ảnh. Query: `ownerType` (bắt buộc) + `ownerId` (bắt buộc). Trả `List<ImageResponse>` sắp xếp theo `displayOrder ASC`. |
+| `POST` | `/api/v1/images/upload` | Owner (Authenticated) | Upload 1 ảnh mới. `multipart/form-data` gồm `file` + query params `ownerType`, `ownerId`, `isPrimary?`, `displayOrder?`. Trả `ImageResponse`. |
+| `GET` | `/api/v1/images` | Authenticated | DS ảnh ACTIVE của 1 owner. Query: `ownerType` (bắt buộc) + `ownerId` (bắt buộc). Trả `List<ImageResponse>` sắp xếp theo `displayOrder ASC`. |
 | `PATCH` | `/api/v1/images/{id}/primary` | Owner | Đánh dấu ảnh là primary (chỉ áp dụng cho PRODUCT/VARIANT). Tự động bỏ primary của ảnh cũ (partial unique index). |
-| `PATCH` | `/api/v1/images/{id}/order` | Owner | Cập nhật `displayOrder` (chỉ áp dụng cho 1-N gallery như REVIEW). |
+| `PATCH` | `/api/v1/images/{id}/order` | Owner | Cập nhật `displayOrder` (chỉ áp dụng cho 1-N gallery như REVIEW). Body: `{"displayOrder": <int>}`. |
 | `DELETE` | `/api/v1/images/{id}` | Owner | Soft delete (`status='INACTIVE'`). Phát event async để xóa trên Cloudinary. |
 | `DELETE` | `/api/v1/images/{id}/force` | Admin | Hard delete (xóa cả record DB + gọi Cloudinary destroy ngay). |
 
-### 28.3 Upload Avatar (User) — Endpoint chuyên dụng dự kiến
+### 28.3 Upload chuyên dụng (endpoint theo owner)
 
-| Method | Endpoint | Access | Mô tả |
+Ngoài endpoint chung `POST /api/v1/images/upload` ở trên, các controller dưới đây expose endpoint upload chuyên biệt — tự resolve `ownerId` từ principal, tự động soft-delete ảnh cũ (1 owner = 1 ảnh ACTIVE).
+
+| Method | Endpoint | Controller | Mô tả |
 | :--- | :--- | :--- | :--- |
-| `POST` | `/api/v1/users/me/avatar` | Authenticated | Upload avatar mới. Tự động soft delete avatar cũ (nếu có). Validate 1 user = 1 avatar ACTIVE qua partial unique index. |
+| `POST` | `/api/v1/users/me/avatar` | `UserController` | Upload avatar. `ownerType=USER`, `ownerId=currentUserId`. |
+| `POST` | `/api/v1/stores/me/logo` | `StoreController` | Upload logo. `ownerType=STORE`, `ownerId=myStoreId`. |
+| `POST` | `/api/v1/seller/products/{id}/images` | `SellerProductController` | Upload ảnh gallery cho SPU. `ownerType=PRODUCT`, `ownerId={id}`. |
+| `POST` | `/api/v1/seller/products/{productId}/variants/{variantId}/images` | `SellerProductController` | Upload ảnh cho 1 SKU. `ownerType=VARIANT`, `ownerId={variantId}`. |
 
-Tương tự: `/api/v1/stores/me/logo`, `/api/v1/seller/products/{id}/images`, `/api/v1/seller/products/{productId}/variants/{variantId}/images`, `/api/v1/reviews/{orderItemId}/images`.
+> Endpoint cho Review album (`/api/v1/reviews/{orderItemId}/images`) sẽ được bổ sung khi implement module review (xem `AGENTS.md` mục #24).
 
-### 28.4 Response mẫu
+### 28.4 Response mẫu (`ImageResponse`)
 
 ```json
 {
@@ -1765,4 +1945,73 @@ Tương tự: `/api/v1/stores/me/logo`, `/api/v1/seller/products/{id}/images`, `
 
 ---
 
-**Phiên bản tài liệu**: 1.1 · **Cập nhật lần cuối**: 2026-10-07 · **Nguồn**: Backend `flash-sale-b2c-UTC2`
+## 29. Banner Module `/api/v1/banners`
+
+> **Public API** · **Tag Swagger**: `Banners`
+
+| Method | Endpoint | Access | Mô tả |
+|---|---|---|---|
+| `GET` | `/api/v1/banners/home` | Public | Lấy danh sách banner cho trang chủ (main slides + side banners) |
+
+### 29.1 `GET /api/v1/banners/home`
+
+Lấy tất cả banner ACTIVE cho trang chủ. Bao gồm 2 nhóm:
+
+- `mainSlides`: hero slide lớn (banner `HERO`).
+- `sideBanners`: banner phụ bên cạnh (`FREESHIP`, `VOUCHER_NEW_SHOP`, `PROMOTION`).
+
+**Response (`HomeBannersResponse`):**
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Get banners successfully",
+  "data": {
+    "mainSlides": [
+      {
+        "id": 1,
+        "type": "HERO",
+        "imageUrl": "https://res.cloudinary.com/.../hero1.jpg",
+        "imageAlt": "Flash Sale 12h Trưa",
+        "ctaHref": "/flash-sales/slots",
+        "ctaText": "Xem ngay"
+      }
+    ],
+    "sideBanners": [
+      {
+        "id": 2,
+        "type": "FREESHIP",
+        "imageUrl": "https://res.cloudinary.com/.../freeship.jpg",
+        "imageAlt": "Miễn phí vận chuyển",
+        "ctaHref": "/products",
+        "ctaText": "Khám phá"
+      },
+      {
+        "id": 3,
+        "type": "VOUCHER_NEW_SHOP",
+        "imageUrl": "https://res.cloudinary.com/.../voucher.jpg",
+        "imageAlt": "Voucher cho khách mới",
+        "ctaHref": "/vouchers",
+        "ctaText": "Nhận voucher"
+      }
+    ]
+  },
+  "timestamp": "2026-10-12T..."
+}
+```
+
+**`BannerType` enum** (tham chiếu `banner/enums/BannerType.java`):
+
+| Value | Mô tả |
+|---|---|
+| `HERO` | Slide chính đầu trang chủ |
+| `FREESHIP` | Banner quảng bá freeship |
+| `VOUCHER_NEW_SHOP` | Banner voucher cho khách hàng mới / shop mới |
+| `PROMOTION` | Banner khuyến mãi chung |
+
+> **Note**: Hiện tại banner được quản lý thủ công (seed trong DB). API Admin để CRUD banner sẽ được bổ sung sau (nếu có yêu cầu).
+
+---
+
+**Phiên bản tài liệu**: 1.2 · **Cập nhật lần cuối**: 2026-10-12 · **Nguồn**: Backend `flash-sale-b2c-UTC2`
