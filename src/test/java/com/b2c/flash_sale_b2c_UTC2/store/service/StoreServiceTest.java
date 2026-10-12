@@ -219,4 +219,97 @@ class StoreServiceTest {
         assertEquals(StoreErrorCode.STORE_ADDRESS_ACCESS_DENIED.getCode(), exception.getErrorCode().getCode());
         verify(addressRepository, never()).delete(any());
     }
+
+    @Test
+    @DisplayName("Lấy thông tin gian hàng của tôi thành công")
+    void getMyStore_Success() {
+        when(storeRepository.findByUserId(1L)).thenReturn(Optional.of(sampleStore));
+        when(storeMapper.toResponse(sampleStore)).thenReturn(StoreResponse.builder().id(10L).storeName("Shop Cong Nghe UTC2").build());
+
+        StoreResponse response = storeService.getMyStore(1L);
+
+        assertNotNull(response);
+        assertEquals(10L, response.getId());
+    }
+
+    @Test
+    @DisplayName("Lấy thông tin gian hàng thất bại khi người dùng chưa có gian hàng STORE_NOT_FOUND (404)")
+    void getMyStore_ShouldThrowException_WhenStoreNotFound() {
+        when(storeRepository.findByUserId(1L)).thenReturn(Optional.empty());
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> storeService.getMyStore(1L));
+        assertEquals(StoreErrorCode.STORE_NOT_FOUND.getCode(), exception.getErrorCode().getCode());
+    }
+
+    @Test
+    @DisplayName("Cập nhật thông tin gian hàng thành công")
+    void updateMyStore_Success() {
+        UpdateStoreRequest request = UpdateStoreRequest.builder()
+                .storeName("Shop Updated")
+                .description("Mo ta moi")
+                .build();
+
+        when(storeRepository.findByUserId(1L)).thenReturn(Optional.of(sampleStore));
+        when(storeRepository.existsByStoreName("Shop Updated")).thenReturn(false);
+        when(storeRepository.save(any(Store.class))).thenReturn(sampleStore);
+        when(storeMapper.toResponse(sampleStore)).thenReturn(StoreResponse.builder().id(10L).storeName("Shop Updated").build());
+
+        StoreResponse response = storeService.updateMyStore(1L, request);
+
+        assertNotNull(response);
+        assertEquals("Shop Updated", response.getStoreName());
+    }
+
+    @Test
+    @DisplayName("Cập nhật gian hàng thất bại khi tên mới bị trùng lặp")
+    void updateMyStore_ShouldThrowException_WhenStoreNameExists() {
+        UpdateStoreRequest request = UpdateStoreRequest.builder()
+                .storeName("Shop Trùng")
+                .build();
+
+        when(storeRepository.findByUserId(1L)).thenReturn(Optional.of(sampleStore));
+        when(storeRepository.existsByStoreName("Shop Trùng")).thenReturn(true);
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> storeService.updateMyStore(1L, request));
+        assertEquals(StoreErrorCode.STORE_NAME_ALREADY_EXISTS.getCode(), exception.getErrorCode().getCode());
+        verify(storeRepository, never()).save(any(Store.class));
+    }
+
+    @Test
+    @DisplayName("Xem thông tin gian hàng công khai thành công khi gian hàng đã APPROVED")
+    void getStoreById_Success_WhenApproved() {
+        sampleStore.setStatus("APPROVED");
+        when(storeRepository.findById(10L)).thenReturn(Optional.of(sampleStore));
+        when(storeMapper.toResponse(sampleStore)).thenReturn(StoreResponse.builder().id(10L).status("APPROVED").build());
+
+        StoreResponse response = storeService.getStoreById(10L);
+
+        assertNotNull(response);
+        assertEquals("APPROVED", response.getStatus());
+    }
+
+    @Test
+    @DisplayName("Xem thông tin gian hàng công khai thất bại khi gian hàng chưa duyệt STORE_NOT_APPROVED")
+    void getStoreById_ShouldThrowException_WhenNotApproved() {
+        sampleStore.setStatus("PENDING");
+        when(storeRepository.findById(10L)).thenReturn(Optional.of(sampleStore));
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> storeService.getStoreById(10L));
+        assertEquals(StoreErrorCode.STORE_NOT_APPROVED.getCode(), exception.getErrorCode().getCode());
+    }
+
+    @Test
+    @DisplayName("Admin từ chối REJECTED không gán vai trò SELLER")
+    void updateStoreStatus_Rejected_ShouldNotAssignSellerRole() {
+        UpdateStoreStatusRequest request = new UpdateStoreStatusRequest("REJECTED");
+
+        when(storeRepository.findById(10L)).thenReturn(Optional.of(sampleStore));
+        when(storeRepository.save(any(Store.class))).thenReturn(sampleStore);
+        when(storeMapper.toResponse(sampleStore)).thenReturn(StoreResponse.builder().id(10L).status("REJECTED").build());
+
+        StoreResponse response = storeService.updateStoreStatus(10L, request);
+
+        assertEquals("REJECTED", response.getStatus());
+        verify(userRoleRepository, never()).save(any(UserRole.class));
+    }
 }
