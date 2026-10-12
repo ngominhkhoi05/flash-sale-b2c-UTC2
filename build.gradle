@@ -65,10 +65,11 @@ dependencies {
 
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
+	options.compilerArgs << '-parameters'
 }
 
 compileJava {
-	options.compilerArgs = [
+	options.compilerArgs += [
 		'-Amapstruct.defaultComponentModel=spring',
 		'-Amapstruct.unmappedTargetPolicy=IGNORE'
 	]
