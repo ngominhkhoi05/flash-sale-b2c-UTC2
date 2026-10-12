@@ -253,6 +253,9 @@ public class OrderServiceImpl implements OrderService {
             productVariantRepository.save(variant);
         }
 
+        // Bồi hoàn lượt dùng voucher nếu có áp dụng
+        voucherService.rollbackVoucherUsage(order.getId());
+
         order.setStatus("CANCELLED");
         order.setUpdatedAt(Instant.now());
         order = orderRepository.save(order);
@@ -294,6 +297,9 @@ public class OrderServiceImpl implements OrderService {
                 variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
                 productVariantRepository.save(variant);
             }
+
+            // Bồi hoàn lượt dùng voucher nếu có áp dụng
+            voucherService.rollbackVoucherUsage(order.getId());
         }
 
         order.setStatus(newStatus);
