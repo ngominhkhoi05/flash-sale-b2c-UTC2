@@ -485,6 +485,7 @@ Khi set một địa chỉ làm mặc định, tất cả các địa chỉ khá
 | `POST` | `/api/v1/stores` | Authenticated | Đăng ký mở gian hàng mới |
 | `GET` | `/api/v1/stores/me` | Authenticated (Seller) | Lấy store của tôi |
 | `PUT` | `/api/v1/stores/me` | Authenticated (Seller) | Cập nhật store của tôi |
+| `GET` | `/api/v1/stores/sidebar/summary` | Seller | Tổng hợp metrics sidebar dashboard |
 | `GET` | `/api/v1/stores/featured` | **Public** | DS gian hàng nổi bật cho trang chủ (Vibe Mall) |
 | `GET` | `/api/v1/stores/{id}` | **Public** | Xem thông tin công khai |
 | `GET` | `/api/v1/stores/me/addresses` | Seller | DS địa chỉ kho |
@@ -570,7 +571,58 @@ Lấy danh sách gian hàng nổi bật (APPROVED) cho section "Vibe Mall" trên
 }
 ```
 
-### 9.4b `POST /api/v1/stores/me/logo` — Seller
+### 9.4b `GET /api/v1/stores/sidebar/summary` — **Seller**
+
+Trả về tổng hợp metrics cho sidebar dashboard của người bán. Chỉ yêu cầu quyền `SELLER`.
+
+**Access:** `@PreAuthorize("hasRole('SELLER')")`
+
+**Response (`SidebarSummaryResponse`):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "totalProducts": 42,
+    "activeFlashSales": 2,
+    "pendingOrders": 7,
+    "unpaidOrders": 7,
+    "todayOrders": 12,
+    "todayRevenue": 5290000,
+    "monthRevenue": 98000000,
+    "ratingAvg": 4.6,
+    "ratingCount": 183,
+    "lowStockProducts": 3,
+    "storeStatus": "APPROVED",
+    "tier": "PREFERRED"
+  }
+}
+```
+
+**Field description:**
+
+| Field | Type | Mô tả |
+|---|---|---|
+| `totalProducts` | `long` | Số sản phẩm ACTIVE của store |
+| `activeFlashSales` | `long` | Số slot Flash Sale đang ACTIVE cho sản phẩm của store |
+| `pendingOrders` | `long` | Số đơn hàng trạng thái `PENDING_PAYMENT` |
+| `unpaidOrders` | `long` | Giống `pendingOrders` (aliased) |
+| `todayOrders` | `long` | Số đơn hàng tạo trong ngày hiện tại |
+| `todayRevenue` | `BigDecimal` | Tổng doanh thu hôm nay (đơn CONFIRMED + COMPLETED) |
+| `monthRevenue` | `BigDecimal` | Tổng doanh thu tháng hiện tại |
+| `ratingAvg` | `double` | TB điểm đánh giá sản phẩm (0.0 nếu chưa có review) |
+| `ratingCount` | `long` | Tổng review VISIBLE của toàn bộ sản phẩm |
+| `lowStockProducts` | `long` | Số variant tồn kho < 10 |
+| `storeStatus` | `string` | Trạng thái store (`PENDING`, `APPROVED`, ...) |
+| `tier` | `string` | Hạng store (`NORMAL`, `OFFICIAL_MALL`, `PREFERRED`) |
+
+**Lỗi:**
+
+| Code | ErrorCode | Message |
+|---|---|---|
+| 404 | `STORE_404_NOT_FOUND` | Gian hàng không tồn tại |
+
+### 9.4c `POST /api/v1/stores/me/logo` — Seller
 
 Upload logo mới cho gian hàng. Tự động soft-delete logo cũ (partial unique index đảm bảo 1 store chỉ có 1 logo ACTIVE).
 

@@ -1914,6 +1914,7 @@ Nếu có lỗi:
 | `POST` | `/api/v1/stores` | Authenticated | Tạo Store (status `PENDING`, tier `NORMAL`, tạo Wallet 1-1) |
 | `GET` | `/api/v1/stores/me` | Seller | Store của tôi |
 | `PUT` | `/api/v1/stores/me` | Seller | Cập nhật Store |
+| `GET` | `/api/v1/stores/sidebar/summary` | Seller | Tổng hợp metrics cho sidebar dashboard (totalProducts, activeFlashSales, pendingOrders, todayOrders, todayRevenue, monthRevenue, ratingAvg, ratingCount, lowStockProducts, storeStatus, tier) |
 | `GET` | `/api/v1/stores/{id}` | Public | Store public |
 | `PATCH` | `/api/v1/admin/stores/{id}/status` | Admin | Duyệt/Khóa. APPROVED → tự gán `ROLE_SELLER` |
 | `GET` | `/api/v1/stores/me/addresses` | Seller | List kho |
