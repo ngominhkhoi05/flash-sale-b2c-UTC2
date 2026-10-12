@@ -1,6 +1,7 @@
 package com.b2c.flash_sale_b2c_UTC2.flashsale.repository;
 
 import com.b2c.flash_sale_b2c_UTC2.flashsale.entity.FlashSaleItem;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -65,4 +66,17 @@ public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Lo
         AND fsi.availableStock + :quantity <= fsi.allocatedStock
     """)
     int replenishAvailableStockConditionally(@Param("id") Long id, @Param("quantity") Integer quantity);
+
+    @Query("""
+        SELECT fsi FROM FlashSaleItem fsi
+        JOIN FETCH fsi.variant v
+        JOIN FETCH v.product p
+        JOIN FETCH p.store s
+        JOIN FETCH p.category c
+        WHERE fsi.slot.status = 'ACTIVE'
+        AND fsi.status = 'APPROVED'
+        AND fsi.availableStock > 0
+        ORDER BY fsi.availableStock DESC
+        """)
+    List<FlashSaleItem> findHotDealItems(Pageable pageable);
 }

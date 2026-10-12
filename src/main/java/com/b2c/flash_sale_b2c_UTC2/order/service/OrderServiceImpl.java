@@ -18,6 +18,7 @@ import com.b2c.flash_sale_b2c_UTC2.order.mapper.OrderMapper;
 import com.b2c.flash_sale_b2c_UTC2.order.repository.OrderItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.order.repository.OrderRepository;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.ProductVariant;
+import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductRepository;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductVariantRepository;
 import com.b2c.flash_sale_b2c_UTC2.store.entity.Store;
 import com.b2c.flash_sale_b2c_UTC2.store.exception.StoreErrorCode;
@@ -56,6 +57,7 @@ public class OrderServiceImpl implements OrderService {
     private final UserRepository userRepository;
     private final StoreRepository storeRepository;
     private final AddressRepository addressRepository;
+    private final ProductRepository productRepository;
     private final ProductVariantRepository productVariantRepository;
     private final VoucherRepository voucherRepository;
     private final VoucherUsageRepository voucherUsageRepository;
@@ -300,6 +302,15 @@ public class OrderServiceImpl implements OrderService {
 
             // Bồi hoàn lượt dùng voucher nếu có áp dụng
             voucherService.rollbackVoucherUsage(order.getId());
+        }
+
+        // When order transitions to COMPLETED, increment product.total_sold
+        if ("COMPLETED".equals(newStatus) && !"COMPLETED".equals(order.getStatus())) {
+            List<OrderItem> completedItems = orderItemRepository.findByOrderId(order.getId());
+            for (OrderItem item : completedItems) {
+                productRepository.incrementTotalSold(item.getVariant().getProduct().getId(), item.getQuantity());
+            }
+            log.info("Order id={} COMPLETED: incremented totalSold for {} products", orderId, completedItems.size());
         }
 
         order.setStatus(newStatus);

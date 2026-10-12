@@ -11,6 +11,8 @@ import com.b2c.flash_sale_b2c_UTC2.product.dto.CreateProductVariantRequest;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductDetailResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductFilterRequest;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductSummaryResponse;
+import com.b2c.flash_sale_b2c_UTC2.product.dto.RecommendedProductResponse;
+import com.b2c.flash_sale_b2c_UTC2.product.dto.RecommendedProductsResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductVariantResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.TierVariationConfigDto;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.UpdateProductRequest;
@@ -487,5 +489,94 @@ public class ProductServiceImpl implements ProductService {
 
     private String nullSafeUrl(com.b2c.flash_sale_b2c_UTC2.image.dto.ImageResponse r) {
         return r == null ? null : r.getUrl();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public RecommendedProductsResponse getRecommendedProducts(String tab, Long categoryId, int limit) {
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(0, limit);
+
+        List<RecommendedProductResponse> forYou = buildRecommendedProducts(
+                productRepository.findForYouProducts(pageable), "for_you");
+        List<RecommendedProductResponse> bestSellers = buildRecommendedProducts(
+                productRepository.findBestSellerProducts(pageable), "best_seller");
+        List<RecommendedProductResponse> hotDeals = buildRecommendedHotDeals(limit);
+
+        if (tab == null || "all".equalsIgnoreCase(tab)) {
+            return RecommendedProductsResponse.builder()
+                    .forYou(forYou).bestSellers(bestSellers).hotDeals(hotDeals).build();
+        }
+        return switch (tab.toLowerCase()) {
+            case "for_you" -> RecommendedProductsResponse.builder().forYou(forYou).build();
+            case "best_seller" -> RecommendedProductsResponse.builder().bestSellers(bestSellers).build();
+            case "hot_deal" -> RecommendedProductsResponse.builder().hotDeals(hotDeals).build();
+            default -> RecommendedProductsResponse.builder()
+                    .forYou(forYou).bestSellers(bestSellers).hotDeals(hotDeals).build();
+        };
+    }
+
+    private List<RecommendedProductResponse> buildRecommendedProducts(List<Product> products, String label) {
+        if (products.isEmpty()) {
+            return List.of();
+        }
+        List<Long> productIds = products.stream().map(Product::getId).toList();
+        Map<Long, List<ProductVariant>> variantsMap = productVariantRepository
+                .findByProductIdInAndStatus(productIds, "ACTIVE").stream()
+                .collect(Collectors.groupingBy(v -> v.getProduct().getId()));
+        Map<Long, String> imageMap = imageService.getPrimaryImagesByOwnerIds(ImageOwnerType.PRODUCT, productIds)
+                .entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> nullSafeUrl(e.getValue())));
+
+        return products.stream()
+                .map(p -> mapToRecommended(p, variantsMap.getOrDefault(p.getId(), List.of()),
+                        imageMap.get(p.getId()), label))
+                .toList();
+    }
+
+    private List<RecommendedProductResponse> buildRecommendedHotDeals(int limit) {
+        List<com.b2c.flash_sale_b2c_UTC2.flashsale.entity.FlashSaleItem> hotItems =
+                flashSaleItemRepository.findHotDealItems(org.springframework.data.domain.PageRequest.of(0, limit));
+        if (hotItems.isEmpty()) {
+            return List.of();
+        }
+        return hotItems.stream().map(item -> {
+            Product p = item.getVariant().getProduct();
+            String imageUrl = nullSafeUrl(imageService.getPrimaryImage(ImageOwnerType.PRODUCT, p.getId()));
+            return RecommendedProductResponse.builder()
+                    .id(p.getId())
+                    .storeId(p.getStore().getId())
+                    .storeName(p.getStore().getStoreName())
+                    .name(p.getName())
+                    .imageUrl(imageUrl)
+                    .minPrice(item.getFlashSalePrice())
+                    .maxPrice(item.getFlashSalePrice())
+                    .totalStock(item.getAvailableStock())
+                    .totalSold(p.getTotalSold())
+                    .label("hot_deal")
+                    .build();
+        }).toList();
+    }
+
+    private RecommendedProductResponse mapToRecommended(Product p, List<ProductVariant> variants,
+                                                       String imageUrl, String label) {
+        BigDecimal minPrice = null, maxPrice = null;
+        int totalStock = 0;
+        for (ProductVariant v : variants) {
+            if (minPrice == null || v.getOriginalPrice().compareTo(minPrice) < 0) minPrice = v.getOriginalPrice();
+            if (maxPrice == null || v.getOriginalPrice().compareTo(maxPrice) > 0) maxPrice = v.getOriginalPrice();
+            totalStock += (v.getStockQuantity() != null ? v.getStockQuantity() : 0);
+        }
+        return RecommendedProductResponse.builder()
+                .id(p.getId())
+                .storeId(p.getStore().getId())
+                .storeName(p.getStore().getStoreName())
+                .name(p.getName())
+                .imageUrl(imageUrl)
+                .minPrice(minPrice)
+                .maxPrice(maxPrice)
+                .totalStock(totalStock)
+                .totalSold(p.getTotalSold())
+                .label(label)
+                .build();
     }
 }
