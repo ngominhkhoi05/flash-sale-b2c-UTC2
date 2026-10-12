@@ -23,21 +23,26 @@ import com.b2c.flash_sale_b2c_UTC2.product.dto.UpdateProductVariantRequest;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.Category;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.Product;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.ProductVariant;
+import com.b2c.flash_sale_b2c_UTC2.product.enums.ProductSortOption;
 import com.b2c.flash_sale_b2c_UTC2.product.exception.ProductErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.product.mapper.ProductVariantMapper;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.CategoryRepository;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductRepository;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductVariantRepository;
+import com.b2c.flash_sale_b2c_UTC2.product.spec.ProductSpecifications;
 import com.b2c.flash_sale_b2c_UTC2.review.repository.ProductReviewRepository;
 import com.b2c.flash_sale_b2c_UTC2.store.entity.Store;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import com.b2c.flash_sale_b2c_UTC2.store.exception.StoreErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.store.repository.StoreRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -277,29 +282,32 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryResponse> getPublicProducts(ProductFilterRequest filter, Pageable pageable) {
-        // NOTE: Sentinel values to avoid Hibernate binding null as bytea (Hibernate6 + Postgres driver bug).
-        // JPQL uses `:categoryId < 0`, `:keyword = ''`, `:minPrice < 0`, `:maxPrice < 0` as "filter disabled" markers.
-        Integer categoryId = (filter.getCategoryId() != null && filter.getCategoryId() > 0)
-                ? filter.getCategoryId() : -1;
-        String keyword = (filter.getKeyword() != null && !filter.getKeyword().isBlank())
-                ? filter.getKeyword().trim() : "";
-        BigDecimal minPrice = filter.getMinPrice() != null ? filter.getMinPrice() : BigDecimal.valueOf(-1);
-        BigDecimal maxPrice = filter.getMaxPrice() != null ? filter.getMaxPrice() : BigDecimal.valueOf(-1);
+        ProductSortOption sortOption = filter.getSortOption() != null
+                ? filter.getSortOption() : ProductSortOption.CREATED_AT_DESC;
 
-        Page<Product> productPage = productRepository.findPublicProducts(
-                categoryId,
-                keyword,
-                minPrice,
-                maxPrice,
-                pageable
-        );
+        Page<Product> productPage;
+
+        if (sortOption == ProductSortOption.PRICE_ASC || sortOption == ProductSortOption.PRICE_DESC) {
+            // Price sort needs aggregate query — use dedicated methods
+            int page = pageable.getPageNumber();
+            int size = pageable.getPageSize();
+            List<Product> products = (sortOption == ProductSortOption.PRICE_ASC)
+                    ? productRepository.findAllOrderByMinPriceAsc(PageRequest.of(page, size))
+                    : productRepository.findAllOrderByMinPriceDesc(PageRequest.of(page, size));
+            productPage = new PageImpl<>(products, pageable, products.size());
+        } else {
+            Specification<Product> spec = ProductSpecifications.fromFilterRequest(filter);
+            Sort sort = buildSort(sortOption, pageable);
+            Pageable sortedPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+            productPage = productRepository.findAll(spec, sortedPageable);
+        }
 
         List<Long> productIds = productPage.getContent().stream().map(Product::getId).toList();
         Map<Long, List<ProductVariant>> variantsByProductId = productIds.isEmpty() ? Map.of() :
                 productVariantRepository.findByProductIdInAndStatus(productIds, "ACTIVE").stream()
                         .collect(Collectors.groupingBy(v -> v.getProduct().getId()));
 
-        // Batch-load ảnh primary để tránh N+1
+        // Batch-load primary images to avoid N+1
         Map<Long, String> primaryImageMap = productIds.isEmpty() ? Map.of() :
                 imageService.getPrimaryImagesByOwnerIds(ImageOwnerType.PRODUCT, productIds)
                         .entrySet().stream()
@@ -311,6 +319,19 @@ public class ProductServiceImpl implements ProductService {
                 .toList();
 
         return PageResponse.of(productPage, content);
+    }
+
+    private Sort buildSort(ProductSortOption sortOption, Pageable pageable) {
+        if (sortOption == null) {
+            return pageable.getSort();
+        }
+        return switch (sortOption) {
+            case CREATED_AT_ASC -> Sort.by(Sort.Direction.ASC, "createdAt");
+            case PRICE_ASC, PRICE_DESC -> pageable.getSort(); // handled separately
+            case SOLD_DESC -> Sort.by(Sort.Direction.DESC, "totalSold");
+            case RATING_DESC -> Sort.by(Sort.Direction.DESC, "ratingAvg"); // Note: ratingAvg not on Product entity; handled by spec sort
+            case CREATED_AT_DESC -> Sort.by(Sort.Direction.DESC, "createdAt");
+        };
     }
 
     @Override

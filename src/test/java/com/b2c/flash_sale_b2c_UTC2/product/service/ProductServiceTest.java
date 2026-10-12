@@ -296,7 +296,7 @@ class ProductServiceTest {
         assertEquals("INACTIVE", variant.getStatus());
         verify(productRepository).save(product);
         verify(productVariantRepository).saveAll(List.of(variant));
-        verify(productRepository, never()).delete(any());
+        verify(productRepository, never()).delete((Product) any());
         verify(productVariantRepository, never()).deleteAll(anyList());
     }
 

@@ -3,7 +3,9 @@ package com.b2c.flash_sale_b2c_UTC2.product.repository;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.Product;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.JpaSort;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,7 +16,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface ProductRepository extends JpaRepository<Product, Long> {
+public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpecificationExecutor<Product> {
 
     @Query(value = """
         SELECT DISTINCT p FROM Product p
@@ -106,4 +108,46 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
      * Count active products for a store.
      */
     long countByStoreIdAndStatus(Long storeId, String status);
+
+    /**
+     * Sort by price ascending: uses COALESCE MIN of variant prices.
+     * Must be used with JpaSort.unsafe() since MIN is an aggregate.
+     */
+    @Query("SELECT p FROM Product p JOIN FETCH p.store s JOIN FETCH p.category c " +
+           "WHERE p.status = 'ACTIVE' AND s.status = 'APPROVED' " +
+           "ORDER BY (SELECT MIN(v.originalPrice) FROM ProductVariant v WHERE v.product.id = p.id AND v.status = 'ACTIVE') ASC")
+    List<Product> findAllOrderByMinPriceAsc(Pageable pageable);
+
+    /**
+     * Sort by price descending: uses COALESCE MAX of variant prices.
+     */
+    @Query("SELECT p FROM Product p JOIN FETCH p.store s JOIN FETCH p.category c " +
+           "WHERE p.status = 'ACTIVE' AND s.status = 'APPROVED' " +
+           "ORDER BY (SELECT MAX(v.originalPrice) FROM ProductVariant v WHERE v.product.id = p.id AND v.status = 'ACTIVE') DESC")
+    List<Product> findAllOrderByMinPriceDesc(Pageable pageable);
+
+    /**
+     * Products that have at least one active flash sale item.
+     */
+    @Query("SELECT DISTINCT p FROM Product p JOIN p.store s " +
+           "WHERE p.status = 'ACTIVE' AND s.status = 'APPROVED' " +
+           "AND EXISTS (" +
+           "  SELECT 1 FROM com.b2c.flash_sale_b2c_UTC2.flashsale.entity.FlashSaleItem fsi " +
+           "  JOIN fsi.variant v JOIN fsi.slot sl " +
+           "  WHERE v.product.id = p.id AND fsi.status = 'APPROVED' AND sl.status = 'ACTIVE'" +
+           ")")
+    Page<Product> findProductsWithActiveFlashSale(Pageable pageable);
+
+    /**
+     * Products with at least one active flash sale item, with categoryId filter.
+     */
+    @Query("SELECT DISTINCT p FROM Product p JOIN p.store s JOIN p.category c " +
+           "WHERE p.status = 'ACTIVE' AND s.status = 'APPROVED' " +
+           "AND (:categoryId < 0 OR c.id = :categoryId) " +
+           "AND EXISTS (" +
+           "  SELECT 1 FROM com.b2c.flash_sale_b2c_UTC2.flashsale.entity.FlashSaleItem fsi " +
+           "  JOIN fsi.variant v JOIN fsi.slot sl " +
+           "  WHERE v.product.id = p.id AND fsi.status = 'APPROVED' AND sl.status = 'ACTIVE'" +
+           ")")
+    Page<Product> findProductsWithActiveFlashSaleByCategory(@Param("categoryId") Integer categoryId, Pageable pageable);
 }
