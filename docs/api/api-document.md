@@ -808,7 +808,12 @@ Lấy danh sách sản phẩm đề xuất theo 3 tab cho trang chủ (For You /
 | `keyword` | `string` | Tìm theo tên |
 | `minPrice` | `decimal` | Giá tối thiểu |
 | `maxPrice` | `decimal` | Giá tối đa |
-| `page`, `size`, `sort` | – | Phân trang chuẩn Spring (`page=0&size=20&sort=createdAt,desc`) |
+| `rating` | `integer` | Lọc sản phẩm có ratingAvg >= rating (1-5) |
+| `flashSaleOnly` | `boolean` | Lọc sản phẩm có flash sale đang ACTIVE |
+| `hasDiscount` | `boolean` | Lọc sản phẩm đang giảm giá (minPrice < maxPrice gốc) |
+| `minSold` | `integer` | Lọc sản phẩm có soldCount >= minSold |
+| `sort` | `string` | Sắp xếp: `createdAt_desc` (default), `createdAt_asc`, `price_asc`, `price_desc`, `sold_desc`, `rating_desc` |
+| `page`, `size` | – | Phân trang chuẩn Spring (`page=0&size=20`) |
 
 **Lọc ngầm:** Chỉ trả về sản phẩm `ACTIVE` thuộc store `APPROVED`. Batch fetch variants tránh N+1.
 

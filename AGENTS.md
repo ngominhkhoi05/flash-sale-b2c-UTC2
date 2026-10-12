@@ -1939,7 +1939,7 @@ Nếu có lỗi:
 
 | Method | Endpoint | Access | Mô tả |
 |---|---|---|---|
-| `GET` | `/api/v1/products` | Public | Tìm/filter (categoryId, keyword, minPrice, maxPrice), paging. Chỉ product `ACTIVE` của store `APPROVED`. Batch fetch variants (không N+1). |
+| `GET` | `/api/v1/products` | Public | Tìm/filter (categoryId, keyword, minPrice, maxPrice, rating, flashSaleOnly, hasDiscount, minSold), paging. Chỉ product `ACTIVE` của store `APPROVED`. Hỗ trợ sort: createdAt_desc (default), createdAt_asc, price_asc, price_desc, sold_desc, rating_desc. Batch fetch variants (không N+1). |
 | `GET` | `/api/v1/products/{id}` | Public | Chi tiết SPU + SKU `ACTIVE` |
 | `POST` | `/api/v1/seller/products` | Seller | Tạo SPU-SKU. Validate store APPROVED, giá > 0, tồn kho >= 0, SKU unique, số SKU khớp `tier_variation_configs` |
 | `GET` | `/api/v1/seller/products` | Seller | List sản phẩm của tôi, paging, filter status |
