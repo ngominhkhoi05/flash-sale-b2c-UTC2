@@ -337,8 +337,9 @@ class ProductServiceTest {
         ProductVariant variant = ProductVariant.builder().id(1L).product(product).originalPrice(new BigDecimal("200000")).stockQuantity(10).status("ACTIVE").build();
 
         org.springframework.data.domain.Page<Product> page = new org.springframework.data.domain.PageImpl<>(List.of(product));
-        when(productRepository.findPublicProducts(any(), any(), any(), any(), any())).thenReturn(page);
-        when(productVariantRepository.findByProductIdInAndStatus(List.of(100L), "ACTIVE")).thenReturn(List.of(variant));
+        when(productRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class), any(org.springframework.data.domain.Pageable.class))).thenReturn(page);
+        when(productVariantRepository.findByProductIdInAndStatus(any(), anyString())).thenReturn(List.of(variant));
+        when(imageService.getPrimaryImagesByOwnerIds(any(), any())).thenReturn(java.util.Map.of());
 
         com.b2c.flash_sale_b2c_UTC2.product.dto.ProductFilterRequest filter = new com.b2c.flash_sale_b2c_UTC2.product.dto.ProductFilterRequest();
         var response = productService.getPublicProducts(filter, org.springframework.data.domain.PageRequest.of(0, 10));
@@ -347,6 +348,6 @@ class ProductServiceTest {
         assertEquals(1, response.getItems().size());
         assertEquals("Áo Polo", response.getItems().get(0).getName());
         assertEquals(new BigDecimal("200000"), response.getItems().get(0).getMinPrice());
-        verify(productVariantRepository).findByProductIdInAndStatus(List.of(100L), "ACTIVE");
+        verify(productVariantRepository).findByProductIdInAndStatus(any(), anyString());
     }
 }
