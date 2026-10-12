@@ -29,6 +29,9 @@ Trong các sàn thương mại điện tử hiện đại (Shopee, Lazada, TikTo
 3. **Mô hình Đa bên & Dòng tiền Minh bạch (Multi-Vendor & Commission):**
    * Hệ thống vận hành theo cơ chế sàn: **Admin mở Slot** $\rightarrow$ **Người bán đăng ký sản phẩm** $\rightarrow$ **Admin duyệt** $\rightarrow$ **Người mua đặt hàng**.
    * Xử lý dòng tiền hoa hồng sàn linh hoạt (mặc định 5%) và quản lý ví doanh thu cho từng người bán một cách tự động, chính xác.
+4. **Banner Homepage & Theo dõi Gian hàng:**
+   * Trang chủ hiển thị các banner khuyến mãi (Hero, Freeship, Voucher mới, Promotion) với khả năng lên lịch hiển thị.
+   * Người mua có thể theo dõi gian hàng yêu thích để nhận thông báo khi có sản phẩm mới, Flash Sale, hoặc khuyến mãi.
 
 ---
 
@@ -155,7 +158,7 @@ gantt
 
 | Mốc | Thời điểm | Tên mốc nghiệm thu | Deliverables & Tiêu chí nghiệm thu |
 | :---: | :---: | :--- | :--- |
-| **M1** | Tuần 3 | **Hồ sơ Thiết kế & Kiến trúc** | SRS đầy đủ, ERD PostgreSQL 24 bảng, Sequence Diagram, API Swagger specs. |
+| **M1** | Tuần 3 | **Hồ sơ Thiết kế & Kiến trúc** | SRS đầy đủ, ERD PostgreSQL 27 bảng, Sequence Diagram, API Swagger specs. |
 | **M2** | Tuần 6 | **Luồng tích hợp thông suốt (End-to-End MVP)** | Docker Compose chạy đủ DB, Redis, Backend, Frontend. Luồng tạo slot $\rightarrow$ đăng ký $\rightarrow$ duyệt $\rightarrow$ đặt hàng giữ chỗ $\rightarrow$ quét QR ZaloPay / COD $\rightarrow$ tính hoa hồng. |
 | **M3** | **Tuần 8** | **🏆 NGHIỆM THU GIỮA KÌ (Lõi Kiểm soát Over-selling)** | **1. Kiểm soát Over-selling:** Bắn tải 1.000 - 5.000 request cùng lúc, kiểm soát số lượng bán không vượt quá tồn kho mở bán, bảo đảm tính nhất quán dữ liệu.<br>**2. Báo cáo đối sánh định lượng:** So sánh hiệu năng Lua Script vs Redisson Lock. |
 | **M4** | Tuần 11 | **Async Queue & AI Dynamic Pricing** | Redis Streams xử lý đơn hàng bất đồng bộ; Gemini API phân tích nhịp bán và đề xuất đổi giá trên Admin Portal. |

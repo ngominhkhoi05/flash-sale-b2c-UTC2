@@ -16,12 +16,14 @@
    * Phê duyệt sản phẩm Seller đăng ký (trừ trực tiếp `allocated_stock` từ kho gốc `product_variants.stock_quantity`).
    * Cấu hình tỷ lệ hoa hồng linh hoạt (mặc định 5% toàn sàn, override theo shop).
    * Giám sát sổ cái đối soát tài chính (`wallet_transactions`).
+   * Quản lý banner homepage (`banners`).
 
 2. **Seller Portal:**
    * Quản lý gian hàng (`stores`) và kho lấy hàng (`addresses`).
    * Quản lý sản phẩm gốc (`products` - SPU) và biến thể phân loại (`product_variants` - SKU).
    * Đăng ký biến thể tham gia Flash Sale: giá sale, số lượng mở bán (`allocated_stock`), trần mua trên mỗi khách (`user_purchase_limit`).
    * Quản lý đơn hàng và theo dõi số dư ví doanh thu (`wallets`).
+   * Xem số lượng người theo dõi (`store_followers`).
 
 3. **Buyer Storefront:**
    * Đăng ký/đăng nhập qua Local (Email/Password) và OAuth2 (Google, Facebook, GitHub).
@@ -30,6 +32,7 @@
    * Đặt mua Flash Sale với cơ chế giữ chỗ 5 phút (Reservation TTL 300s).
    * Thanh toán đa kênh: Quét mã QR ZaloPay & COD.
    * Đánh giá sản phẩm đã mua (`product_reviews`) chuẩn Verified Purchase.
+   * Xem banner homepage (`banners`) và theo dõi gian hàng (`store_followers`).
 
 ---
 
@@ -75,6 +78,8 @@ Hệ thống tuân thủ 25 bảng dữ liệu chuẩn 3NF:
 23. `cart_items`
 24. `product_reviews` (Verified Purchase)
 25. `images` (Polymorphic: Product / Variant / User / Store / Review, tích hợp Cloudinary)
+26. `banners` (Banner Homepage: HERO, FREESHIP, VOUCHER_NEW_SHOP, PROMOTION)
+27. `store_followers` (Buyer theo dõi Store)
 
 ### 8 Ràng Buộc Invariant Flash Sale:
 1. $0 \le \texttt{available\_stock} \le \texttt{allocated\_stock}$ (CHECK constraint DB).

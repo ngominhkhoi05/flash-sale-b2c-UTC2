@@ -9,13 +9,13 @@
 * **Hệ quản trị CSDL:** PostgreSQL 16+
 * **Chuẩn thiết kế dữ liệu:** Chuẩn hóa cấp 3 (3NF - Third Normal Form)
 * **Tầng Cache & Concurrency:** Redis In-Memory (Lua Scripting & Redisson Distributed Lock)
-* **Quy mô CSDL:** 25 Bảng dữ liệu hoàn chỉnh (Hỗ trợ Đa người bán, Hoa hồng sàn, Mô hình biến thể phân loại hàng SPU - SKU chuẩn TMĐT, Giỏ hàng Shopping Cart, Đánh giá & Phản hồi Verified Reviews, ZaloPay/COD, OAuth2, Phân quyền Ma trận RBAC kèm Permission Groups & Cờ khóa tính năng, Sổ địa chỉ chuẩn hóa 2 Khóa ngoại vật lý kèm tọa độ GPS, Phân hệ Khuyến mãi Voucher, Quản lý Ảnh đa đối tượng Polymorphic với Cloudinary)
+* **Quy mô CSDL:** 27 Bảng dữ liệu hoàn chỉnh (Hỗ trợ Đa người bán, Hoa hồng sàn, Mô hình biến thể phân loại hàng SPU - SKU chuẩn TMĐT, Giỏ hàng Shopping Cart, Đánh giá & Phản hồi Verified Reviews, ZaloPay/COD, OAuth2, Phân quyền Ma trận RBAC kèm Permission Groups & Cờ khóa tính năng, Sổ địa chỉ chuẩn hóa 2 Khóa ngoại vật lý kèm tọa độ GPS, Phân hệ Khuyến mãi Voucher, Quản lý Ảnh đa đối tượng Polymorphic với Cloudinary, Banner Homepage cho B2C Storefront, Theo dõi Gian hàng)
 
 ---
 
 ## 1. Nguyên lý Chuẩn hóa 3NF (Third Normal Form Proof)
 
-Cơ sở dữ liệu của hệ thống bao gồm **25 bảng**, được thiết kế tuân thủ nghiêm ngặt chuẩn hóa cấp 3 (3NF):
+Cơ sở dữ liệu của hệ thống bao gồm **27 bảng**, được thiết kế tuân thủ nghiêm ngặt chuẩn hóa cấp 3 (3NF):
 
 1. **Chuẩn 1 (1NF - First Normal Form):**
    * Mọi thuộc tính đều mang giá trị nguyên tử (Atomic values), không có cột đa trị (ví dụ: danh sách món hàng tách thành `order_items`, biến thể SKU tách thành `product_variants`, món hàng trong giỏ tách thành `cart_items`, đánh giá tách thành `product_reviews`, lượt dùng voucher tách thành `voucher_usages`, phân bổ quyền tách thành `group_permissions`, địa chỉ tách thành bảng `addresses`).
@@ -169,6 +169,7 @@ erDiagram
         text description
         jsonb tier_variation_configs
         varchar status
+        int total_sold
         timestamptz created_at
     }
 
@@ -324,6 +325,27 @@ erDiagram
         timestamptz updated_at
     }
 
+    BANNERS {
+        bigint id PK
+        varchar type
+        int position
+        varchar image_url
+        varchar image_alt
+        varchar cta_href
+        varchar cta_text
+        boolean is_active
+        timestamptz start_date
+        timestamptz end_date
+        timestamptz created_at
+    }
+
+    STORE_FOLLOWERS {
+        bigint id PK
+        bigint store_id FK
+        bigint user_id FK
+        timestamptz created_at
+    }
+
     %% QUAN HỆ GIỮA CÁC BẢNG (RELATIONSHIPS)
     USERS ||--o{ USER_ROLES : "gán"
     ROLES ||--o{ USER_ROLES : "vai trò chính"
@@ -369,6 +391,11 @@ erDiagram
     USERS            ||--o| IMAGES : "has_avatar (owner_type=USER, 1-1)"
     STORES           ||--o| IMAGES : "has_logo (owner_type=STORE, 1-1)"
     PRODUCT_REVIEWS  ||--o{ IMAGES : "has_album (owner_type=REVIEW)"
+
+    %% Banner homepage (public, khong co owner FK)
+    %% Store follower (buyer follows store)
+    STORES ||--o{ STORE_FOLLOWERS : "followed_by"
+    USERS  ||--o{ STORE_FOLLOWERS : "follows"
 ```
 
 ---
@@ -545,9 +572,10 @@ erDiagram
   | ~~`image_url`~~ | ~~`VARCHAR(255)`~~ | ~~NULL~~ | **ĐÃ CHUYỂN SANG BẢNG `images`** (owner_type='PRODUCT'). Xem Phân hệ 10. |
   | `image_url` | `VARCHAR(255)` | NULL | Link ảnh đại diện chính của sản phẩm |
   | `description` | `TEXT` | NULL | Bài viết mô tả chi tiết thông số |
-  | `tier_variation_configs` | **`JSONB`** | NULL | Cấu hình các tầng lựa chọn (VD: `[{"name": "Màu sắc", "options": ["Đen", "Trắng", "Vàng"]}, {"name": "Kích thước", "options": ["S", "M", "L"]}]`). NULL nếu là hàng đơn không có phân loại |
-  | `status` | `VARCHAR(20)` | DEFAULT 'ACTIVE' | `ACTIVE`, `INACTIVE`, `OUT_OF_STOCK` |
-  | `created_at` | `TIMESTAMPTZ` | DEFAULT CURRENT_TIMESTAMP | Ngày tạo sản phẩm |
+| `tier_variation_configs` | **`JSONB`** | NULL | Cấu hình các tầng lựa chọn (VD: `[{"name": "Màu sắc", "options": ["Đen", "Trắng", "Vàng"]}, {"name": "Kích thước", "options": ["S", "M", "L"]}]`). NULL nếu là hàng đơn không có phân loại |
+| `total_sold` | `INT` | DEFAULT 0 | Tổng số lượng đã bán (cập nhật khi đơn hàng COMPLETED). Dùng cho FE hiển thị "Đã bán X" |
+| `status` | `VARCHAR(20)` | DEFAULT 'ACTIVE' | `ACTIVE`, `INACTIVE`, `OUT_OF_STOCK` |
+| `created_at` | `TIMESTAMPTZ` | DEFAULT CURRENT_TIMESTAMP | Ngày tạo sản phẩm |
 
 #### 13. Bảng `product_variants` (Chi tiết từng biến thể phân loại - SKU)
 * **Chức năng nghiệp vụ:** Quản lý từng biến thể SKU cụ thể sinh ra từ tổ hợp lựa chọn (VD: $3 \text{ màu} \times 3 \text{ size} = 9 \text{ SKUs}$). Là nơi thực tế quản lý mã định danh SKU, giá bán lẻ gốc và số lượng tồn kho theo chuẩn 3NF.
@@ -792,7 +820,7 @@ erDiagram
 
 ---
 
-### PHÂN HỆ 10: QUẢN LÝ ẢNH ĐA ĐỐI TƯỢNG - CLOUDINARY (1 BẢNG)
+### Phân hệ 10: Quản lý Ảnh Đa đối tượng - Cloudinary (1 Bảng)
 
 #### 25. Bảng `images` (Polymorphic Image Storage - Thay thế 5 cột ảnh rải rác)
 * **Chức năng nghiệp vụ:** Lưu trữ toàn bộ ảnh của 5 loại đối tượng (Product, Variant, User, Store, Review) trong một bảng thống nhất. Thay thế 5 cột đã xóa bởi migration V4: `products.image_url`, `product_variants.image_url`, `stores.logo_url`, `users.avatar_url`, `product_reviews.image_urls` (JSONB).
@@ -837,6 +865,53 @@ erDiagram
   - Mô hình polymorphic vi phạm chuẩn 3NF về mặt lý thuyết (không có FK vật lý). Đây là **quyết định kiến trúc có chủ đích** để đơn giản hóa quản lý ảnh đa đối tượng, đánh đổi tính toàn vẹn tham chiếu cấp RDBMS lấy sự linh hoạt.
   - Service bắt buộc validate `owner_id` tồn tại trong bảng tương ứng (theo `owner_type`) trước khi insert.
   - Khi xóa owner (Product/Store/Review/User), Service phải soft delete tất cả `images` có `owner_id` tương ứng để tránh ảnh mồ côi trên Cloudinary.
+
+---
+
+### PHÂN HỆ 11: BANNER HOMEPAGE (1 BẢNG)
+
+#### 26. Bảng `banners` (Banner Homepage cho B2C Storefront)
+* **Chức năng nghiệp vụ:** Quản lý banner hiển thị trên trang chủ B2C Storefront (Hero carousel, Freeship banner, Voucher khởi người bán mới, Promotion). Hỗ trợ lên lịch hiển thị qua `start_date`/`end_date` và sắp xếp theo `position`.
+* **Cấu trúc trường:**
+  | Tên trường | Kiểu dữ liệu | Ràng buộc | Mô tả chi tiết |
+  | :--- | :--- | :--- | :--- |
+  | `id` | `BIGSERIAL` | **PRIMARY KEY** | ID banner |
+  | `type` | `VARCHAR(20)` | **NOT NULL** | Loại banner: `HERO` (carousel chính), `FREESHIP`, `VOUCHER_NEW_SHOP`, `PROMOTION` |
+  | `position` | `INT` | DEFAULT 0, CHECK (>=0) | Thứ tự hiển thị (sắp xếp tăng dần) |
+  | `image_url` | `VARCHAR(500)` | **NOT NULL** | URL ảnh banner |
+  | `image_alt` | `VARCHAR(255)` | NULL | Mô tả ảnh cho SEO/accessibility |
+  | `cta_href` | `VARCHAR(255)` | NULL | Đường dẫn khi click banner (VD: `/products?category=sale`) |
+  | `cta_text` | `VARCHAR(50)` | NULL | Nút Call-to-Action text (VD: "Mua ngay") |
+  | `is_active` | `BOOLEAN` | DEFAULT TRUE | Banner có hiển thị hay không |
+  | `start_date` | `TIMESTAMPTZ` | NULL | Thời điểm bắt đầu hiển thị (NULL = hiển thị ngay) |
+  | `end_date` | `TIMESTAMPTZ` | NULL | Thời điểm kết thúc hiển thị (NULL = hiển thị vĩnh viễn) |
+  | `created_at` | `TIMESTAMPTZ` | DEFAULT CURRENT_TIMESTAMP | Ngày tạo banner |
+* **Ràng buộc toàn vẹn:**
+  * `CHECK (type IN ('HERO','FREESHIP','VOUCHER_NEW_SHOP','PROMOTION'))`
+  * `CHECK (position >= 0)`
+  * `CHECK (start_date IS NULL OR end_date IS NULL OR start_date <= end_date)` — Đảm bảo ngày bắt đầu không lớn hơn ngày kết thúc
+* **Chỉ mục tối ưu:**
+  * `CREATE INDEX idx_banners_active_window ON banners (is_active, start_date, end_date);` — Tối ưu truy vấn banner đang active trong khoảng thời gian
+  * `CREATE INDEX idx_banners_type_position ON banners (type, position);` — Tối ưu truy vấn theo loại và thứ tự
+
+---
+
+### PHÂN HỆ 12: THEO DÕI GIAN HÀNG (1 BẢNG)
+
+#### 27. Bảng `store_followers` (Người mua theo dõi Gian hàng)
+* **Chức năng nghiệp vụ:** Cho phép Buyer theo dõi Store để nhận thông báo khi có sản phẩm mới, Flash Sale, hoặc khuyến mãi. Mỗi user có thể theo dõi nhiều store, mỗi store có thể được theo dõi bởi nhiều user.
+* **Cấu trúc trường:**
+  | Tên trường | Kiểu dữ liệu | Ràng buộc | Mô tả chi tiết |
+  | :--- | :--- | :--- | :--- |
+  | `id` | `BIGSERIAL` | **PRIMARY KEY** | ID bản ghi theo dõi |
+  | `store_id` | `BIGINT` | **NOT NULL, FK** $\rightarrow$ `stores(id)` ON DELETE CASCADE | Store được theo dõi |
+  | `user_id` | `BIGINT` | **NOT NULL, FK** $\rightarrow$ `users(id)` ON DELETE CASCADE | User theo dõi store |
+  | `created_at` | `TIMESTAMPTZ` | DEFAULT CURRENT_TIMESTAMP | Thời điểm bắt đầu theo dõi |
+* **Ràng buộc duy nhất:**
+  * `UNIQUE (store_id, user_id)` — Mỗi user chỉ theo dõi 1 store tối đa 1 lần
+* **Chỉ mục tối ưu:**
+  * `CREATE INDEX idx_store_followers_store ON store_followers(store_id);` — Tối ưu truy vấn "ai đang theo dõi store X"
+  * `CREATE INDEX idx_store_followers_user ON store_followers(user_id);` — Tối ưu truy vấn "user đang theo dõi những store nào"
 
 ---
 
