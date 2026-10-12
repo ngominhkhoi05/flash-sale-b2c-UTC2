@@ -58,6 +58,9 @@ public class Product {
     @Builder.Default
     private String status = "ACTIVE";
 
+    @Column(name = "slug", length = 255)
+    private String slug;
+
     @Column(name = "total_sold")
     @Builder.Default
     private Integer totalSold = 0;

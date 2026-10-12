@@ -1,8 +1,11 @@
 package com.b2c.flash_sale_b2c_UTC2.store.entity;
 
+import com.b2c.flash_sale_b2c_UTC2.store.enums.StoreTier;
 import com.b2c.flash_sale_b2c_UTC2.user.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -52,6 +55,21 @@ public class Store {
     @Column(name = "status", length = 20)
     @Builder.Default
     private String status = "PENDING";
+
+    /**
+     * Store tier for B2C marketplace badges.
+     * NORMAL = regular store, OFFICIAL_MALL = official mall store, PREFERRED = preferred store.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tier", length = 20, nullable = false)
+    @Builder.Default
+    private StoreTier tier = StoreTier.NORMAL;
+
+    /**
+     * Last active timestamp of the store (for store profile display).
+     */
+    @Column(name = "last_active_at")
+    private Instant lastActiveAt;
 
     @Column(name = "created_at")
     private Instant createdAt;
