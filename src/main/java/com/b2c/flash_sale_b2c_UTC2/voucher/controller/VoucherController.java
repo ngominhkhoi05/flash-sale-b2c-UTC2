@@ -38,7 +38,7 @@ public class VoucherController {
 
     @Operation(summary = "Xem danh sách mã giảm giá của gian hàng", description = "Lấy danh sách mã giảm giá thuộc một gian hàng")
     @GetMapping("/store/{storeId}")
-    public ResponseEntity<ApiResponse<List<VoucherResponse>>> getStoreVouchers(@PathVariable Long storeId) {
+    public ResponseEntity<ApiResponse<List<VoucherResponse>>> getStoreVouchers(@PathVariable("storeId") Long storeId) {
         List<VoucherResponse> response = voucherService.getStoreVouchers(storeId);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách voucher gian hàng thành công", response));
     }
