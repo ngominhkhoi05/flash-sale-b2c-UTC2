@@ -99,4 +99,6 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     @Query("SELECT MIN(v.originalPrice), MAX(v.originalPrice) FROM ProductVariant v WHERE v.product.id = :productId AND v.status = 'ACTIVE'")
     Object[] findPriceRangeByProductId(@Param("productId") Long productId);
+
+    boolean existsByIdAndStatus(Long id, String status);
 }

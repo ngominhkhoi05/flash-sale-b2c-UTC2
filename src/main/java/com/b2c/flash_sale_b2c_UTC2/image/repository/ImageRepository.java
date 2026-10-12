@@ -75,4 +75,19 @@ public interface ImageRepository extends JpaRepository<Image, Long> {
           AND i.updatedAt < :threshold
         """)
     List<Image> findReadyForHardDelete(@Param("threshold") Instant threshold);
+
+    /**
+     * Batch-load tất cả ảnh ACTIVE cho nhiều owner cùng lúc (không chỉ primary).
+     * Dùng cho review album — lấy tất cả ảnh của các review để map vào response.
+     */
+    @Query("""
+        SELECT i FROM Image i
+        WHERE i.ownerType = :ownerType
+          AND i.status = 'ACTIVE'
+          AND i.ownerId IN :ownerIds
+        ORDER BY i.displayOrder ASC
+        """)
+    List<Image> findByOwnerTypeAndOwnerIdIn(
+            @Param("ownerType") ImageOwnerType ownerType,
+            @Param("ownerIds") List<Long> ownerIds);
 }
