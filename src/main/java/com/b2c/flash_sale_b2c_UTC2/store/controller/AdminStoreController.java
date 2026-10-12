@@ -28,7 +28,7 @@ public class AdminStoreController {
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<StoreResponse>> updateStoreStatus(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody UpdateStoreStatusRequest request
     ) {
         StoreResponse response = storeService.updateStoreStatus(id, request);

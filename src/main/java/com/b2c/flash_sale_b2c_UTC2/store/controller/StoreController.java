@@ -67,7 +67,7 @@ public class StoreController {
 
     @Operation(summary = "Xem thông tin công khai gian hàng", description = "Khách hàng xem thông tin gian hàng đã được duyệt (APPROVED)")
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<StoreResponse>> getStoreById(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<StoreResponse>> getStoreById(@PathVariable("id") Long id) {
         StoreResponse response = storeService.getStoreById(id);
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin gian hàng thành công", response));
     }
@@ -98,7 +98,7 @@ public class StoreController {
     @PutMapping("/me/addresses/{addressId}")
     public ResponseEntity<ApiResponse<AddressResponse>> updateStoreAddress(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long addressId,
+            @PathVariable("addressId") Long addressId,
             @Valid @RequestBody UpdateAddressRequest request
     ) {
         AddressResponse response = storeService.updateStoreAddress(userDetails.getUser().getId(), addressId, request);
@@ -109,7 +109,7 @@ public class StoreController {
     @DeleteMapping("/me/addresses/{addressId}")
     public ResponseEntity<ApiResponse<Void>> deleteStoreAddress(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long addressId
+            @PathVariable("addressId") Long addressId
     ) {
         storeService.deleteStoreAddress(userDetails.getUser().getId(), addressId);
         return ResponseEntity.ok(ApiResponse.success("Xóa địa chỉ kho thành công", null));
@@ -119,7 +119,7 @@ public class StoreController {
     @PatchMapping("/me/addresses/{addressId}/default")
     public ResponseEntity<ApiResponse<AddressResponse>> setDefaultStoreAddress(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long addressId
+            @PathVariable("addressId") Long addressId
     ) {
         AddressResponse response = storeService.setDefaultStoreAddress(userDetails.getUser().getId(), addressId);
         return ResponseEntity.ok(ApiResponse.success("Đặt địa chỉ kho mặc định thành công", response));
