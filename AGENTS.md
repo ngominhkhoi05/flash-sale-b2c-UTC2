@@ -1948,6 +1948,15 @@ Nếu có lỗi:
 | `PATCH` | `/api/v1/seller/products/{id}/status` | Seller | Đổi status `ACTIVE` / `INACTIVE` / `OUT_OF_STOCK` |
 
 > **V8 field**: `Product.slug` (`VARCHAR(255)`, nullable, unique partial index) — dùng cho SEO URL, backfill từ `name`.
+>
+> **`ProductDetailResponse` new fields** (Subplan 2):
+> - `Double ratingAvg` — trung bình rating từ reviews VISIBLE (default 0.0)
+> - `Integer ratingCount` — tổng review VISIBLE
+> - `Integer soldCount` — từ `products.total_sold` (V7)
+> - `BigDecimal minPrice` — MIN variant original_price WHERE ACTIVE
+> - `BigDecimal maxPrice` — MAX variant original_price WHERE ACTIVE
+> - `Integer discountPercent` — `round((original - flashSale) / original * 100)` từ lowest-price active FlashSaleItem; `null` nếu không có
+> - `List<ProductImageDto> images` — ảnh từ `ImageService.listImages(PRODUCT, productId)`, alt = product name
 
 ### 46.9 Image (`/api/v1/images` & `/api/v1/admin/images`)
 

@@ -783,14 +783,40 @@ Lấy danh sách sản phẩm đề xuất theo 3 tab cho trang chủ (For You /
 
 **Response (`ProductDetailResponse`):**
 
+| Field | Type | Mô tả |
+|---|---|---|
+| `id` | `Long` | |
+| `storeId` | `Long` | |
+| `storeTier` | `String` | Hạng store (`NORMAL`, `OFFICIAL_MALL`, `PREFERRED`) — null nếu chưa có |
+| `storeName` | `String` | |
+| `categoryId` | `Long` | |
+| `categoryName` | `String` | |
+| `name` | `String` | |
+| `slug` | `String` | Slug cho SEO URL (nullable, từ `products.slug` V8) |
+| `imageUrl` | `String` | Ảnh đại diện (từ bảng `images` hoặc cũ) |
+| `description` | `String` | |
+| `tierVariationConfigs` | `Array` | Cấu hình biến thể cấp SPU |
+| `status` | `String` | |
+| `createdAt` | `ISO DateTime` | |
+| `ratingAvg` | `Double` | Trung bình rating từ reviews VISIBLE (mặc định `0.0` nếu không có review) |
+| `ratingCount` | `Integer` | Tổng số review VISIBLE |
+| `soldCount` | `Integer` | Tổng số đã bán (từ `products.total_sold` V7) |
+| `minPrice` | `Decimal` | Giá thấp nhất trong các variant ACTIVE |
+| `maxPrice` | `Decimal` | Giá cao nhất trong các variant ACTIVE |
+| `discountPercent` | `Integer` | `%` giảm giá Flash Sale. `null` nếu sản phẩm không có FlashSaleItem ACTIVE. Tính: `round((original - flashSale) / original * 100)` |
+| `images` | `Array<ProductImageDto>` | Danh sách ảnh sản phẩm (từ bảng `images`, sort theo `displayOrder`) |
+| `variants` | `Array` | Danh sách SKU |
+
 ```json
 {
   "id": 1,
   "storeId": 2,
+  "storeTier": "OFFICIAL_MALL",
   "storeName": "Shop ABC",
   "categoryId": 1,
   "categoryName": "Thời trang nam",
   "name": "Áo thun nam",
+  "slug": "ao-thun-nam",
   "imageUrl": "https://...",
   "description": "...",
   "tierVariationConfigs": [
@@ -798,7 +824,28 @@ Lấy danh sách sản phẩm đề xuất theo 3 tab cho trang chủ (For You /
     { "name": "Size", "options": ["M", "L", "XL"] }
   ],
   "status": "ACTIVE",
-  "createdAt": "2026-10-01T...",
+  "ratingAvg": 4.5,
+  "ratingCount": 128,
+  "soldCount": 320,
+  "minPrice": 99000,
+  "maxPrice": 199000,
+  "discountPercent": 30,
+  "images": [
+    {
+      "id": 10,
+      "url": "https://res.cloudinary.com/.../image1.jpg",
+      "isPrimary": true,
+      "displayOrder": 0,
+      "alt": "Áo thun nam"
+    },
+    {
+      "id": 11,
+      "url": "https://res.cloudinary.com/.../image2.jpg",
+      "isPrimary": false,
+      "displayOrder": 1,
+      "alt": "Áo thun nam"
+    }
+  ],
   "variants": [
     {
       "id": 10,
@@ -813,7 +860,8 @@ Lấy danh sách sản phẩm đề xuất theo 3 tab cho trang chủ (For You /
       "version": 0,
       "createdAt": "2026-10-01T..."
     }
-  ]
+  ],
+  "createdAt": "2026-10-01T..."
 }
 ```
 
