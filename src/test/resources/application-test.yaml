@@ -1,23 +1,74 @@
-# Profile test: dung cho Unit Test (Mock) - KHING can Postgres
-# Cac test dung Postgres that phai dung @ActiveProfiles("test-local")
+# ===================================================================
+# Flash Sale B2C - Test Profile (uses real Supabase Dev DB)
+# Used for RepositoryIT (via AbstractPostgresIT) and Full-flow IT.
+# No Testcontainers - requires user to have Docker (we removed that requirement).
+# Connection points to Supabase Pooler, same as application-local.yaml.
+# ===================================================================
+
 spring:
+  config:
+    activate:
+      on-profile: test
+
+  # Allow bean override in test profile (TestCorsConfig overrides CorsConfig)
+  main:
+    allow-bean-definition-overriding: true
+
+  # Disable Redis auto-configs (Redis is mocked in tests; no real Redis available)
   autoconfigure:
     exclude:
-      - org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration
       - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
-      - org.redisson.spring.starter.RedissonAutoConfigurationV2
-      - org.redisson.spring.starter.RedissonAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration
+
+  # --- PostgreSQL connection (Supabase Cloud Dev DB) ---
+  datasource:
+    url: jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require
+    username: postgres.dygnssynjofuaaapnvcg
+    password: '&zyXVX8TNLWYF!B'
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: FlashSaleTestHikariPool
+      maximum-pool-size: 5
+      minimum-idle: 1
+      idle-timeout: 60000
+      connection-timeout: 20000
+      max-lifetime: 600000
+
+  # --- JPA / Hibernate for Test ---
   jpa:
-    hibernate:
-      ddl-auto: none
-  flyway:
-    enabled: false
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        highlight_sql: false
 
-kwt:
-  secret: SecureTestLocalSecretWithAtLeast32CharactersHS256Bit2026
-  expiration-ms: 3600000
-  refresh-expiration-ms: 60480000
+  # --- Redis disabled in test (mocked via @MockitoBean) ---
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: ""
+      timeout: 1000ms
 
+# --- JWT secret for test (>= 64 chars) ---
+jwt:
+  secret: 07ebea14294a854e0b0c27f1adf042341b8736fbf7cf72df52d68667463c956f
+
+# --- Cloudinary: empty for test (mocked via @MockitoBean if needed) ---
+cloudinary:
+  cloud-name: ""
+  api-key: ""
+  api-secret: ""
+  folder: flash-sale-b2c/test
+
+# --- CORS: allow all origins in test ---
+cors:
+  allowed-origins: "*"
+
+# --- Logging: reduce noise ---
 logging:
   level:
-    com.b2c.flash_sale_b2c_UTC2: DEBUG
+    root: WARN
+    com.b2c: INFO
+    org.hibernate.SQL: OFF
+    org.springframework.test: INFO

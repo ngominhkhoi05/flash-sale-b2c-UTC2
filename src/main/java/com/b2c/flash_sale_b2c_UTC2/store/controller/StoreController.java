@@ -6,6 +6,7 @@ import com.b2c.flash_sale_b2c_UTC2.image.dto.ImageResponse;
 import com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType;
 import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.CreateStoreRequest;
+import com.b2c.flash_sale_b2c_UTC2.store.dto.FeaturedStoreResponse;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.StoreResponse;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.UpdateStoreRequest;
 import com.b2c.flash_sale_b2c_UTC2.store.service.StoreService;
@@ -63,6 +64,15 @@ public class StoreController {
     ) {
         StoreResponse response = storeService.updateMyStore(userDetails.getUser().getId(), request);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật thông tin gian hàng thành công", response));
+    }
+
+    @Operation(summary = "Lấy danh sách gian hàng nổi bật", description = "Public - lấy danh sách gian hàng APPROVED cho section Vibe Mall trang chủ")
+    @GetMapping("/featured")
+    public ResponseEntity<ApiResponse<List<FeaturedStoreResponse>>> getFeaturedStores(
+            @RequestParam(value = "limit", defaultValue = "4") int limit
+    ) {
+        List<FeaturedStoreResponse> response = storeService.getFeaturedStores(limit);
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách gian hàng nổi bật thành công", response));
     }
 
     @Operation(summary = "Xem thông tin công khai gian hàng", description = "Khách hàng xem thông tin gian hàng đã được duyệt (APPROVED)")

@@ -2,6 +2,7 @@ package com.b2c.flash_sale_b2c_UTC2.store.service;
 
 import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.CreateStoreRequest;
+import com.b2c.flash_sale_b2c_UTC2.store.dto.FeaturedStoreResponse;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.StoreResponse;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.UpdateStoreRequest;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.UpdateStoreStatusRequest;
@@ -11,6 +12,7 @@ import com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType;
 import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
 import com.b2c.flash_sale_b2c_UTC2.store.mapper.StoreMapper;
 import com.b2c.flash_sale_b2c_UTC2.store.repository.StoreRepository;
+import com.b2c.flash_sale_b2c_UTC2.image.repository.ImageRepository;
 import com.b2c.flash_sale_b2c_UTC2.user.dto.AddressResponse;
 import com.b2c.flash_sale_b2c_UTC2.user.dto.CreateAddressRequest;
 import com.b2c.flash_sale_b2c_UTC2.user.dto.UpdateAddressRequest;
@@ -46,6 +48,7 @@ public class StoreServiceImpl implements StoreService {
     private final UserRoleRepository userRoleRepository;
     private final WalletRepository walletRepository;
     private final AddressRepository addressRepository;
+    private final ImageRepository imageRepository;
     private final StoreMapper storeMapper;
     private final AddressMapper addressMapper;
     private final ImageService imageService;
@@ -145,6 +148,46 @@ public class StoreServiceImpl implements StoreService {
         store = storeRepository.save(store);
         log.info("Admin đã cập nhật trạng thái gian hàng id={} thành {}", storeId, newStatus);
         return toResponseWithLogo(store);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<FeaturedStoreResponse> getFeaturedStores(int limit) {
+        int safeLimit = Math.max(1, Math.min(8, limit));
+        List<Store> stores = storeRepository.findFeaturedStores(
+                org.springframework.data.domain.PageRequest.of(0, safeLimit));
+        return stores.stream()
+                .map(this::toFeaturedStoreResponse)
+                .toList();
+    }
+
+    private FeaturedStoreResponse toFeaturedStoreResponse(Store store) {
+        return FeaturedStoreResponse.builder()
+                .id(store.getId())
+                .name(store.getStoreName())
+                .logoUrl(resolveStoreLogoUrl(store))
+                .verified(true)
+                .rating(0.0)
+                .totalRatings(0L)
+                .followers(0L)
+                .productThumbnails(java.util.Collections.emptyList())
+                .totalProducts(0)
+                .createdAt(store.getCreatedAt())
+                .build();
+    }
+
+    private String resolveStoreLogoUrl(Store store) {
+        try {
+            return imageRepository
+                    .findFirstByOwnerTypeAndOwnerIdAndStatus(
+                            com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType.STORE,
+                            store.getId(), "ACTIVE")
+                    .map(img -> img.getUrl())
+                    .orElse(null);
+        } catch (Exception e) {
+            log.warn("Could not resolve logo for store {}: {}", store.getId(), e.getMessage());
+            return null;
+        }
     }
 
     @Override
