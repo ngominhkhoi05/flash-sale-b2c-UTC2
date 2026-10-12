@@ -19,6 +19,9 @@ jobs:
           java-version: '25'
           cache: gradle
 
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
       - name: Build with Gradle (skip test)
         run: ./gradlew clean bootJar -x test --no-daemon
 
