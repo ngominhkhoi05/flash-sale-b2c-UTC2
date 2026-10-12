@@ -1949,7 +1949,7 @@ Nếu có lỗi:
 
 > **V8 field**: `Product.slug` (`VARCHAR(255)`, nullable, unique partial index) — dùng cho SEO URL, backfill từ `name`.
 >
-> **`ProductDetailResponse` new fields** (Subplan 2):
+> **`ProductDetailResponse` new fields** (Subplan 2 + Subplan 4):
 > - `Double ratingAvg` — trung bình rating từ reviews VISIBLE (default 0.0)
 > - `Integer ratingCount` — tổng review VISIBLE
 > - `Integer soldCount` — từ `products.total_sold` (V7)
@@ -1957,6 +1957,7 @@ Nếu có lỗi:
 > - `BigDecimal maxPrice` — MAX variant original_price WHERE ACTIVE
 > - `Integer discountPercent` — `round((original - flashSale) / original * 100)` từ lowest-price active FlashSaleItem; `null` nếu không có
 > - `List<ProductImageDto> images` — ảnh từ `ImageService.listImages(PRODUCT, productId)`, alt = product name
+> - **`List<ActiveFlashSaleDto> flashSales`** (Subplan 4) — danh sách FlashSaleItem ACTIVE của product. Gồm: `slotId`, `slotStartTime`, `slotEndTime`, `itemId`, `variantId`, `originalPrice`, `flashSalePrice`, `stockAvailable` (Redis → fallback DB), `slotStatus`. Sorted by `flashSalePrice ASC`. Empty list nếu không có.
 
 ### 46.9 Image (`/api/v1/images` & `/api/v1/admin/images`)
 
@@ -2044,6 +2045,22 @@ Xem chi tiết mục #22. Tóm tắt:
 | `DELETE` | `/api/v1/seller/vouchers/{id}` | Seller | Xóa |
 | `GET` | `/api/v1/admin/vouchers` | Admin | List platform voucher |
 | `POST` | `/api/v1/admin/vouchers` | Admin | Tạo platform voucher |
+
+### 46.13 Banner (`/api/v1/banners`, `/api/v1/admin/banners`)
+
+Xem chi tiết mục #25 (Image Module). Tóm tắt:
+
+| Method | Endpoint | Access | Mô tả |
+|---|---|---|---|
+| `GET` | `/api/v1/banners/home` | Public | Banner trang chủ (mainSlides HERO + sideBanners) |
+| `GET` | `/api/v1/banners/position/{position}` | Public | Banner ACTIVE theo vị trí |
+| `GET` | `/api/v1/admin/banners` | Admin | List banner (paging, filter type/isActive) |
+| `POST` | `/api/v1/admin/banners` | Admin | Tạo banner |
+| `PUT` | `/api/v1/admin/banners/{id}` | Admin | Cập nhật banner |
+| `PATCH` | `/api/v1/admin/banners/{id}/status` | Admin | Đổi isActive (validate time window) |
+| `DELETE` | `/api/v1/admin/banners/{id}` | Admin | Soft delete (isActive=false) |
+
+Error codes: `BANNER_NOT_FOUND`, `BANNER_INVALID_DATE_RANGE`, `BANNER_INVALID_STATUS`, `BANNER_IMAGE_URL_BLANK`.
 
 ### 46.14 Payment (`/api/v1/payments`)
 

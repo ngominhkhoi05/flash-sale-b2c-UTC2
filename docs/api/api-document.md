@@ -40,7 +40,7 @@
 26. [Bảng Mã Lỗi Tổng Hợp](#26-bảng-mã-lỗi-tổng-hợp)
 27. [Phân Quyền Truy Cập Theo Role](#27-phân-quyền-truy-cập-theo-role)
 28. [Image Management Module (Polymorphic Storage - Cloudinary)](#28-image-management-module-polymorphic-storage---cloudinary)
-29. [Banner Module](#29-banner-module--apibanners)
+29. [Banner Module](#29-banner-module--apibanners-apibanners-admin-apibanners) (Public + Admin CRUD)
 
 ---
 
@@ -203,8 +203,8 @@ Tổng cộng **69 endpoints** được nhóm theo 21 controller:
 | Voucher | 3 | – | – | – | 3 |
 | Seller Voucher | – | – | 2 | – | 2 |
 | Admin Voucher | – | – | – | 1 | 1 |
-| Banner | 1 | – | – | – | 1 |
-| **Tổng** | **15** | **20** | **23** | **11** | **69** |
+| Banner | 2 | – | – | 5 | 7 |
+| **Tổng** | **16** | **20** | **23** | **16** | **75** |
 
 ---
 ## 6. Auth Module `/api/v1/auth`
@@ -804,6 +804,7 @@ Lấy danh sách sản phẩm đề xuất theo 3 tab cho trang chủ (For You /
 | `minPrice` | `Decimal` | Giá thấp nhất trong các variant ACTIVE |
 | `maxPrice` | `Decimal` | Giá cao nhất trong các variant ACTIVE |
 | `discountPercent` | `Integer` | `%` giảm giá Flash Sale. `null` nếu sản phẩm không có FlashSaleItem ACTIVE. Tính: `round((original - flashSale) / original * 100)` |
+| `flashSales` | `Array<ActiveFlashSaleDto>` | Danh sách Flash Sale ACTIVE của sản phẩm này. Mỗi item gồm: `slotId`, `slotStartTime`, `slotEndTime`, `itemId`, `variantId`, `originalPrice`, `flashSalePrice`, `stockAvailable` (từ Redis, fallback DB), `slotStatus`. Sorted by `flashSalePrice ASC`. Rỗng nếu không có. |
 | `images` | `Array<ProductImageDto>` | Danh sách ảnh sản phẩm (từ bảng `images`, sort theo `displayOrder`) |
 | `variants` | `Array` | Danh sách SKU |
 
@@ -830,6 +831,19 @@ Lấy danh sách sản phẩm đề xuất theo 3 tab cho trang chủ (For You /
   "minPrice": 99000,
   "maxPrice": 199000,
   "discountPercent": 30,
+  "flashSales": [
+    {
+      "slotId": 1,
+      "slotStartTime": "2026-10-15T00:00:00.000Z",
+      "slotEndTime": "2026-10-15T23:59:59.000Z",
+      "itemId": 10,
+      "variantId": 10,
+      "originalPrice": 99000,
+      "flashSalePrice": 69000,
+      "stockAvailable": 50,
+      "slotStatus": "ACTIVE"
+    }
+  ],
   "images": [
     {
       "id": 10,
@@ -2105,15 +2119,18 @@ Ngoài endpoint chung `POST /api/v1/images/upload` ở trên, các controller d�
 
 ---
 
-## 29. Banner Module `/api/v1/banners`
+## 29. Banner Module `/api/v1/banners` (Public) — `/api/v1/admin/banners` (Admin)
 
-> **Public API** · **Tag Swagger**: `Banners`
+> **Public API** · **Tag Swagger**: `Banners` (public) và `Admin Banners` (admin)
+
+### 29.1 Public Endpoints
 
 | Method | Endpoint | Access | Mô tả |
 |---|---|---|---|
 | `GET` | `/api/v1/banners/home` | Public | Lấy danh sách banner cho trang chủ (main slides + side banners) |
+| `GET` | `/api/v1/banners/position/{position}` | Public | Lấy banner ACTIVE theo vị trí `position`, sắp xếp theo `displayOrder` |
 
-### 29.1 `GET /api/v1/banners/home`
+#### 29.1.1 `GET /api/v1/banners/home`
 
 Lấy tất cả banner ACTIVE cho trang chủ. Bao gồm 2 nhóm:
 
@@ -2170,8 +2187,108 @@ Lấy tất cả banner ACTIVE cho trang chủ. Bao gồm 2 nhóm:
 | `VOUCHER_NEW_SHOP` | Banner voucher cho khách hàng mới / shop mới |
 | `PROMOTION` | Banner khuyến mãi chung |
 
-> **Note**: Hiện tại banner được quản lý thủ công (seed trong DB). API Admin để CRUD banner sẽ được bổ sung sau (nếu có yêu cầu).
+> **Note**: Subplan 4 (2026-10-12) đã implement Admin CRUD cho Banner qua `/api/v1/admin/banners`. Banner được quản lý qua API, không còn seed thủ công.
+
+### 29.2 Admin Endpoints (`/api/v1/admin/banners`)
+
+| Method | Endpoint | Access | Mô tả |
+|---|---|---|---|
+| `GET` | `/api/v1/admin/banners` | Admin | List banner (paging, filter `type`, `isActive`) |
+| `POST` | `/api/v1/admin/banners` | Admin | Tạo banner mới |
+| `PUT` | `/api/v1/admin/banners/{id}` | Admin | Cập nhật banner |
+| `PATCH` | `/api/v1/admin/banners/{id}/status` | Admin | Đổi `isActive` (ACTIVE ↔ INACTIVE) |
+| `DELETE` | `/api/v1/admin/banners/{id}` | Admin | Xóa banner (soft delete: `isActive=false`) |
+
+#### 29.2.1 `GET /api/v1/admin/banners`
+
+List tất cả banner (paging, filter theo `type` và `isActive`).
+
+**Query params:**
+
+| Param | Type | Default | Mô tả |
+|---|---|---|---|
+| `type` | `String` | — | Filter theo BannerType (`HERO`, `FREESHIP`, `VOUCHER_NEW_SHOP`, `PROMOTION`) |
+| `isActive` | `Boolean` | — | Filter theo trạng thái |
+| `page` | `Integer` | 0 | |
+| `size` | `Integer` | 20 | Max 100 |
+
+**Response:** `PageResponse<BannerListItem>` (id, type, position, imageUrl, imageAlt, ctaHref, ctaText, isActive, startDate, endDate, createdAt).
+
+#### 29.2.2 `POST /api/v1/admin/banners`
+
+Tạo banner mới.
+
+**Request (`BannerRequest`):**
+
+| Field | Type | Required | Mô tả |
+|---|---|---|---|
+| `type` | `String` | ✅ | BannerType enum |
+| `position` | `Integer` | | Thứ tự hiển thị (mặc định 0) |
+| `imageUrl` | `String` | ✅ | URL ảnh banner |
+| `imageAlt` | `String` | | Alt text ảnh |
+| `ctaHref` | `String` | | Đường dẫn khi click |
+| `ctaText` | `String` | | Text nút CTA |
+| `isActive` | `Boolean` | | Mặc định `false` (SCHEDULED) |
+| `startDate` | `ISO DateTime` | | Thời điểm bắt đầu hiển thị |
+| `endDate` | `ISO DateTime` | | Thời điểm kết thúc |
+
+**Validation:**
+- `imageUrl` không được blank.
+- `startDate` phải trước `endDate`.
+
+**Response:** `ApiResponse<BannerListItem>` (HTTP 201).
+
+#### 29.2.3 `PUT /api/v1/admin/banners/{id}`
+
+Cập nhật banner.
+
+**Path:** `id` — banner ID.
+
+**Request:** `BannerRequest` (giống POST, tất cả field optional).
+
+**Response:** `ApiResponse<BannerListItem>` (HTTP 200).
+
+**Error:** `404 BANNER_NOT_FOUND` nếu banner không tồn tại.
+
+#### 29.2.4 `PATCH /api/v1/admin/banners/{id}/status`
+
+Đổi trạng thái banner.
+
+**Request body:**
+
+```json
+{ "isActive": true }
+```
+
+**Validation (khi `isActive = true`):**
+- `startDate` không được trong tương lai (banner không thể được kích hoạt trước thời gian bắt đầu).
+- `endDate` không được trong quá khứ (banner đã hết hạn không thể kích hoạt).
+
+**Error codes:**
+- `404 BANNER_NOT_FOUND` — banner không tồn tại.
+- `422 BANNER_INVALID_STATUS` — vi phạm validation thời gian khi kích hoạt.
+
+#### 29.2.5 `DELETE /api/v1/admin/banners/{id}`
+
+Xóa banner (soft delete: `isActive = false`).
+
+**Error:** `404 BANNER_NOT_FOUND` nếu không tồn tại.
+
+### 29.3 Banner Error Codes
+
+| HTTP | ErrorCode | Ý nghĩa |
+|---|---|---|
+| 404 | `BANNER_NOT_FOUND` | Banner không tồn tại |
+| 422 | `BANNER_INVALID_DATE_RANGE` | `startDate` > `endDate` |
+| 422 | `BANNER_INVALID_STATUS` | Kích hoạt banner khi `startDate` trong tương lai hoặc `endDate` trong quá khứ |
+| 400 | `BANNER_IMAGE_URL_BLANK` | `imageUrl` bị blank |
+
+### 29.4 Banner DTO Summary
+
+**`BannerListItem`** (list/admin response): `id`, `type`, `position`, `imageUrl`, `imageAlt`, `ctaHref`, `ctaText`, `isActive`, `startDate`, `endDate`, `createdAt`.
+
+**`BannerResponse`** (public response): `id`, `type`, `imageUrl`, `imageAlt`, `ctaHref`, `ctaText`.
 
 ---
 
-**Phiên bản tài liệu**: 1.2 · **Cập nhật lần cuối**: 2026-10-12 · **Nguồn**: Backend `flash-sale-b2c-UTC2`
+**Phiên bản tài liệu**: 1.3 · **Cập nhật lần cuối**: 2026-10-12 · **Nguồn**: Backend `flash-sale-b2c-UTC2`
