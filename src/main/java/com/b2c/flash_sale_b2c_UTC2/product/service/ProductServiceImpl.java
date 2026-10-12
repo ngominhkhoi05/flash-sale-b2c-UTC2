@@ -10,6 +10,7 @@ import com.b2c.flash_sale_b2c_UTC2.product.dto.CreateProductRequest;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.CreateProductVariantRequest;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductDetailResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductFilterRequest;
+import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductImageDto;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductSummaryResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.RecommendedProductResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.RecommendedProductsResponse;
@@ -25,6 +26,7 @@ import com.b2c.flash_sale_b2c_UTC2.product.mapper.ProductVariantMapper;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.CategoryRepository;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductRepository;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductVariantRepository;
+import com.b2c.flash_sale_b2c_UTC2.review.repository.ProductReviewRepository;
 import com.b2c.flash_sale_b2c_UTC2.store.entity.Store;
 import com.b2c.flash_sale_b2c_UTC2.store.exception.StoreErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.store.repository.StoreRepository;
@@ -56,6 +58,7 @@ public class ProductServiceImpl implements ProductService {
     private final StoreRepository storeRepository;
     private final OrderItemRepository orderItemRepository;
     private final FlashSaleItemRepository flashSaleItemRepository;
+    private final ProductReviewRepository productReviewRepository;
     private final ProductVariantMapper productVariantMapper;
     private final ImageService imageService;
 
@@ -452,9 +455,12 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private ProductDetailResponse buildProductDetailResponse(Product product, List<ProductVariant> variants) {
+        Long productId = product.getId();
+
         // 1 query cho ảnh primary của Product
         String productImageUrl = nullSafeUrl(
-                imageService.getPrimaryImage(ImageOwnerType.PRODUCT, product.getId()));
+                imageService.getPrimaryImage(ImageOwnerType.PRODUCT, productId));
+
         // Từng variant: 1 query / variant (chấp nhận N+1 nhỏ trong context detail)
         Map<Long, String> variantImageMap = variants.stream()
                 .collect(Collectors.toMap(
@@ -471,8 +477,58 @@ public class ProductServiceImpl implements ProductService {
                 })
                 .toList();
 
+        // ─── Subplan 2: populate 7 new fields ────────────────────────────────────────
+        // 1. ratingAvg / ratingCount
+        Double avgRating = productReviewRepository.avgRatingByProductId(productId);
+        long ratingCount = productReviewRepository.countByProductIdAndVisible(productId);
+
+        // 2. soldCount
+        Integer soldCount = product.getTotalSold() != null ? product.getTotalSold() : 0;
+
+        // 3. minPrice / maxPrice (from aggregate query)
+        BigDecimal minPrice = null;
+        BigDecimal maxPrice = null;
+        Object[] priceRange = productRepository.findPriceRangeByProductId(productId);
+        if (priceRange != null && priceRange.length == 2) {
+            if (priceRange[0] != null) minPrice = (BigDecimal) priceRange[0];
+            if (priceRange[1] != null) maxPrice = (BigDecimal) priceRange[1];
+        }
+
+        // 4. discountPercent: find min-priced ACTIVE FlashSaleItem, compare to variant original price
+        Integer discountPercent = null;
+        List<com.b2c.flash_sale_b2c_UTC2.flashsale.entity.FlashSaleItem> activeItems =
+                flashSaleItemRepository.findActiveByProductId(productId);
+        if (!activeItems.isEmpty()) {
+            // Get the item with lowest flash sale price
+            var minFlashItem = activeItems.stream()
+                    .min((a, b) -> a.getFlashSalePrice().compareTo(b.getFlashSalePrice()))
+                    .orElse(null);
+            if (minFlashItem != null) {
+                BigDecimal originalPrice = minFlashItem.getVariant().getOriginalPrice();
+                BigDecimal flashPrice = minFlashItem.getFlashSalePrice();
+                if (originalPrice != null && originalPrice.compareTo(BigDecimal.ZERO) > 0) {
+                    BigDecimal percentBD = BigDecimal.valueOf(100)
+                            .multiply(originalPrice.subtract(flashPrice))
+                            .divide(originalPrice, 0, java.math.RoundingMode.HALF_UP);
+                    discountPercent = percentBD.intValue();
+                }
+            }
+        }
+
+        // 5. images list
+        List<ProductImageDto> images = imageService.listImages(ImageOwnerType.PRODUCT, productId)
+                .stream()
+                .map(img -> ProductImageDto.builder()
+                        .id(img.getId())
+                        .url(img.getUrl())
+                        .isPrimary(img.getIsPrimary())
+                        .displayOrder(img.getDisplayOrder())
+                        .alt(product.getName())
+                        .build())
+                .toList();
+
         return ProductDetailResponse.builder()
-                .id(product.getId())
+                .id(productId)
                 .storeId(product.getStore().getId())
                 .storeName(product.getStore().getStoreName())
                 .categoryId(product.getCategory().getId())
@@ -484,6 +540,14 @@ public class ProductServiceImpl implements ProductService {
                 .status(product.getStatus())
                 .createdAt(product.getCreatedAt())
                 .variants(variantResponses)
+                // new fields
+                .ratingAvg(avgRating != null ? avgRating : 0.0)
+                .ratingCount((int) ratingCount)
+                .soldCount(soldCount)
+                .minPrice(minPrice)
+                .maxPrice(maxPrice)
+                .discountPercent(discountPercent)
+                .images(images)
                 .build();
     }
 

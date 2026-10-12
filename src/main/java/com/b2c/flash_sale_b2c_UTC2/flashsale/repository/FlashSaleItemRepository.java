@@ -79,4 +79,7 @@ public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Lo
         ORDER BY fsi.availableStock DESC
         """)
     List<FlashSaleItem> findHotDealItems(Pageable pageable);
+
+    @Query("SELECT fsi FROM FlashSaleItem fsi JOIN FETCH fsi.variant v WHERE v.product.id = :productId AND fsi.slot.status = 'ACTIVE' AND fsi.status = 'APPROVED' ORDER BY fsi.flashSalePrice ASC")
+    List<FlashSaleItem> findActiveByProductId(@Param("productId") Long productId);
 }

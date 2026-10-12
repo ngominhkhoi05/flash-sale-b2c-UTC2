@@ -96,4 +96,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Modifying
     @Query("UPDATE Product p SET p.totalSold = p.totalSold + :quantity WHERE p.id = :productId")
     void incrementTotalSold(@Param("productId") Long productId, @Param("quantity") int quantity);
+
+    @Query("SELECT MIN(v.originalPrice), MAX(v.originalPrice) FROM ProductVariant v WHERE v.product.id = :productId AND v.status = 'ACTIVE'")
+    Object[] findPriceRangeByProductId(@Param("productId") Long productId);
 }
