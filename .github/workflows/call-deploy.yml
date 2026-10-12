@@ -10,7 +10,7 @@ on:
 jobs:
   dispatch:
     if: github.event_name == 'push' || github.event.pull_request.merged == true
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Trigger deploy workflow in deploy-b2c-utc2
         env:
