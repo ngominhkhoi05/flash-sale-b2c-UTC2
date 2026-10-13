@@ -15,6 +15,7 @@ import com.b2c.flash_sale_b2c_UTC2.order.exception.OrderErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.order.mapper.OrderMapper;
 import com.b2c.flash_sale_b2c_UTC2.order.repository.OrderItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.order.repository.OrderRepository;
+import com.b2c.flash_sale_b2c_UTC2.payment.repository.PaymentRepository;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.Product;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.ProductVariant;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductVariantRepository;
@@ -88,6 +89,9 @@ class OrderServiceTest {
 
     @Mock
     private OrderMapper orderMapper;
+
+    @Mock
+    private PaymentRepository paymentRepository;
 
     @InjectMocks
     private OrderServiceImpl orderService;

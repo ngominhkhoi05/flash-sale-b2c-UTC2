@@ -35,4 +35,14 @@ public class OrderResponse {
     private Instant createdAt;
     private Instant updatedAt;
     private List<OrderItemResponse> items;
+
+    // Payment and Tracking info (Gap Report 2026-10-13)
+    private String paymentMethod;
+    private String paymentStatus;
+    private String paymentUrl;
+    private String qrCodeUrl;
+    private String trackingNumber;
+    private Instant shippedAt;
+    private Instant completedAt;
+    private List<OrderTimelineDto> timeline;
 }
