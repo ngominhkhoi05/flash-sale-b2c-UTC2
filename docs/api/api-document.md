@@ -26,6 +26,7 @@
 12. [Admin Category Module](#12-admin-category-module--apiadmincategories)
 13. [Product Public Module](#13-product-public-module--apiproducts)
 14. [Seller Product Module](#14-seller-product-module--apisellerproducts)
+14b. [Product Review Module](#14b-product-review-module--apiproductsproductidreviews)
 15. [Flash Sale Public Module](#15-flash-sale-public-module--apiflashsalesslots)
 16. [Flash Sale Reservation Module](#16-flash-sale-reservation-module--apiflashsalesreservations)
 17. [Admin Flash Sale Module](#17-admin-flash-sale-module--apiadminflashsales)
@@ -180,7 +181,7 @@ Authorization: Bearer <access_token>
 
 ## 5. Danh Mục API
 
-Tổng cộng **69 endpoints** được nhóm theo 21 controller:
+Tổng cộng **83 endpoints** được nhóm theo 24 controller:
 
 | Module | Public | Buyer | Seller | Admin | Tổng |
 |---|---|---|---|---|---|
@@ -192,6 +193,7 @@ Tổng cộng **69 endpoints** được nhóm theo 21 controller:
 | Category | 3 | – | – | – | 3 |
 | Admin Category | – | – | – | 3 | 3 |
 | Product (Public) | 3 | – | – | – | 3 |
+| Product Review (Public GET) | 1 | – | – | – | 1 |
 | Seller Product | – | – | 8 | – | 8 |
 | Flash Sale Public | 1 | – | – | – | 1 |
 | Flash Sale Reservation | – | 1 | – | – | 1 |
@@ -203,8 +205,10 @@ Tổng cộng **69 endpoints** được nhóm theo 21 controller:
 | Voucher | 3 | – | – | – | 3 |
 | Seller Voucher | – | – | 2 | – | 2 |
 | Admin Voucher | – | – | – | 1 | 1 |
-| Banner | 2 | – | – | 5 | 7 |
-| **Tổng** | **16** | **20** | **23** | **16** | **75** |
+| Banner Public | 1 | – | – | – | 1 |
+| Banner Admin | – | – | – | 5 | 5 |
+| Image Management | – | 4 | 1 | 1 | 6 |
+| **Tổng** | **16** | **24** | **24** | **19** | **83** |
 
 ---
 ## 6. Auth Module `/api/v1/auth`
@@ -344,13 +348,14 @@ Tổng cộng **69 endpoints** được nhóm theo 21 controller:
 
 ### 7.2 `PUT /api/v1/users/me`
 
-**Request Body:**
+**Request Body (`UpdateProfileRequest`):**
 
 | Field | Type | Required | Validation |
 |---|---|---|---|
 | `fullName` | `string` | Có | max 100, không blank |
 | `phone` | `string` | Không | max 15 |
-| `avatarUrl` | `string` | Không | max 255 |
+
+> **Lưu ý**: `UpdateProfileRequest` không bao gồm `avatarUrl`. Avatar được upload riêng qua endpoint `POST /api/v1/users/me/avatar` (mục 7.4) sau khi cập nhật profile.
 
 ### 7.3 `PUT /api/v1/users/me/change-password`
 
@@ -504,8 +509,9 @@ Khi set một địa chỉ làm mặc định, tất cả các địa chỉ khá
 | Field | Type | Required | Validation |
 |---|---|---|---|
 | `storeName` | `string` | Có | 2-150 ký tự |
-| `logoUrl` | `string` | Không | max 255 |
 | `description` | `string` | Không | – |
+
+> **Lưu ý**: `CreateStoreRequest` không bao gồm `logoUrl`. Logo được upload riêng qua endpoint `POST /api/v1/stores/me/logo` (mục 9.4c) sau khi tạo xong store.
 
 **HTTP Status:** 201 Created
 
@@ -844,13 +850,11 @@ Lấy danh sách sản phẩm đề xuất theo 3 tab cho trang chủ (For You /
 |---|---|---|
 | `id` | `Long` | |
 | `storeId` | `Long` | |
-| `storeTier` | `String` | Hạng store (`NORMAL`, `OFFICIAL_MALL`, `PREFERRED`) — null nếu chưa có |
 | `storeName` | `String` | |
-| `categoryId` | `Long` | |
+| `categoryId` | `Integer` | |
 | `categoryName` | `String` | |
 | `name` | `String` | |
-| `slug` | `String` | Slug cho SEO URL (nullable, từ `products.slug` V8) |
-| `imageUrl` | `String` | Ảnh đại diện (từ bảng `images` hoặc cũ) |
+| `imageUrl` | `String` | Ảnh đại diện (từ bảng `images`, sort theo `displayOrder` lấy ảnh đầu) |
 | `description` | `String` | |
 | `tierVariationConfigs` | `Array` | Cấu hình biến thể cấp SPU |
 | `status` | `String` | |
@@ -865,16 +869,16 @@ Lấy danh sách sản phẩm đề xuất theo 3 tab cho trang chủ (For You /
 | `images` | `Array<ProductImageDto>` | Danh sách ảnh sản phẩm (từ bảng `images`, sort theo `displayOrder`) |
 | `variants` | `Array` | Danh sách SKU |
 
+> **Lưu ý**: Hiện tại `ProductDetailResponse` **CHƯA** trả về `storeTier` (hạng store) và `slug` (V8) — các field này đã tồn tại trong entity `Product`/`Store` nhưng chưa được mapper expose trong DTO. Nếu FE cần, có thể bổ sung trong subplan sau.
+
 ```json
 {
   "id": 1,
   "storeId": 2,
-  "storeTier": "OFFICIAL_MALL",
   "storeName": "Shop ABC",
   "categoryId": 1,
   "categoryName": "Thời trang nam",
   "name": "Áo thun nam",
-  "slug": "ao-thun-nam",
   "imageUrl": "https://...",
   "description": "...",
   "tierVariationConfigs": [
@@ -944,15 +948,17 @@ Lấy danh sách sản phẩm đề xuất theo 3 tab cho trang chủ (For You /
 
 ---
 
-## 13b. Product Review Module `/api/v1/products/{id}/reviews`
+## 14b. Product Review Module `/api/v1/products/{productId}/reviews`
 
 > **Public API** · **Tag Swagger**: `Product Review - Public API`
+
+> **Trạng thái hiện tại**: chỉ `GET` public đã được implement (Subplan 3). Các endpoint còn lại (POST, GET my reviews, DELETE) đang là placeholder — sẽ bổ sung ở subplan sau (xem `AGENTS.md` mục #24).
 
 ### Endpoint
 
 | Method | Endpoint | Access | Mô tả |
 |---|---|---|---|
-| `GET` | `/api/v1/products/{productId}/reviews` | Public | Danh sách review + rating distribution (Subplan 3) |
+| `GET` | `/api/v1/products/{productId}/reviews` | Public | Danh sách review + rating distribution (Subplan 3) — **Đã implement** |
 | `POST` | `/api/v1/products/{productId}/reviews` | Authenticated | Tạo review (placeholder) |
 
 ### 13b.1 `GET /api/v1/products/{productId}/reviews`
@@ -1050,9 +1056,9 @@ Lấy danh sách review công khai của sản phẩm. Hỗ trợ lọc theo `ra
 
 **Lỗi:**
 
-| HTTP | Code | ErrorCode | Message |
-|---|---|---|---|
-| 404 | `REVIEW_PRODUCT_NOT_FOUND` | Sản phẩm không tồn tại hoặc chưa được duyệt |
+| HTTP | Code | Message |
+|---|---|---|
+| 404 | `REVIEW_404_PRODUCT_NOT_FOUND` | Sản phẩm không tồn tại hoặc chưa được duyệt |
 
 ---
 
@@ -1079,10 +1085,11 @@ Lấy danh sách review công khai của sản phẩm. Hỗ trợ lọc theo `ra
 |---|---|---|---|
 | `categoryId` | `integer` | Có | không null |
 | `name` | `string` | Có | max 255 |
-| `imageUrl` | `string` | Không | max 255 |
 | `description` | `string` | Không | – |
 | `tierVariationConfigs` | `array<TierVariationConfigDto>` | Không | Cấu hình phân loại |
 | `variants` | `array<CreateProductVariantRequest>` | Có | Min 1 phần tử |
+
+> **Lưu ý**: `CreateProductRequest` không bao gồm `imageUrl`. Ảnh sản phẩm được upload riêng qua endpoint `POST /api/v1/seller/products/{id}/images` (mục 14.7) sau khi tạo xong SPU.
 
 **`TierVariationConfigDto`:**
 
@@ -1098,9 +1105,10 @@ Lấy danh sách review công khai của sản phẩm. Hỗ trợ lọc theo `ra
 | `sku` | `string` | Có | max 50, unique toàn hệ thống |
 | `variantName` | `string` | Có | max 150 |
 | `attributes` | `object<string,string>` | Không | VD: `{"Màu sắc":"Đen"}` |
-| `originalPrice` | `decimal` | Có | > 0 |
+| `originalPrice` | `decimal` | Có | > 0 (`@DecimalMin("0.01")`) |
 | `stockQuantity` | `integer` | Có | >= 0 |
-| `imageUrl` | `string` | Không | max 255 |
+
+> **Lưu ý**: `CreateProductVariantRequest` không bao gồm `imageUrl`. Ảnh SKU được upload riêng qua endpoint `POST /api/v1/seller/products/{productId}/variants/{variantId}/images` (mục 14.8) sau khi tạo xong SKU.
 
 **HTTP Status:** 201 Created
 
@@ -1897,6 +1905,7 @@ stompClient.subscribe(
 | 401 | `AUTH_401_REFRESH_TOKEN` | Refresh token không hợp lệ hoặc đã hết hạn |
 | 403 | `AUTH_403_USER_DISABLED` | Tài khoản của bạn đã bị khóa hoặc tạm ngưng |
 | 404 | `AUTH_404_ROLE` | Vai trò yêu cầu không tồn tại trên hệ thống |
+| 404 | `AUTH_404_USER` | Tài khoản không tồn tại trên hệ thống |
 | 409 | `AUTH_409_EMAIL` | Email này đã được đăng ký trên hệ thống |
 | 409 | `AUTH_409_PHONE` | Số điện thoại này đã được sử dụng |
 
@@ -2003,6 +2012,19 @@ stompClient.subscribe(
 | 403 | `VOUCHER_403` (`STORE_MISMATCH`) | Mã giảm giá của gian hàng không áp dụng cho đơn hàng gian hàng khác |
 | 404 | `VOUCHER_404` (`VOUCHER_NOT_FOUND`) | Không tìm thấy mã giảm giá |
 | 409 | `VOUCHER_409` (`VOUCHER_CODE_EXISTS`) | Mã giảm giá đã tồn tại trên hệ thống |
+
+### 26.10 Review Errors
+
+> Module `review` chỉ mới implement `GET /api/v1/products/{productId}/reviews` (Subplan 3). Mã lỗi dưới đây đã được khai báo trong `ReviewErrorCode.java` và sẽ được sử dụng khi các endpoint POST/GET-my-reviews/DELETE được implement ở subplan sau (xem `AGENTS.md` mục #24).
+
+| HTTP | Code | Message |
+|---|---|---|
+| 400 | `REVIEW_400_ORDER_NOT_COMPLETED` | Đơn hàng chưa hoàn tất, không thể đánh giá |
+| 403 | `REVIEW_403_ACCESS_DENIED` | Bạn không có quyền thao tác với đánh giá này |
+| 403 | `REVIEW_403_FORBIDDEN` | Không thể thực hiện thao tác này |
+| 404 | `REVIEW_404_NOT_FOUND` | Không tìm thấy đánh giá |
+| 404 | `REVIEW_404_PRODUCT_NOT_FOUND` | Không tìm thấy sản phẩm để xem đánh giá (cũng dùng cho trường hợp product không ACTIVE) |
+| 409 | `REVIEW_409_ALREADY_EXISTS` | Bạn đã đánh giá sản phẩm này rồi (1 orderItem chỉ review 1 lần) |
 
 ---
 ## 27. Phân Quyền Truy Cập Theo Role
@@ -2164,15 +2186,25 @@ Ngoài endpoint chung `POST /api/v1/images/upload` ở trên, các controller d�
 }
 ```
 
-### 28.5 Error codes dự kiến
+### 28.5 Error codes (`ImageErrorCode`)
 
-| HTTP | ErrorCode | Ý nghĩa |
+Mapping theo `image/exception/ImageErrorCode.java`:
+
+| HTTP | Code | Message |
 | :---: | :--- | :--- |
-| 400 | `IMAGE_400` (`FILE_TOO_LARGE`) | File >5MB |
-| 400 | `IMAGE_400` (`INVALID_FORMAT`) | Không phải JPG/PNG/WebP |
-| 403 | `IMAGE_403` (`NOT_OWNER`) | User không sở hữu owner (vd: seller A upload ảnh cho product của seller B) |
-| 409 | `IMAGE_409` (`PRIMARY_EXISTS`) | Đã có ảnh primary ACTIVE khác |
-| 502 | `IMAGE_502` (`CLOUDINARY_FAILED`) | Cloudinary API fail (retry qua scheduled job) |
+| 413 | `IMAGE_413_FILE_TOO_LARGE` | Tệp ảnh vượt quá kích thước cho phép (tối đa 5MB) |
+| 400 | `IMAGE_400_INVALID_FORMAT` | Định dạng tệp ảnh không hợp lệ (chỉ chấp nhận JPG/PNG/WebP) |
+| 400 | `IMAGE_400_EMPTY_FILE` | Tệp ảnh rỗng, vui lòng chọn tệp khác |
+| 400 | `IMAGE_400_INVALID_OWNER_TYPE` | `ownerType` không hợp lệ |
+| 400 | `IMAGE_400_PRIMARY_NOT_ALLOWED` | Chỉ `PRODUCT`/`VARIANT` mới hợp lệ với ảnh đại diện chính |
+| 400 | `IMAGE_400_ORDER_NOT_ALLOWED` | Chỉ `REVIEW` mới hợp lệ với cập nhật thứ tự hiển thị |
+| 403 | `IMAGE_403_NOT_OWNER` | Bạn không có quyền quản lý ảnh thuộc đối tượng này (vd: seller A upload ảnh cho product của seller B) |
+| 404 | `IMAGE_404_NOT_FOUND` | Không tìm thấy ảnh |
+| 404 | `IMAGE_404_OWNER_NOT_FOUND` | Không tìm thấy đối tượng sở hữu ảnh |
+| 409 | `IMAGE_409_PRIMARY_EXISTS` | Đối tượng đã có ảnh đại diện chính ACTIVE khác |
+| 502 | `IMAGE_502_CLOUDINARY_FAILED` | Cloudinary API thất bại, sẽ được thử lại bởi tác vụ định kỳ |
+
+> **Lưu ý giới hạn kích thước**: `FILE_TOO_LARGE` trả về HTTP 413 (Payload Too Large) thay vì 400 để phân biệt với validation format. Hiện tại backend đang cấu hình giới hạn 5MB; xem `AGENTS.md` mục #25 (ghi 10MB) để biết inconsistency cần đối chiếu khi đồng bộ config.
 
 ---
 
@@ -2182,10 +2214,12 @@ Ngoài endpoint chung `POST /api/v1/images/upload` ở trên, các controller d�
 
 ### 29.1 Public Endpoints
 
+> **Trạng thái hiện tại**: chỉ `GET /api/v1/banners/home` đã được implement. `GET /api/v1/banners/position/{position}` đang ở dạng placeholder trong docs, chưa có controller thật (sẽ bổ sung khi cần).
+
 | Method | Endpoint | Access | Mô tả |
 |---|---|---|---|
 | `GET` | `/api/v1/banners/home` | Public | Lấy danh sách banner cho trang chủ (main slides + side banners) |
-| `GET` | `/api/v1/banners/position/{position}` | Public | Lấy banner ACTIVE theo vị trí `position`, sắp xếp theo `displayOrder` |
+| `GET` | `/api/v1/banners/position/{position}` | Public | Lấy banner ACTIVE theo vị trí `position`, sắp xếp theo `displayOrder` *(placeholder, chưa implement)* |
 
 #### 29.1.1 `GET /api/v1/banners/home`
 
@@ -2305,7 +2339,7 @@ Cập nhật banner.
 
 **Response:** `ApiResponse<BannerListItem>` (HTTP 200).
 
-**Error:** `404 BANNER_NOT_FOUND` nếu banner không tồn tại.
+**Error:** `404 BANNER_404_NOT_FOUND` nếu banner không tồn tại.
 
 #### 29.2.4 `PATCH /api/v1/admin/banners/{id}/status`
 
@@ -2322,30 +2356,43 @@ Cập nhật banner.
 - `endDate` không được trong quá khứ (banner đã hết hạn không thể kích hoạt).
 
 **Error codes:**
-- `404 BANNER_NOT_FOUND` — banner không tồn tại.
-- `422 BANNER_INVALID_STATUS` — vi phạm validation thời gian khi kích hoạt.
+- `404 BANNER_404_NOT_FOUND` — banner không tồn tại.
+- `422 BANNER_422_INVALID_STATUS` — vi phạm validation thời gian khi kích hoạt.
 
 #### 29.2.5 `DELETE /api/v1/admin/banners/{id}`
 
 Xóa banner (soft delete: `isActive = false`).
 
-**Error:** `404 BANNER_NOT_FOUND` nếu không tồn tại.
+**Error:** `404 BANNER_404_NOT_FOUND` nếu không tồn tại.
 
 ### 29.3 Banner Error Codes
 
-| HTTP | ErrorCode | Ý nghĩa |
+| HTTP | Code | Ý nghĩa |
 |---|---|---|
-| 404 | `BANNER_NOT_FOUND` | Banner không tồn tại |
-| 422 | `BANNER_INVALID_DATE_RANGE` | `startDate` > `endDate` |
-| 422 | `BANNER_INVALID_STATUS` | Kích hoạt banner khi `startDate` trong tương lai hoặc `endDate` trong quá khứ |
-| 400 | `BANNER_IMAGE_URL_BLANK` | `imageUrl` bị blank |
+| 404 | `BANNER_404_NOT_FOUND` | Banner không tồn tại |
+| 422 | `BANNER_422_INVALID_STATUS` | Trạng thái banner không hợp lệ cho thao tác (vd: kích hoạt banner khi `startDate` trong tương lai hoặc `endDate` trong quá khứ) |
+| 400 | `BANNER_400_INVALID_DATE_RANGE` | `startDate` > `endDate` |
+| 400 | `BANNER_400_IMAGE_URL_BLANK` | `imageUrl` bị blank |
 
 ### 29.4 Banner DTO Summary
 
 **`BannerListItem`** (list/admin response): `id`, `type`, `position`, `imageUrl`, `imageAlt`, `ctaHref`, `ctaText`, `isActive`, `startDate`, `endDate`, `createdAt`.
 
-**`BannerResponse`** (public response): `id`, `type`, `imageUrl`, `imageAlt`, `ctaHref`, `ctaText`.
+**`BannerResponse`** (dùng chung cho public và admin response): `id`, `type`, `position`, `imageUrl`, `imageAlt`, `ctaHref`, `ctaText`, `isActive`, `startDate`, `endDate`, `createdAt`. Trong `HomeBannersResponse`, các trường `position`/`isActive`/`startDate`/`endDate`/`createdAt` vẫn được trả về — FE có thể bỏ qua nếu không cần.
 
 ---
 
-**Phiên bản tài liệu**: 1.3 · **Cập nhật lần cuối**: 2026-10-12 · **Nguồn**: Backend `flash-sale-b2c-UTC2`
+**Phiên bản tài liệu**: 1.4 · **Cập nhật lần cuối**: 2026-10-13 · **Nguồn**: Backend `flash-sale-b2c-UTC2`
+
+**Thay đổi trong phiên bản 1.4 (2026-10-13):**
+- Cập nhật bảng mục 5: 83 endpoints (thêm Image Management, Product Review, Banner Public/Admin tách dòng).
+- Thêm TOC mục 14b. Product Review Module.
+- Đổi số section 13b → 14b cho Product Review Module.
+- Banner public endpoint `/position/{position}` đánh dấu là placeholder (chưa implement).
+- Banner error codes: cập nhật format `BANNER_<HTTP>_<REASON>` (theo code).
+- Image error codes: thêm 6 codes còn thiếu (`IMAGE_400_EMPTY_FILE`, `IMAGE_400_INVALID_OWNER_TYPE`, `IMAGE_400_PRIMARY_NOT_ALLOWED`, `IMAGE_400_ORDER_NOT_ALLOWED`, `IMAGE_404_NOT_FOUND`, `IMAGE_404_OWNER_NOT_FOUND`); chuyển `IMAGE_400` → `IMAGE_413_FILE_TOO_LARGE` cho đúng HTTP status.
+- Thêm mục 26.10 Review Errors.
+- Auth errors: thêm `AUTH_404_USER`.
+
+---
+
