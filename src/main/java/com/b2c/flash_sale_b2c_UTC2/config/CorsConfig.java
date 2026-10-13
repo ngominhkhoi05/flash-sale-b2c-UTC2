@@ -3,6 +3,7 @@ package com.b2c.flash_sale_b2c_UTC2.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -18,8 +19,11 @@ import java.util.List;
  * Origins được đọc từ env var {@code cors.allowed-origins} (comma-separated).
  * Mặc định local/dev: http://localhost:3000, http://localhost:3001, http://127.0.0.1:3000
  * Production: set trong application-prod.yaml → biến CORS_ALLOWED_ORIGINS.
+ *
+ * Không load trong test profile — test dùng TestCorsConfig riêng.
  */
 @Configuration
+@Profile("!test & !test-local")
 public class CorsConfig implements WebMvcConfigurer {
 
     @Value("${cors.allowed-origins:http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000}")
