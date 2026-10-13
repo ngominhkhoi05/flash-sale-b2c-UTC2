@@ -194,6 +194,14 @@ public class FlashSaleItemService {
         return responseList;
     }
 
+        @Transactional(readOnly = true)
+    public List<PublicFlashSaleSlotResponse.PublicFlashSaleItemResponse> getActiveItems() {
+        return getPublicSlots().stream()
+                .filter(slot -> "ACTIVE".equalsIgnoreCase(slot.getStatus()))
+                .flatMap(slot -> slot.getItems().stream())
+                .toList();
+    }
+
     public int getRealtimeStock(FlashSaleItem item) {
         if (redisTemplate != null) {
             try {
