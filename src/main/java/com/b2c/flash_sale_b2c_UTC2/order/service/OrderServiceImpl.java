@@ -62,7 +62,8 @@ public class OrderServiceImpl implements OrderService {
     private final VoucherRepository voucherRepository;
     private final VoucherUsageRepository voucherUsageRepository;
     private final VoucherService voucherService;
-    private final CartRepository cartRepository;
+        private final CartRepository cartRepository;
+    private final com.b2c.flash_sale_b2c_UTC2.payment.repository.PaymentRepository paymentRepository;
     private final CartItemRepository cartItemRepository;
     private final OrderMapper orderMapper;
 
@@ -325,6 +326,32 @@ public class OrderServiceImpl implements OrderService {
         OrderResponse response = orderMapper.toResponse(order);
         List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
         response.setItems(orderMapper.toItemResponseList(items));
+
+        // Enrich payment info from payments table
+        List<com.b2c.flash_sale_b2c_UTC2.payment.entity.Payment> payments =
+                paymentRepository.findByOrderId(order.getId());
+        if (payments != null && !payments.isEmpty()) {
+            com.b2c.flash_sale_b2c_UTC2.payment.entity.Payment latest = payments.get(payments.size() - 1);
+            response.setPaymentMethod(latest.getPaymentMethod());
+            response.setPaymentStatus(latest.getStatus());
+            response.setPaymentUrl(latest.getPaymentUrl());
+            response.setQrCodeUrl(latest.getQrCodeData());
+        }
+
+        // Build timeline from order status history
+        List<com.b2c.flash_sale_b2c_UTC2.order.dto.OrderTimelineDto> timeline = new java.util.ArrayList<>();
+        timeline.add(com.b2c.flash_sale_b2c_UTC2.order.dto.OrderTimelineDto.builder()
+                .status("PENDING_PAYMENT").label("Chờ thanh toán").at(order.getCreatedAt()).build());
+        if (order.getShippedAt() != null) {
+            timeline.add(com.b2c.flash_sale_b2c_UTC2.order.dto.OrderTimelineDto.builder()
+                    .status("SHIPPING").label("Đang giao hàng").at(order.getShippedAt()).build());
+        }
+        if (order.getCompletedAt() != null) {
+            timeline.add(com.b2c.flash_sale_b2c_UTC2.order.dto.OrderTimelineDto.builder()
+                    .status("COMPLETED").label("Hoàn thành").at(order.getCompletedAt()).build());
+        }
+        response.setTimeline(timeline);
+
         return response;
     }
 }
