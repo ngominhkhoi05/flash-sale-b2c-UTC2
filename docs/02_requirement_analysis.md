@@ -188,7 +188,7 @@ erDiagram
 | 8 | **`addresses`** | Sổ địa chỉ chuẩn hóa với 2 khóa ngoại vật lý (`user_id`, `store_id`), CHECK loại trừ XOR và tọa độ GPS. |
 | 9 | **`stores`** | Thông tin gian hàng của Seller, tỷ lệ hoa hồng riêng của shop. |
 | 10 | **`wallets`** | Ví tiền của Seller (số dư khả dụng, số dư đóng băng). |
-| 11 | **`categories`** | Danh mục ngành hàng (Thời trang, Điện tử, Đồ gia dụng...). |
+| 11 | **`categories`** | Danh mục ngành hàng (Thời trang, Điện tử, Đồ gia dụng...). Cột `slug VARCHAR(255)` (nullable, V9) dùng cho URL SEO, partial unique index `uq_categories_slug` đảm bảo không trùng slug khi đã gán. |
 | 12 | **`products`** | Thông tin sản phẩm gốc SPU (tên, ngành hàng, mô tả, cấu hình phân loại 2 cấp `tier_variation_configs`). |
 | 13 | **`product_variants`** | Chi tiết từng biến thể SKU (quản lý mã SKU, giá bán lẻ gốc, tồn kho thực tế, thuộc tính JSONB Màu x Size). |
 | 14 | **`flash_sale_slots`** | Khung giờ Flash Sale do Admin tạo (thời gian bắt đầu, kết thúc, TTL giữ kho `reservation_ttl_seconds`). |
