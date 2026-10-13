@@ -23,7 +23,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @Import(TestCorsConfig.class)
-@ActiveProfiles("test")
+@ActiveProfiles({"test", "test-local"})
 public abstract class AbstractPostgresIT {
 
     @MockitoBean
