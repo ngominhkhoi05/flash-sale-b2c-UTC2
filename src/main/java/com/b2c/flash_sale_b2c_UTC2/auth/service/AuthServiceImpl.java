@@ -131,10 +131,10 @@ public class AuthServiceImpl implements AuthService {
         if (input.contains("@")) {
             String normalizedEmail = input.toLowerCase();
             user = userRepository.findByEmail(normalizedEmail)
-                    .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_CREDENTIALS));
+                    .orElseThrow(() -> new BusinessException(AuthErrorCode.USER_NOT_FOUND));
         } else {
             user = userRepository.findByPhone(input)
-                    .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_CREDENTIALS));
+                    .orElseThrow(() -> new BusinessException(AuthErrorCode.USER_NOT_FOUND));
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
