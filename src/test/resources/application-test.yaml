@@ -20,19 +20,10 @@ spring:
       - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
       - org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration
 
-  # --- PostgreSQL connection (Supabase Cloud Dev DB) ---
-  datasource:
-    url: jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require
-    username: postgres.dygnssynjofuaaapnvcg
-    password: '&zyXVX8TNLWYF!B'
-    driver-class-name: org.postgresql.Driver
-    hikari:
-      pool-name: FlashSaleTestHikariPool
-      maximum-pool-size: 5
-      minimum-idle: 1
-      idle-timeout: 60000
-      connection-timeout: 20000
-      max-lifetime: 600000
+  # --- PostgreSQL connection: configured in application-test-local.yaml ---
+  # Always activate "test-local" alongside "test" (or directly use "test-local" only)
+  # Spring profile chain: test → test-local → loaded together
+  # All sensitive credentials (DB password, Redis password) live in application-test-local.yaml
 
   # --- JPA / Hibernate for Test ---
   jpa:
@@ -42,12 +33,11 @@ spring:
         format_sql: false
         highlight_sql: false
 
-  # --- Redis disabled in test (mocked via @MockitoBean) ---
+  # --- Redis: password is in application-test-local.yaml ---
   data:
     redis:
       host: localhost
       port: 6379
-      password: ""
       timeout: 1000ms
 
 # --- JWT secret for test (>= 64 chars) ---

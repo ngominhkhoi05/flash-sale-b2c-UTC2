@@ -79,4 +79,22 @@ public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Lo
         ORDER BY fsi.availableStock DESC
         """)
     List<FlashSaleItem> findHotDealItems(Pageable pageable);
+
+    @Query("SELECT fsi FROM FlashSaleItem fsi JOIN FETCH fsi.slot sl JOIN FETCH fsi.variant v WHERE v.product.id = :productId AND sl.status = 'ACTIVE' AND fsi.status = 'APPROVED' ORDER BY fsi.flashSalePrice ASC")
+    List<FlashSaleItem> findActiveByProductId(@Param("productId") Long productId);
+
+    /**
+     * Count distinct active flash sale items (APPROVED + slot ACTIVE) for a given store.
+     * Counts distinct slot IDs that are currently active for products belonging to the store.
+     */
+    @Query("""
+        SELECT COUNT(DISTINCT fsi.slot.id)
+        FROM FlashSaleItem fsi
+        JOIN fsi.variant v
+        JOIN fsi.slot s
+        WHERE v.product.store.id = :storeId
+        AND fsi.status = 'APPROVED'
+        AND s.status = 'ACTIVE'
+    """)
+    long countActiveByStoreId(@Param("storeId") Long storeId);
 }

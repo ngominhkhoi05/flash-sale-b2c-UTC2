@@ -834,16 +834,16 @@ Khi tạo Review phải kiểm tra:
 
 `product_id` có thể được giữ như **intentional denormalization / read optimization**.
 
-### Endpoint (đang implement)
+### Endpoint (Subplan 3 implemented: GET public)
 
 ```text
-POST   /api/v1/products/{productId}/reviews    # Authenticated
-GET    /api/v1/products/{productId}/reviews    # Public, paging
-GET    /api/v1/users/me/reviews                # Buyer xem review của mình
-DELETE /api/v1/reviews/{id}                    # Owner hoặc Admin
+POST   /api/v1/products/{productId}/reviews    # Authenticated (placeholder)
+GET    /api/v1/products/{productId}/reviews    # Public, paging, filter by rating/hasMedia, ratingDistribution + mediaCount (Subplan 3)
+GET    /api/v1/users/me/reviews                # Buyer xem review của mình (placeholder)
+DELETE /api/v1/reviews/{id}                    # Owner hoặc Admin (placeholder)
 ```
 
-> Lưu ý: `review/controller/` chỉ có `.gitkeep`. Sẽ bổ sung khi implement.
+> `review/controller/ProductReviewPublicController.java` đã implement GET public endpoint (Subplan 3). Review album ảnh dùng bảng `images` (owner_type=`REVIEW`) — không còn `product_reviews.image_urls JSONB` (đã xóa V4).
 
 ---
 
@@ -1911,9 +1911,10 @@ Nếu có lỗi:
 
 | Method | Endpoint | Access | Mô tả |
 |---|---|---|---|
-| `POST` | `/api/v1/stores` | Authenticated | Tạo Store (status `PENDING`, tạo Wallet 1-1) |
+| `POST` | `/api/v1/stores` | Authenticated | Tạo Store (status `PENDING`, tier `NORMAL`, tạo Wallet 1-1) |
 | `GET` | `/api/v1/stores/me` | Seller | Store của tôi |
 | `PUT` | `/api/v1/stores/me` | Seller | Cập nhật Store |
+| `GET` | `/api/v1/stores/sidebar/summary` | Seller | Tổng hợp metrics cho sidebar dashboard (totalProducts, activeFlashSales, pendingOrders, todayOrders, todayRevenue, monthRevenue, ratingAvg, ratingCount, lowStockProducts, storeStatus, tier) |
 | `GET` | `/api/v1/stores/{id}` | Public | Store public |
 | `PATCH` | `/api/v1/admin/stores/{id}/status` | Admin | Duyệt/Khóa. APPROVED → tự gán `ROLE_SELLER` |
 | `GET` | `/api/v1/stores/me/addresses` | Seller | List kho |
@@ -1921,6 +1922,8 @@ Nếu có lỗi:
 | `PUT` | `/api/v1/stores/me/addresses/{id}` | Seller | Cập nhật kho |
 | `DELETE` | `/api/v1/stores/me/addresses/{id}` | Seller | Xóa kho |
 | `PATCH` | `/api/v1/stores/me/addresses/{id}/default` | Seller | Set kho mặc định |
+
+> **V8 fields**: `Store.tier` (`NORMAL`, `OFFICIAL_MALL`, `PREFERRED`) + `Store.lastActiveAt` (Instant, nullable) — dùng cho Store Extended Response (Subplan 5).
 
 ### 46.7 Category (`/api/v1/categories` & `/api/v1/admin/categories`)
 
@@ -1936,7 +1939,7 @@ Nếu có lỗi:
 
 | Method | Endpoint | Access | Mô tả |
 |---|---|---|---|
-| `GET` | `/api/v1/products` | Public | Tìm/filter (categoryId, keyword, minPrice, maxPrice), paging. Chỉ product `ACTIVE` của store `APPROVED`. Batch fetch variants (không N+1). |
+| `GET` | `/api/v1/products` | Public | Tìm/filter (categoryId, keyword, minPrice, maxPrice, rating, flashSaleOnly, hasDiscount, minSold), paging. Chỉ product `ACTIVE` của store `APPROVED`. Hỗ trợ sort: createdAt_desc (default), createdAt_asc, price_asc, price_desc, sold_desc, rating_desc. Batch fetch variants (không N+1). |
 | `GET` | `/api/v1/products/{id}` | Public | Chi tiết SPU + SKU `ACTIVE` |
 | `POST` | `/api/v1/seller/products` | Seller | Tạo SPU-SKU. Validate store APPROVED, giá > 0, tồn kho >= 0, SKU unique, số SKU khớp `tier_variation_configs` |
 | `GET` | `/api/v1/seller/products` | Seller | List sản phẩm của tôi, paging, filter status |
@@ -1944,6 +1947,18 @@ Nếu có lỗi:
 | `PUT` | `/api/v1/seller/products/{id}` | Seller | Cập nhật SPU + SKU. Chặn sửa giá/giảm tồn kho nếu SKU trong Flash Sale `ACTIVE`. Optimistic lock (`@Version`). |
 | `DELETE` | `/api/v1/seller/products/{id}` | Seller | Soft delete nếu có order/flash_sale reference, hard delete nếu chưa |
 | `PATCH` | `/api/v1/seller/products/{id}/status` | Seller | Đổi status `ACTIVE` / `INACTIVE` / `OUT_OF_STOCK` |
+
+> **V8 field**: `Product.slug` (`VARCHAR(255)`, nullable, unique partial index) — dùng cho SEO URL, backfill từ `name`.
+>
+> **`ProductDetailResponse` new fields** (Subplan 2 + Subplan 4):
+> - `Double ratingAvg` — trung bình rating từ reviews VISIBLE (default 0.0)
+> - `Integer ratingCount` — tổng review VISIBLE
+> - `Integer soldCount` — từ `products.total_sold` (V7)
+> - `BigDecimal minPrice` — MIN variant original_price WHERE ACTIVE
+> - `BigDecimal maxPrice` — MAX variant original_price WHERE ACTIVE
+> - `Integer discountPercent` — `round((original - flashSale) / original * 100)` từ lowest-price active FlashSaleItem; `null` nếu không có
+> - `List<ProductImageDto> images` — ảnh từ `ImageService.listImages(PRODUCT, productId)`, alt = product name
+> - **`List<ActiveFlashSaleDto> flashSales`** (Subplan 4) — danh sách FlashSaleItem ACTIVE của product. Gồm: `slotId`, `slotStartTime`, `slotEndTime`, `itemId`, `variantId`, `originalPrice`, `flashSalePrice`, `stockAvailable` (Redis → fallback DB), `slotStatus`. Sorted by `flashSalePrice ASC`. Empty list nếu không có.
 
 ### 46.9 Image (`/api/v1/images` & `/api/v1/admin/images`)
 
@@ -2031,6 +2046,22 @@ Xem chi tiết mục #22. Tóm tắt:
 | `DELETE` | `/api/v1/seller/vouchers/{id}` | Seller | Xóa |
 | `GET` | `/api/v1/admin/vouchers` | Admin | List platform voucher |
 | `POST` | `/api/v1/admin/vouchers` | Admin | Tạo platform voucher |
+
+### 46.13 Banner (`/api/v1/banners`, `/api/v1/admin/banners`)
+
+Xem chi tiết mục #25 (Image Module). Tóm tắt:
+
+| Method | Endpoint | Access | Mô tả |
+|---|---|---|---|
+| `GET` | `/api/v1/banners/home` | Public | Banner trang chủ (mainSlides HERO + sideBanners) |
+| `GET` | `/api/v1/banners/position/{position}` | Public | Banner ACTIVE theo vị trí |
+| `GET` | `/api/v1/admin/banners` | Admin | List banner (paging, filter type/isActive) |
+| `POST` | `/api/v1/admin/banners` | Admin | Tạo banner |
+| `PUT` | `/api/v1/admin/banners/{id}` | Admin | Cập nhật banner |
+| `PATCH` | `/api/v1/admin/banners/{id}/status` | Admin | Đổi isActive (validate time window) |
+| `DELETE` | `/api/v1/admin/banners/{id}` | Admin | Soft delete (isActive=false) |
+
+Error codes: `BANNER_NOT_FOUND`, `BANNER_INVALID_DATE_RANGE`, `BANNER_INVALID_STATUS`, `BANNER_IMAGE_URL_BLANK`.
 
 ### 46.14 Payment (`/api/v1/payments`)
 

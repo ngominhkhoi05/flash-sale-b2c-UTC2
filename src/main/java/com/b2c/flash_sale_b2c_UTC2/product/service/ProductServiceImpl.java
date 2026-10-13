@@ -2,6 +2,8 @@ package com.b2c.flash_sale_b2c_UTC2.product.service;
 
 import com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse;
 import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.ActiveFlashSaleDto;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.entity.FlashSaleItem;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.repository.FlashSaleItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType;
 import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
@@ -10,6 +12,7 @@ import com.b2c.flash_sale_b2c_UTC2.product.dto.CreateProductRequest;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.CreateProductVariantRequest;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductDetailResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductFilterRequest;
+import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductImageDto;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductSummaryResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.RecommendedProductResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.RecommendedProductsResponse;
@@ -20,18 +23,26 @@ import com.b2c.flash_sale_b2c_UTC2.product.dto.UpdateProductVariantRequest;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.Category;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.Product;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.ProductVariant;
+import com.b2c.flash_sale_b2c_UTC2.product.enums.ProductSortOption;
 import com.b2c.flash_sale_b2c_UTC2.product.exception.ProductErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.product.mapper.ProductVariantMapper;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.CategoryRepository;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductRepository;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductVariantRepository;
+import com.b2c.flash_sale_b2c_UTC2.product.spec.ProductSpecifications;
+import com.b2c.flash_sale_b2c_UTC2.review.repository.ProductReviewRepository;
 import com.b2c.flash_sale_b2c_UTC2.store.entity.Store;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import com.b2c.flash_sale_b2c_UTC2.store.exception.StoreErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.store.repository.StoreRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,8 +67,11 @@ public class ProductServiceImpl implements ProductService {
     private final StoreRepository storeRepository;
     private final OrderItemRepository orderItemRepository;
     private final FlashSaleItemRepository flashSaleItemRepository;
+    private final ProductReviewRepository productReviewRepository;
     private final ProductVariantMapper productVariantMapper;
     private final ImageService imageService;
+
+    private final StringRedisTemplate redisTemplate;
 
     @Override
     @Transactional
@@ -268,29 +282,32 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<ProductSummaryResponse> getPublicProducts(ProductFilterRequest filter, Pageable pageable) {
-        // NOTE: Sentinel values to avoid Hibernate binding null as bytea (Hibernate6 + Postgres driver bug).
-        // JPQL uses `:categoryId < 0`, `:keyword = ''`, `:minPrice < 0`, `:maxPrice < 0` as "filter disabled" markers.
-        Integer categoryId = (filter.getCategoryId() != null && filter.getCategoryId() > 0)
-                ? filter.getCategoryId() : -1;
-        String keyword = (filter.getKeyword() != null && !filter.getKeyword().isBlank())
-                ? filter.getKeyword().trim() : "";
-        BigDecimal minPrice = filter.getMinPrice() != null ? filter.getMinPrice() : BigDecimal.valueOf(-1);
-        BigDecimal maxPrice = filter.getMaxPrice() != null ? filter.getMaxPrice() : BigDecimal.valueOf(-1);
+        ProductSortOption sortOption = filter.getSortOption() != null
+                ? filter.getSortOption() : ProductSortOption.CREATED_AT_DESC;
 
-        Page<Product> productPage = productRepository.findPublicProducts(
-                categoryId,
-                keyword,
-                minPrice,
-                maxPrice,
-                pageable
-        );
+        Page<Product> productPage;
+
+        if (sortOption == ProductSortOption.PRICE_ASC || sortOption == ProductSortOption.PRICE_DESC) {
+            // Price sort needs aggregate query — use dedicated methods
+            int page = pageable.getPageNumber();
+            int size = pageable.getPageSize();
+            List<Product> products = (sortOption == ProductSortOption.PRICE_ASC)
+                    ? productRepository.findAllOrderByMinPriceAsc(PageRequest.of(page, size))
+                    : productRepository.findAllOrderByMinPriceDesc(PageRequest.of(page, size));
+            productPage = new PageImpl<>(products, pageable, products.size());
+        } else {
+            Specification<Product> spec = ProductSpecifications.fromFilterRequest(filter);
+            Sort sort = buildSort(sortOption, pageable);
+            Pageable sortedPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+            productPage = productRepository.findAll(spec, sortedPageable);
+        }
 
         List<Long> productIds = productPage.getContent().stream().map(Product::getId).toList();
         Map<Long, List<ProductVariant>> variantsByProductId = productIds.isEmpty() ? Map.of() :
                 productVariantRepository.findByProductIdInAndStatus(productIds, "ACTIVE").stream()
                         .collect(Collectors.groupingBy(v -> v.getProduct().getId()));
 
-        // Batch-load ảnh primary để tránh N+1
+        // Batch-load primary images to avoid N+1
         Map<Long, String> primaryImageMap = productIds.isEmpty() ? Map.of() :
                 imageService.getPrimaryImagesByOwnerIds(ImageOwnerType.PRODUCT, productIds)
                         .entrySet().stream()
@@ -302,6 +319,19 @@ public class ProductServiceImpl implements ProductService {
                 .toList();
 
         return PageResponse.of(productPage, content);
+    }
+
+    private Sort buildSort(ProductSortOption sortOption, Pageable pageable) {
+        if (sortOption == null) {
+            return pageable.getSort();
+        }
+        return switch (sortOption) {
+            case CREATED_AT_ASC -> Sort.by(Sort.Direction.ASC, "createdAt");
+            case PRICE_ASC, PRICE_DESC -> pageable.getSort(); // handled separately
+            case SOLD_DESC -> Sort.by(Sort.Direction.DESC, "totalSold");
+            case RATING_DESC -> Sort.by(Sort.Direction.DESC, "ratingAvg"); // Note: ratingAvg not on Product entity; handled by spec sort
+            case CREATED_AT_DESC -> Sort.by(Sort.Direction.DESC, "createdAt");
+        };
     }
 
     @Override
@@ -452,16 +482,15 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private ProductDetailResponse buildProductDetailResponse(Product product, List<ProductVariant> variants) {
+        Long productId = product.getId();
+
         // 1 query cho ảnh primary của Product
         String productImageUrl = nullSafeUrl(
-                imageService.getPrimaryImage(ImageOwnerType.PRODUCT, product.getId()));
+                imageService.getPrimaryImage(ImageOwnerType.PRODUCT, productId));
+
         // Từng variant: 1 query / variant (chấp nhận N+1 nhỏ trong context detail)
-        Map<Long, String> variantImageMap = variants.stream()
-                .collect(Collectors.toMap(
-                                ProductVariant::getId,
-                                v -> nullSafeUrl(
-                                        imageService.getPrimaryImage(ImageOwnerType.VARIANT, v.getId())),
-                                (a, b) -> a));
+        // filterNullEntries prevents NPE in toMap when a variant has no image
+        Map<Long, String> variantImageMap = buildVariantImageMap(variants);
 
         List<ProductVariantResponse> variantResponses = variants.stream()
                 .map(v -> {
@@ -471,8 +500,61 @@ public class ProductServiceImpl implements ProductService {
                 })
                 .toList();
 
+        // ─── Subplan 2: populate 7 new fields ────────────────────────────────────────
+        // 1. ratingAvg / ratingCount
+        Double avgRating = productReviewRepository.avgRatingByProductId(productId);
+        long ratingCount = productReviewRepository.countByProductIdAndVisible(productId);
+
+        // 2. soldCount
+        Integer soldCount = product.getTotalSold() != null ? product.getTotalSold() : 0;
+
+        // 3. minPrice / maxPrice (from aggregate query)
+        BigDecimal minPrice = null;
+        BigDecimal maxPrice = null;
+        Object[] priceRange = productRepository.findPriceRangeByProductId(productId);
+        if (priceRange != null && priceRange.length == 2) {
+            if (priceRange[0] != null) minPrice = (BigDecimal) priceRange[0];
+            if (priceRange[1] != null) maxPrice = (BigDecimal) priceRange[1];
+        }
+
+        // 4. discountPercent: find min-priced ACTIVE FlashSaleItem, compare to variant original price
+        Integer discountPercent = null;
+        List<com.b2c.flash_sale_b2c_UTC2.flashsale.entity.FlashSaleItem> activeItems =
+                flashSaleItemRepository.findActiveByProductId(productId);
+        if (!activeItems.isEmpty()) {
+            // Get the item with lowest flash sale price
+            var minFlashItem = activeItems.stream()
+                    .min((a, b) -> a.getFlashSalePrice().compareTo(b.getFlashSalePrice()))
+                    .orElse(null);
+            if (minFlashItem != null) {
+                BigDecimal originalPrice = minFlashItem.getVariant().getOriginalPrice();
+                BigDecimal flashPrice = minFlashItem.getFlashSalePrice();
+                if (originalPrice != null && originalPrice.compareTo(BigDecimal.ZERO) > 0) {
+                    BigDecimal percentBD = BigDecimal.valueOf(100)
+                            .multiply(originalPrice.subtract(flashPrice))
+                            .divide(originalPrice, 0, java.math.RoundingMode.HALF_UP);
+                    discountPercent = percentBD.intValue();
+                }
+            }
+        }
+
+        // 5. images list
+        List<ProductImageDto> images = imageService.listImages(ImageOwnerType.PRODUCT, productId)
+                .stream()
+                .map(img -> ProductImageDto.builder()
+                        .id(img.getId())
+                        .url(img.getUrl())
+                        .isPrimary(img.getIsPrimary())
+                        .displayOrder(img.getDisplayOrder())
+                        .alt(product.getName())
+                        .build())
+                .toList();
+
+        // Part A Subplan 4: populate active flash sales list
+        List<ActiveFlashSaleDto> flashSales = buildActiveFlashSales(activeItems);
+
         return ProductDetailResponse.builder()
-                .id(product.getId())
+                .id(productId)
                 .storeId(product.getStore().getId())
                 .storeName(product.getStore().getStoreName())
                 .categoryId(product.getCategory().getId())
@@ -484,11 +566,72 @@ public class ProductServiceImpl implements ProductService {
                 .status(product.getStatus())
                 .createdAt(product.getCreatedAt())
                 .variants(variantResponses)
+                // new fields
+                .ratingAvg(avgRating != null ? avgRating : 0.0)
+                .ratingCount((int) ratingCount)
+                .soldCount(soldCount)
+                .minPrice(minPrice)
+                .maxPrice(maxPrice)
+                .discountPercent(discountPercent)
+                .images(images)
+                .flashSales(flashSales)
                 .build();
     }
 
     private String nullSafeUrl(com.b2c.flash_sale_b2c_UTC2.image.dto.ImageResponse r) {
         return r == null ? null : r.getUrl();
+    }
+
+    private Map<Long, String> buildVariantImageMap(List<ProductVariant> variants) {
+        Map<Long, String> result = new java.util.HashMap<>();
+        for (ProductVariant v : variants) {
+            String url = nullSafeUrl(imageService.getPrimaryImage(ImageOwnerType.VARIANT, v.getId()));
+            if (url != null) {
+                result.put(v.getId(), url);
+            }
+        }
+        return result;
+    }
+
+    private static final String STOCK_KEY_PREFIX = "flash_sale:stock:";
+
+    /**
+     * Build ActiveFlashSaleDto list from FlashSaleItem entities.
+     * Gets realtime stock from Redis with DB fallback.
+     */
+    private List<ActiveFlashSaleDto> buildActiveFlashSales(List<FlashSaleItem> items) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        return items.stream().map(item -> {
+            int displayStock = getRealtimeStock(item);
+            return ActiveFlashSaleDto.builder()
+                    .slotId(item.getSlot().getId())
+                    .slotStartTime(item.getSlot().getStartTime())
+                    .slotEndTime(item.getSlot().getEndTime())
+                    .slotStatus(item.getSlot().getStatus())
+                    .itemId(item.getId())
+                    .variantId(item.getVariant().getId())
+                    .originalPrice(item.getVariant().getOriginalPrice())
+                    .flashSalePrice(item.getFlashSalePrice())
+                    .stockAvailable(displayStock)
+                    .build();
+        }).toList();
+    }
+
+    private int getRealtimeStock(FlashSaleItem item) {
+        if (redisTemplate != null) {
+            try {
+                String stockVal = redisTemplate.opsForValue().get(STOCK_KEY_PREFIX + item.getId());
+                if (stockVal != null) {
+                    return Integer.parseInt(stockVal);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to fetch Redis stock for item ID: {}, falling back to DB: {}",
+                        item.getId(), e.getMessage());
+            }
+        }
+        return java.util.Optional.ofNullable(item.getAvailableStock()).orElse(0);
     }
 
     @Override

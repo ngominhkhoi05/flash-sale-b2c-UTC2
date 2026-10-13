@@ -2,6 +2,7 @@ package com.b2c.flash_sale_b2c_UTC2.store.service;
 
 import com.b2c.flash_sale_b2c_UTC2.store.dto.CreateStoreRequest;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.FeaturedStoreResponse;
+import com.b2c.flash_sale_b2c_UTC2.store.dto.SidebarSummaryResponse;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.StoreResponse;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.UpdateStoreRequest;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.UpdateStoreStatusRequest;
@@ -41,4 +42,12 @@ public interface StoreService {
     void deleteStoreAddress(Long userId, Long addressId);
 
     AddressResponse setDefaultStoreAddress(Long userId, Long addressId);
+
+    /**
+     * Get aggregated metrics for seller dashboard sidebar.
+     *
+     * @param userId current authenticated user ID
+     * @return SidebarSummaryResponse with all aggregated metrics
+     */
+    SidebarSummaryResponse getSidebarSummary(Long userId);
 }

@@ -7,6 +7,7 @@ import com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType;
 import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.CreateStoreRequest;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.FeaturedStoreResponse;
+import com.b2c.flash_sale_b2c_UTC2.store.dto.SidebarSummaryResponse;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.StoreResponse;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.UpdateStoreRequest;
 import com.b2c.flash_sale_b2c_UTC2.store.service.StoreService;
@@ -21,6 +22,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -54,6 +56,17 @@ public class StoreController {
     ) {
         StoreResponse response = storeService.getMyStore(userDetails.getUser().getId());
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin gian hàng thành công", response));
+    }
+
+    @Operation(summary = "Lấy tổng hợp metrics cho sidebar dashboard của seller",
+               description = "Seller chỉ — trả về totalProducts, activeFlashSales, pendingOrders, todayOrders, todayRevenue, monthRevenue, ratingAvg, ratingCount, lowStockProducts, storeStatus, tier")
+    @GetMapping("/sidebar/summary")
+    @PreAuthorize("hasRole('SELLER')")
+    public ResponseEntity<ApiResponse<SidebarSummaryResponse>> getSidebarSummary(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        SidebarSummaryResponse response = storeService.getSidebarSummary(userDetails.getUser().getId());
+        return ResponseEntity.ok(ApiResponse.success("Lấy tổng hợp sidebar thành công", response));
     }
 
     @Operation(summary = "Cập nhật thông tin gian hàng của tôi", description = "Seller cập nhật tên, logo, mô tả gian hàng")
