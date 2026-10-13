@@ -58,8 +58,10 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         Map<Long, User> userMap;
+        Map<Long, String> userAvatarMap;
         if (reviews.isEmpty()) {
             userMap = Collections.emptyMap();
+            userAvatarMap = Collections.emptyMap();
         } else {
             List<Long> userIds = reviews.stream()
                     .map(r -> r.getUser().getId())
@@ -67,10 +69,12 @@ public class ReviewServiceImpl implements ReviewService {
                     .collect(Collectors.toList());
             userMap = userRepository.findAllById(userIds).stream()
                     .collect(Collectors.toMap(User::getId, Function.identity()));
+            userAvatarMap = imageRepository.findPrimaryImagesByOwnerIds(ImageOwnerType.USER, userIds).stream()
+                    .collect(Collectors.toMap(Image::getOwnerId, Image::getUrl, (a, b) -> a));
         }
 
         List<ProductReviewResponse> items = reviews.stream()
-                .map(review -> mapToResponse(review, reviewImagesMap, userMap))
+                .map(review -> mapToResponse(review, reviewImagesMap, userMap, userAvatarMap))
                 .collect(Collectors.toList());
 
         RatingDistributionDto ratingDistribution = aggregateRatingDistribution(productId);
@@ -90,7 +94,7 @@ public class ReviewServiceImpl implements ReviewService {
     private ProductReviewResponse mapToResponse(
             ProductReview review,
             Map<Long, List<Image>> reviewImagesMap,
-            Map<Long, User> userMap) {
+            Map<Long, User> userMap, Map<Long, String> userAvatarMap) {
 
         String variantSku = null;
         Map<String, String> variantAttributes = null;
@@ -106,7 +110,24 @@ public class ReviewServiceImpl implements ReviewService {
                 .map(Image::getUrl)
                 .collect(Collectors.toList());
 
+                com.b2c.flash_sale_b2c_UTC2.review.dto.SellerReplyDto sellerReplyDto = null;
+        if (review.getSellerReply() != null && !review.getSellerReply().isBlank()) {
+            String storeName = (review.getProduct() != null && review.getProduct().getStore() != null)
+                    ? review.getProduct().getStore().getStoreName() : null;
+            sellerReplyDto = com.b2c.flash_sale_b2c_UTC2.review.dto.SellerReplyDto.builder()
+                    .content(review.getSellerReply())
+                    .storeName(storeName)
+                    .repliedAt(review.getSellerReplyAt())
+                    .build();
+        }
+        List<String> urls = album.isEmpty() ? null : album;
+
+        String userAvatarUrl = userAvatarMap.get(review.getUser().getId());
+
         return ProductReviewResponse.builder()
+                .mediaUrls(urls)
+                .isVerifiedPurchase(Boolean.TRUE)
+                .userAvatarUrl(userAvatarUrl)
                 .id(review.getId())
                 .rating(review.getRating().intValue())
                 .comment(review.getComment())
@@ -114,7 +135,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .variantSku(variantSku)
                 .variantAttributes(variantAttributes)
                 .album(album.isEmpty() ? null : album)
-                .sellerReply(review.getSellerReply())
+                .sellerReply(sellerReplyDto)
                 .sellerReplyAt(review.getSellerReplyAt())
                 .createdAt(review.getCreatedAt())
                 .build();

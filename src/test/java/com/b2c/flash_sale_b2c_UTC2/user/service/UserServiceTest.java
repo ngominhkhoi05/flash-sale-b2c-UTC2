@@ -36,6 +36,9 @@ class UserServiceTest {
     private UserRepository userRepository;
 
     @Mock
+    private com.b2c.flash_sale_b2c_UTC2.user.repository.UserRoleRepository userRoleRepository;
+
+    @Mock
     private UserMapper userMapper;
 
     @Mock

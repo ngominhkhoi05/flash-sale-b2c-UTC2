@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.List;
 
 @Data
 @Builder
@@ -19,4 +20,5 @@ public class UserResponse {
     private String avatarUrl;
     private String status;
     private Instant createdAt;
+    private List<String> roles;
 }
