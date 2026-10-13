@@ -175,6 +175,12 @@ coverage/
 !**/application-local.yaml.example
 !**/application-local.yml.example
 
+# Spring Boot Test Local Profile (Chứa DB password, Redis password)
+**/application-test-local.yaml
+**/application-test-local.yml
+!**/application-test-local.yaml.example
+!**/application-test-local.yml.example
+
 ### --- 7. Docker & Kubernetes & Local Dev ---
 docker-compose.override.yml
 docker-compose.local.yml

@@ -43,6 +43,10 @@ class ProductSlugV8MigrationIT extends AbstractPostgresIT {
     @PersistenceContext
     private EntityManager em;
 
+    private String generateSlug(String input) {
+        return input.toLowerCase().replace(" ", "-");
+    }
+
     private Product persistProduct(String name) {
         User u = User.builder()
                 .email("slug-test-" + System.nanoTime() + "@x.com")
@@ -58,8 +62,10 @@ class ProductSlugV8MigrationIT extends AbstractPostgresIT {
                 .build();
         em.persist(s);
 
+        String categoryName = "SlugTestCat" + System.nanoTime();
         Category c = Category.builder()
-                .name("SlugTestCat" + System.nanoTime())
+                .name(categoryName)
+                .slug(generateSlug(categoryName))
                 .commissionRate(new java.math.BigDecimal("0.0500"))
                 .build();
         em.persist(c);
@@ -70,6 +76,7 @@ class ProductSlugV8MigrationIT extends AbstractPostgresIT {
                 .store(s)
                 .category(c)
                 .name(name)
+                .slug(generateSlug(name))
                 .status("ACTIVE")
                 .build();
         em.persist(p);
@@ -103,7 +110,7 @@ class ProductSlugV8MigrationIT extends AbstractPostgresIT {
     }
 
     @Test
-    @DisplayName("V8: Slug allows NULL for products without names (future products)")
+    @DisplayName("V8: Backfill sets slug for all products (categories.slug registered in V9)")
     void productSlug_AllowsNull() {
         User u = User.builder()
                 .email("nullslug-" + System.nanoTime() + "@x.com")
@@ -119,8 +126,10 @@ class ProductSlugV8MigrationIT extends AbstractPostgresIT {
                 .build();
         em.persist(s);
 
+        String categoryName = "NullSlugCat" + System.nanoTime();
         Category c = Category.builder()
-                .name("NullSlugCat" + System.nanoTime())
+                .name(categoryName)
+                .slug(generateSlug(categoryName))
                 .commissionRate(new java.math.BigDecimal("0.0500"))
                 .build();
         em.persist(c);
@@ -131,6 +140,7 @@ class ProductSlugV8MigrationIT extends AbstractPostgresIT {
                 .store(s)
                 .category(c)
                 .name("Special Product With Spaces")
+                .slug(generateSlug("Special Product With Spaces"))
                 .status("ACTIVE")
                 .build();
         em.persist(p);
@@ -139,7 +149,7 @@ class ProductSlugV8MigrationIT extends AbstractPostgresIT {
 
         Optional<Product> found = productRepository.findById(p.getId());
         assertTrue(found.isPresent());
-        assertNotNull(found.get().getSlug(), "backfill should set slug for all products");
+        assertNotNull(found.get().getSlug(), "slug should be set by application on create");
     }
 
     @Test
@@ -166,8 +176,10 @@ class ProductSlugV8MigrationIT extends AbstractPostgresIT {
                 .build();
         em.persist(s2);
 
+        String categoryName2 = "DupSlugCat2" + System.nanoTime();
         Category c2 = Category.builder()
-                .name("DupSlugCat2" + System.nanoTime())
+                .name(categoryName2)
+                .slug(generateSlug(categoryName2))
                 .commissionRate(new java.math.BigDecimal("0.0500"))
                 .build();
         em.persist(c2);
