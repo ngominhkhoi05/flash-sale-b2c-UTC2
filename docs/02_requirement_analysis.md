@@ -70,6 +70,9 @@ graph TD
   * **Soft delete + Scheduled Cleanup**: Xóa ảnh set `status='INACTIVE'` (sync) → phát event async → Cloudinary destroy → flag `cloudinary_deleted=true` → Sau 30 ngày, scheduled job dọn record `INACTIVE AND cloudinary_deleted=true AND updated_at < NOW()-30 days`.
   * **Tính toàn vẹn tham chiếu**: Do polymorphic không tạo được FK vật lý tới 5 bảng owner, Service **bắt buộc validate** `owner_id` tồn tại trong bảng tương ứng (theo `owner_type`) trước khi insert.
   * Khi xóa owner (Product/Store/Review/User), Service phải soft delete tất cả `images` có `owner_id` tương ứng để tránh ảnh mồ côi trên Cloudinary.
+* **FR-3.4 (Đặc tả Chi Tiết Sản Phẩm & SEO Slug - V10):**
+  * Quản lý thông tin chi tiết SPU gồm chuỗi định danh SEO `slug`, cấu trúc thông số kỹ thuật `specs` JSONB (chất liệu, xuất xứ, phong cách, SKU, hướng dẫn bảo quản), khối lợi ích nổi bật `features` JSONB, cam kết gian hàng `commitments` JSONB, bảng kích cỡ `size_chart` JSONB và bài viết rich text `description_rich` JSONB.
+  * Hỗ trợ API công khai tra cứu sản phẩm chi tiết theo `slug` (`GET /api/v1/products/slug/{slug}` hoặc `?slug=`) tối ưu cho SEO và render Storefront.
 
 ### Phân hệ 4: Lõi Đặt hàng, Khóa Tồn kho & Giữ chỗ (Reservation & Anti-Overselling Core)
 * **FR-4.1 (Kiểm tra Giới hạn Mua - Purchase Limit Check):** Khi Buyer nhấn mua, hệ thống kiểm tra key `flash_sale:user_limit:{slotId}:{userId}:{itemId}` trên Redis xem Buyer đã đạt trần mua trong phiên hay chưa. Giới hạn này có thời gian sống (TTL) tương ứng với thời lượng còn lại của phiên Flash Sale (`slot.end_time - now()`), độc lập với thời gian giữ chỗ đơn hàng (Reservation TTL 300 giây).
@@ -96,6 +99,9 @@ graph TD
 * **FR-5.4 (Xử lý Hoàn tiền - Refund):**
   * Đối với các đơn hàng đã thanh toán Online qua ZaloPay bị hủy bởi shop (hết hàng, sự cố) hoặc hủy hợp lệ trước khi giao:
   * Hệ thống chuyển `payments.status = REFUNDED`, lưu vết thời gian `refunded_at` và lý do `refund_reason` để hỗ trợ đối soát kế toán.
+* **FR-5.5 (Theo dõi Vận chuyển & Timeline Trạng thái Đơn hàng - V10):**
+  * Bổ sung mã vận đơn `tracking_number` do đối tác vận chuyển cung cấp, ghi nhận thời điểm lấy hàng đi giao `shipped_at` và thời điểm giao thành công `completed_at` trong bảng `orders`.
+  * Cung cấp danh sách các mốc thời gian chuyển dịch trạng thái đơn hàng (`timeline`) gồm trạng thái, nhãn hiển thị và thời điểm tương ứng phục vụ người mua theo dõi hành trình đơn hàng.
 
 ### Phân hệ 6: Quản lý Tài chính & Hoa hồng Sàn (Commission & Wallet Settlement)
 * **FR-6.1:** Admin cấu hình tỷ lệ hoa hồng linh hoạt: Cố định toàn sàn (mặc định 5%), hoặc cấu hình riêng cho từng Store (`stores.default_commission_rate`), hoặc cấu hình riêng theo từng sản phẩm sale.
