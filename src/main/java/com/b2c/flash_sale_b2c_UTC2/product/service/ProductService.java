@@ -23,7 +23,9 @@ public interface ProductService {
 
     PageResponse<ProductSummaryResponse> getPublicProducts(ProductFilterRequest filter, Pageable pageable);
 
-    ProductDetailResponse getPublicProductDetail(Long productId);
+        ProductDetailResponse getPublicProductDetail(Long productId);
+
+    ProductDetailResponse getPublicProductDetailBySlug(String slug);
 
     PageResponse<ProductSummaryResponse> getSellerProducts(Long userId, String status, Pageable pageable);
 

@@ -1,6 +1,7 @@
 package com.b2c.flash_sale_b2c_UTC2.product.dto;
 
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.ActiveFlashSaleDto;
+import com.b2c.flash_sale_b2c_UTC2.review.dto.RatingDistributionDto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -52,10 +53,20 @@ public class ProductDetailResponse {
     private List<ProductImageDto> images;
 
     // Part A Subplan 4: active flash sales list for product detail
-    /**
-     * Danh sach Flash Sale ACTIVE cua san pham nay.
-     * Populated in buildProductDetailResponse() via findActiveByProductId() + Redis stock.
-     * Sorted by flashSalePrice ASC.
-     */
     private List<ActiveFlashSaleDto> flashSales;
+
+    // Gap Report 2026-10-13 additions for Frontend UI integration
+    private String slug;
+    private Object descriptionRich;
+    private Object specs;
+    private Object features;
+    private Object commitments;
+    private Object vouchers;
+    private Object storeProfile;
+    private Object shipping;
+    private Object sizeChart;
+    private RatingDistributionDto ratingDistribution;
+    private Integer questionCount;
+    private List<ProductSummaryResponse> relatedSameStore;
+    private List<ProductSummaryResponse> relatedBestSellers;
 }
