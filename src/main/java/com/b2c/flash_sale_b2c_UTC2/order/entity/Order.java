@@ -93,6 +93,15 @@ public class Order {
     @Column(name = "status", nullable = false, length = 30)
     private String status;
 
+    @Column(name = "tracking_number", length = 100)
+    private String trackingNumber;
+
+    @Column(name = "shipped_at")
+    private Instant shippedAt;
+
+    @Column(name = "completed_at")
+    private Instant completedAt;
+
     @Column(name = "expires_at")
     private Instant expiresAt;
 

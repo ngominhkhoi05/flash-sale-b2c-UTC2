@@ -45,15 +45,28 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success("Lay san pham recommended thanh cong", response));
     }
 
+    @GetMapping("/slug/{slug}")
+    @Operation(summary = "Xem chi tiet san pham theo slug SEO (Public)",
+               description = "Chi tra ve san pham ACTIVE cua cua hang APPROVED")
+    public ResponseEntity<ApiResponse<ProductDetailResponse>> getPublicProductDetailBySlug(@PathVariable String slug) {
+        ProductDetailResponse response = productService.getPublicProductDetailBySlug(slug);
+        return ResponseEntity.ok(ApiResponse.success("Lay chi tiet san pham thanh cong", response));
+    }
+
     @GetMapping
-    @Operation(summary = "Tìm kiếm & lọc danh sách sản phẩm sàn (Public)",
-               description = "Hỗ trợ lọc theo categoryId, từ khóa keyword, khoảng giá minPrice-maxPrice, phân trang PageResponse")
-    public ResponseEntity<ApiResponse<PageResponse<ProductSummaryResponse>>> getPublicProducts(
+    @Operation(summary = "Tim kiem & loc danh sach san pham san (Public)",
+               description = "Ho tro loc theo slug, categoryId, tu khoa keyword, khoang gia minPrice-maxPrice, phan trang PageResponse")
+    public ResponseEntity<?> getPublicProducts(
+            @RequestParam(value = "slug", required = false) String slug,
             @ModelAttribute ProductFilterRequest filter,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
+        if (slug != null && !slug.isBlank()) {
+            ProductDetailResponse detail = productService.getPublicProductDetailBySlug(slug.trim());
+            return ResponseEntity.ok(ApiResponse.success("Lay chi tiet san pham thanh cong", detail));
+        }
         PageResponse<ProductSummaryResponse> response = productService.getPublicProducts(filter, pageable);
-        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm thành công", response));
+        return ResponseEntity.ok(ApiResponse.success("Lay danh sach san pham thanh cong", response));
     }
 
     @GetMapping("/{id}")

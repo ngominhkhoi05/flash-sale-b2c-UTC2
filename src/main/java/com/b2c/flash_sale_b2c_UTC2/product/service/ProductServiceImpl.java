@@ -334,6 +334,20 @@ public class ProductServiceImpl implements ProductService {
         };
     }
 
+        @Override
+    @Transactional(readOnly = true)
+    public ProductDetailResponse getPublicProductDetailBySlug(String slug) {
+        Product product = productRepository.findBySlugWithStoreAndCategory(slug)
+                .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
+
+        if (!"ACTIVE".equalsIgnoreCase(product.getStatus()) || !"APPROVED".equalsIgnoreCase(product.getStore().getStatus())) {
+            throw new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND);
+        }
+
+        List<ProductVariant> activeVariants = productVariantRepository.findByProductIdAndStatus(product.getId(), "ACTIVE");
+        return buildProductDetailResponse(product, activeVariants);
+    }
+
     @Override
     @Transactional(readOnly = true)
     public ProductDetailResponse getPublicProductDetail(Long productId) {
@@ -574,7 +588,23 @@ public class ProductServiceImpl implements ProductService {
                 .maxPrice(maxPrice)
                 .discountPercent(discountPercent)
                 .images(images)
-                .flashSales(flashSales)
+                                .flashSales(flashSales)
+                .slug(product.getSlug())
+                .descriptionRich(product.getDescriptionRich())
+                .specs(product.getSpecs())
+                .features(product.getFeatures())
+                .commitments(product.getCommitments())
+                .sizeChart(product.getSizeChart())
+                .storeProfile(java.util.Map.of(
+                        "id", product.getStore().getId(),
+                        "name", product.getStore().getStoreName(),
+                        "isOfficial", "OFFICIAL_MALL".equalsIgnoreCase(String.valueOf(product.getStore().getTier()))
+                ))
+                .shipping(java.util.Map.of(
+                        "freeshipBadge", "FREESHIP XTRA",
+                        "freeshipText", "Mien phi van chuyen",
+                        "estimatedDays", "1 - 2 ngay"
+                ))
                 .build();
     }
 

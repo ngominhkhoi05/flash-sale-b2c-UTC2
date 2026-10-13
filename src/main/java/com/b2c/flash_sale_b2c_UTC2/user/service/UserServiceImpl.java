@@ -11,6 +11,7 @@ import com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType;
 import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
 import com.b2c.flash_sale_b2c_UTC2.user.mapper.UserMapper;
 import com.b2c.flash_sale_b2c_UTC2.user.repository.UserRepository;
+import com.b2c.flash_sale_b2c_UTC2.user.repository.UserRoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -25,10 +27,25 @@ import java.time.Instant;
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
+    private final UserRoleRepository userRoleRepository;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
     private final ImageService imageService;
+
+    private List<String> getUserRoles(Long userId) {
+        if (userId == null || userRoleRepository == null) return List.of();
+        var roles = userRoleRepository.findByUserId(userId);
+        if (roles == null) return List.of();
+        return roles.stream()
+                .filter(ur -> ur != null && ur.getRole() != null && ur.getRole().getName() != null)
+                .map(ur -> {
+                    String name = ur.getRole().getName();
+                    return name.startsWith("ROLE_") ? name : "ROLE_" + name;
+                })
+                .distinct()
+                .toList();
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -40,6 +57,7 @@ public class UserServiceImpl implements UserService {
         if (avatar != null) {
             resp.setAvatarUrl(avatar.getUrl());
         }
+        resp.setRoles(getUserRoles(userId));
         return resp;
     }
 
@@ -68,6 +86,7 @@ public class UserServiceImpl implements UserService {
         if (avatar != null) {
             resp.setAvatarUrl(avatar.getUrl());
         }
+        resp.setRoles(getUserRoles(userId));
         return resp;
     }
 

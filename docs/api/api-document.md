@@ -948,6 +948,14 @@ Lấy danh sách sản phẩm đề xuất theo 3 tab cho trang chủ (For You /
 
 ---
 
+### 13.4 `GET /api/v1/products/slug/{slug}` (hoặc `GET /api/v1/products?slug={slug}`)
+
+> **Public API** — Tra cứu chi tiết sản phẩm theo SEO `slug`.
+
+**Response:** `ProductDetailResponse` (bao gồm đầy đủ các trường `specs`, `features`, `commitments`, `sizeChart`, `shipping`, `storeProfile`, `vouchers`, `descriptionRich`).
+
+---
+
 ## 14b. Product Review Module `/api/v1/products/{productId}/reviews`
 
 > **Public API** · **Tag Swagger**: `Product Review - Public API`
@@ -1233,6 +1241,14 @@ Upload ảnh mới vào gallery của một SKU cụ thể. Partial unique index
 ```
 
 **`availableStock`** được lấy **realtime từ Redis** (không phải DB). DB chỉ là nguồn bền vững, Redis là source-of-truth tạm thời cho tồn kho Flash Sale.
+
+---
+
+### 15.2 `GET /api/v1/flash-sales/items/active`
+
+> **Public API** — Lấy danh sách toàn bộ các sản phẩm Flash Sale đang ACTIVE trong các khung giờ hiện tại.
+
+**Response:** `List<PublicFlashSaleItemResponse>`
 
 ---
 
@@ -1621,6 +1637,32 @@ Hủy đơn khi chưa thanh toán.
 | 404 | `ORDER_404` | Không tìm thấy đơn hàng |
 | 403 | `ORDER_403` | Bạn không có quyền truy cập hoặc thao tác trên đơn hàng này |
 | 400 | `ORDER_400_3` (`INVALID_STATUS_TRANSITION`) | Trạng thái chuyển đổi của đơn hàng không hợp lệ |
+
+---
+
+### 20.5 `GET /api/v1/orders/{id}/payment`
+
+> Yêu cầu: **Authentication** (người mua đơn hàng).
+
+Lấy thông tin và trạng thái thanh toán hiện tại của đơn hàng.
+
+**Response (`PaymentResponse`):** `orderId`, `orderCode`, `paymentMethod`, `amount`, `status`, `paymentUrl`, `qrCodeUrl`, `transactionCode`, `paidAt`, `createdAt`.
+
+### 20.6 `POST /api/v1/orders/{id}/payment/zalopay`
+
+> Yêu cầu: **Authentication** (người mua đơn hàng).
+
+Khởi tạo giao dịch ZaloPay và lấy QR Code thanh toán cho đơn hàng.
+
+**Response:** `PaymentResponse` chứa `paymentUrl` và `qrCodeUrl`.
+
+### 20.7 `POST /api/v1/orders/{id}/payment/cod`
+
+> Yêu cầu: **Authentication** (người mua đơn hàng).
+
+Xác nhận thanh toán COD (tiền mặt khi nhận hàng) và cập nhật đơn hàng sang trạng thái `CONFIRMED`.
+
+**Response:** `PaymentResponse` với `paymentMethod: "COD"`.
 
 ---
 

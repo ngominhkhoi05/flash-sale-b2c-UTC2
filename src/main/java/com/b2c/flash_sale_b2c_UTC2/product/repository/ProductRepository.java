@@ -72,6 +72,9 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
             Pageable pageable
     );
 
+        @Query("SELECT p FROM Product p JOIN FETCH p.store s JOIN FETCH p.category c WHERE p.slug = :slug")
+    Optional<Product> findBySlugWithStoreAndCategory(@Param("slug") String slug);
+
     @Query("SELECT p FROM Product p JOIN FETCH p.store s JOIN FETCH p.category c WHERE p.id = :id")
     Optional<Product> findByIdWithStoreAndCategory(@Param("id") Long id);
 

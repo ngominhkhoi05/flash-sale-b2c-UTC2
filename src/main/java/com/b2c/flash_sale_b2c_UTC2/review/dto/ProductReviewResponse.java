@@ -19,10 +19,13 @@ public class ProductReviewResponse {
     private Integer rating;
     private String comment;
     private String userName;
+    private String userAvatarUrl;
+    private Boolean isVerifiedPurchase;
     private String variantSku;
     private Map<String, String> variantAttributes;
     private List<String> album;
-    private String sellerReply;
+    private List<String> mediaUrls;
+    private SellerReplyDto sellerReply;
     private Instant sellerReplyAt;
     private Instant createdAt;
 }

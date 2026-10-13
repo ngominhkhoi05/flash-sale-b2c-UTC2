@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -46,6 +47,20 @@ public class AuthServiceImpl implements AuthService {
 
     private static final String REDIS_REFRESH_KEY_PREFIX = "auth:refresh:";
     private static final String REDIS_USER_TOKENS_PREFIX = "auth:user_tokens:";
+
+    private List<String> getUserRoles(Long userId) {
+        if (userId == null || userRoleRepository == null) return List.of();
+        List<UserRole> list = userRoleRepository.findByUserId(userId);
+        if (list == null || list.isEmpty()) return List.of();
+        return list.stream()
+                .filter(ur -> ur != null && ur.getRole() != null && ur.getRole().getName() != null)
+                .map(ur -> {
+                    String name = ur.getRole().getName();
+                    return name.startsWith("ROLE_") ? name : "ROLE_" + name;
+                })
+                .distinct()
+                .toList();
+    }
 
     @Override
     @Transactional
@@ -109,6 +124,8 @@ public class AuthServiceImpl implements AuthService {
         saveRefreshTokenInRedis(user.getId(), jti);
 
         UserResponse userResponse = userMapper.toResponse(user);
+        List<String> roles = getUserRoles(user.getId());
+        if (userResponse != null) { userResponse.setRoles(roles); }
 
         return AuthResponse.builder()
                 .accessToken(accessToken)
@@ -116,6 +133,7 @@ public class AuthServiceImpl implements AuthService {
                 .tokenType("Bearer")
                 .expiresIn(jwtProperties.getExpirationMs() / 1000)
                 .user(userResponse)
+                .roles(roles)
                 .build();
     }
 
@@ -152,6 +170,8 @@ public class AuthServiceImpl implements AuthService {
         saveRefreshTokenInRedis(user.getId(), jti);
 
         UserResponse userResponse = userMapper.toResponse(user);
+        List<String> roles = getUserRoles(user.getId());
+        if (userResponse != null) { userResponse.setRoles(roles); }
 
         return AuthResponse.builder()
                 .accessToken(accessToken)
@@ -159,6 +179,7 @@ public class AuthServiceImpl implements AuthService {
                 .tokenType("Bearer")
                 .expiresIn(jwtProperties.getExpirationMs() / 1000)
                 .user(userResponse)
+                .roles(roles)
                 .build();
     }
 
@@ -219,6 +240,8 @@ public class AuthServiceImpl implements AuthService {
         saveRefreshTokenInRedis(userId, newJti);
 
         UserResponse userResponse = userMapper.toResponse(user);
+        List<String> roles = getUserRoles(user.getId());
+        if (userResponse != null) { userResponse.setRoles(roles); }
 
         return AuthResponse.builder()
                 .accessToken(newAccessToken)
@@ -226,37 +249,38 @@ public class AuthServiceImpl implements AuthService {
                 .tokenType("Bearer")
                 .expiresIn(jwtProperties.getExpirationMs() / 1000)
                 .user(userResponse)
+                .roles(roles)
                 .build();
+    }
+
+    @Override
+    public void logout() {
+        log.info("Nguoi dung da thuc hien thao tac dang xuat.");
     }
 
     @Override
     public void logout(RefreshTokenRequest request) {
         if (request != null && request.getRefreshToken() != null && !request.getRefreshToken().isBlank()) {
             try {
-                String token = request.getRefreshToken();
+                String token = request.getRefreshToken().trim();
                 Long userId = jwtService.extractUserId(token);
                 String jti = jwtService.extractJti(token);
                 if (userId != null && jti != null) {
                     revokeRefreshToken(userId, jti);
-                    log.info("Thu hồi thành công Refresh Token trong Redis: userId={}, jti={}", userId, jti);
+                    log.info("Đã đăng xuất và thu hồi Refresh Token: userId={}, jti={}", userId, jti);
                 }
             } catch (Exception ex) {
-                log.warn("Không thể trích xuất thông tin refresh token để logout: {}", ex.getMessage());
+                log.warn("Lỗi phân tích cú pháp Refresh Token khi logout: {}", ex.getMessage());
             }
         }
-    }
-
-    @Override
-    public void logout() {
-        log.info("Người dùng đã thực hiện thao tác đăng xuất.");
     }
 
     private void saveRefreshTokenInRedis(Long userId, String jti) {
         if (userId == null || jti == null) {
             return;
         }
-        long ttlSeconds = jwtProperties.getRefreshExpirationMs() / 1000;
         String redisKey = REDIS_REFRESH_KEY_PREFIX + userId + ":" + jti;
+        long ttlSeconds = jwtProperties.getRefreshExpirationMs() / 1000;
         stringRedisTemplate.opsForValue().set(redisKey, "VALID", ttlSeconds, TimeUnit.SECONDS);
 
         String userTokensKey = REDIS_USER_TOKENS_PREFIX + userId;
@@ -265,13 +289,10 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private void revokeRefreshToken(Long userId, String jti) {
-        if (userId == null || jti == null) {
-            return;
-        }
-        String redisKey = REDIS_REFRESH_KEY_PREFIX + userId + ":" + jti;
-        stringRedisTemplate.delete(redisKey);
+        String key = REDIS_REFRESH_KEY_PREFIX + userId + ":" + jti;
+        stringRedisTemplate.delete(key);
 
-        String userTokensKey = REDIS_USER_TOKENS_PREFIX + userId;
-        stringRedisTemplate.opsForSet().remove(userTokensKey, jti);
+        String setKey = REDIS_USER_TOKENS_PREFIX + userId;
+        stringRedisTemplate.opsForSet().remove(setKey, jti);
     }
 }
