@@ -259,6 +259,7 @@ Tổng cộng **83 endpoints** được nhóm theo 24 controller:
     "refreshToken": "eyJ...",
     "tokenType": "Bearer",
     "expiresIn": 3600000,
+    "roles": ["ROLE_CUSTOMER"],
     "user": {
       "id": 1,
       "email": "buyer@example.com",
@@ -266,7 +267,8 @@ Tổng cộng **83 endpoints** được nhóm theo 24 controller:
       "phone": "0987654321",
       "avatarUrl": null,
       "status": "ACTIVE",
-      "createdAt": "2026-10-03T..."
+      "createdAt": "2026-10-03T...",
+      "roles": ["ROLE_CUSTOMER"]
     }
   },
   "timestamp": "2026-10-03T..."
@@ -279,7 +281,7 @@ Tổng cộng **83 endpoints** được nhóm theo 24 controller:
 
 | Field | Type | Required | Mô tả |
 |---|---|---|---|
-| `email` | `string` | Có | Email đăng nhập |
+| `email` | `string` | Có | Email hoặc Username đăng nhập |
 | `password` | `string` | Có | Mật khẩu |
 
 **HTTP Status:** 200 OK
@@ -288,6 +290,7 @@ Tổng cộng **83 endpoints** được nhóm theo 24 controller:
 
 | Code | ErrorCode | Message |
 |---|---|---|
+| 404 | `AUTH_404_USER` | Tài khoản không tồn tại trên hệ thống |
 | 401 | `AUTH_401_CREDENTIALS` | Email hoặc mật khẩu không chính xác |
 | 403 | `AUTH_403_USER_DISABLED` | Tài khoản của bạn đã bị khóa hoặc tạm ngưng |
 
@@ -867,9 +870,16 @@ Lấy danh sách sản phẩm đề xuất theo 3 tab cho trang chủ (For You /
 | `discountPercent` | `Integer` | `%` giảm giá Flash Sale. `null` nếu sản phẩm không có FlashSaleItem ACTIVE. Tính: `round((original - flashSale) / original * 100)` |
 | `flashSales` | `Array<ActiveFlashSaleDto>` | Danh sách Flash Sale ACTIVE của sản phẩm này. Mỗi item gồm: `slotId`, `slotStartTime`, `slotEndTime`, `itemId`, `variantId`, `originalPrice`, `flashSalePrice`, `stockAvailable` (từ Redis, fallback DB), `slotStatus`. Sorted by `flashSalePrice ASC`. Rỗng nếu không có. |
 | `images` | `Array<ProductImageDto>` | Danh sách ảnh sản phẩm (từ bảng `images`, sort theo `displayOrder`) |
+| `slug` | `String` | URL SEO thân thiện (/products/ao-thun-nam-cotton) |
+| `descriptionRich` | `Object` | Dữ liệu mô tả bài viết rich text / HTML mở rộng (V10) |
+| `specs` | `Object` | Bảng thông số kỹ thuật (category, material, origin, style, sku, careInstructions) (V10) |
+| `features` | `Array` | 3 khối tính năng / lợi ích nổi bật trên storefront (icon, class, tiêu đề, mô tả) (V10) |
+| `commitments` | `Array` | Danh sách cam kết chính sách gian hàng (chính hãng, đổi trả, bảo hành) (V10) |
+| `sizeChart` | `Array` | Bảng kích cỡ chọn size cho thời trang (V10) |
+| `storeProfile` | `Object` | Hồ sơ tóm tắt gian hàng (id, name, isOfficial) |
+| `shipping` | `Object` | Thông tin vận chuyển (freeshipBadge, freeshipText, estimatedDays) |
+| `ratingDistribution` | `RatingDistributionDto` | Phân bố đánh giá từ 1 đến 5 sao |
 | `variants` | `Array` | Danh sách SKU |
-
-> **Lưu ý**: Hiện tại `ProductDetailResponse` **CHƯA** trả về `storeTier` (hạng store) và `slug` (V8) — các field này đã tồn tại trong entity `Product`/`Store` nhưng chưa được mapper expose trong DTO. Nếu FE cần, có thể bổ sung trong subplan sau.
 
 ```json
 {
@@ -878,9 +888,37 @@ Lấy danh sách sản phẩm đề xuất theo 3 tab cho trang chủ (For You /
   "storeName": "Shop ABC",
   "categoryId": 1,
   "categoryName": "Thời trang nam",
-  "name": "Áo thun nam",
+  "name": "Áo thun nam Cotton",
+  "slug": "ao-thun-nam-cotton",
   "imageUrl": "https://...",
-  "description": "...",
+  "description": "Mô tả cơ bản của sản phẩm...",
+  "descriptionRich": { "html": "<p>Chi tiết bài viết...</p>" },
+  "specs": {
+    "material": "100% Cotton",
+    "origin": "Việt Nam",
+    "style": "Basic",
+    "careInstructions": "Giặt máy chế độ nhẹ"
+  },
+  "features": [
+    { "icon": "eco", "title": "Chất liệu Organic", "description": "100% sợi bông tự nhiên thoáng mát" }
+  ],
+  "commitments": [
+    { "icon": "verified", "label": "Cam kết chính hãng 100%" }
+  ],
+  "sizeChart": [
+    { "size": "M", "height": "1m60-1m68", "weight": "50-60kg" },
+    { "size": "L", "height": "1m68-1m75", "weight": "60-70kg" }
+  ],
+  "storeProfile": {
+    "id": 2,
+    "name": "Shop ABC",
+    "isOfficial": true
+  },
+  "shipping": {
+    "freeshipBadge": "FREESHIP XTRA",
+    "freeshipText": "Miễn phí vận chuyển",
+    "estimatedDays": "1 - 2 ngày"
+  },
   "tierVariationConfigs": [
     { "name": "Màu sắc", "options": ["Đen", "Trắng"] },
     { "name": "Size", "options": ["M", "L", "XL"] }
@@ -911,13 +949,6 @@ Lấy danh sách sản phẩm đề xuất theo 3 tab cho trang chủ (For You /
       "url": "https://res.cloudinary.com/.../image1.jpg",
       "isPrimary": true,
       "displayOrder": 0,
-      "alt": "Áo thun nam"
-    },
-    {
-      "id": 11,
-      "url": "https://res.cloudinary.com/.../image2.jpg",
-      "isPrimary": false,
-      "displayOrder": 1,
       "alt": "Áo thun nam"
     }
   ],
@@ -950,9 +981,9 @@ Lấy danh sách sản phẩm đề xuất theo 3 tab cho trang chủ (For You /
 
 ### 13.4 `GET /api/v1/products/slug/{slug}` (hoặc `GET /api/v1/products?slug={slug}`)
 
-> **Public API** — Tra cứu chi tiết sản phẩm theo SEO `slug`.
+> **Public API** — Tra cứu chi tiết sản phẩm theo SEO `slug`. Hệ thống hỗ trợ cả dạng Path Variable `/slug/{slug}` lẫn Query Param `?slug=`.
 
-**Response:** `ProductDetailResponse` (bao gồm đầy đủ các trường `specs`, `features`, `commitments`, `sizeChart`, `shipping`, `storeProfile`, `vouchers`, `descriptionRich`).
+**Response:** `ProductDetailResponse` (bao gồm đầy đủ các trường `specs`, `features`, `commitments`, `sizeChart`, `shipping`, `storeProfile`, `vouchers`, `descriptionRich`, `ratingDistribution`).
 
 ---
 
@@ -995,18 +1026,24 @@ Lấy danh sách review công khai của sản phẩm. Hỗ trợ lọc theo `ra
 {
   "items": [
     {
-      "id": 1,
+      "id": 10,
       "rating": 5,
-      "reviewText": "Sản phẩm rất tốt, giao hàng nhanh",
-      "username": "Nguyễn Văn A",
+      "comment": "Chất lượng áo rất tốt, vải mát đúng mô tả!",
+      "userName": "Nguyễn Văn A",
+      "userAvatarUrl": "https://res.cloudinary.com/.../avatar.jpg",
+      "isVerifiedPurchase": true,
       "variantSku": "AT-DEN-M",
       "variantAttributes": { "Màu sắc": "Đen", "Size": "M" },
-      "albumUrls": [
+      "mediaUrls": [
         "https://res.cloudinary.com/.../review1.jpg",
         "https://res.cloudinary.com/.../review2.jpg"
       ],
-      "sellerReply": "Cảm ơn bạn đã tin tưởng!",
-      "sellerRepliedAt": "2026-10-05T10:00:00.000Z",
+      "sellerReply": {
+        "content": "Cảm ơn bạn đã tin tưởng và ủng hộ shop!",
+        "storeName": "Shop ABC",
+        "repliedAt": "2026-10-05T10:00:00.000Z"
+      },
+      "sellerReplyAt": "2026-10-05T10:00:00.000Z",
       "createdAt": "2026-10-03T08:30:00.000Z"
     }
   ],
@@ -1041,15 +1078,17 @@ Lấy danh sách review công khai của sản phẩm. Hỗ trợ lọc theo `ra
 
 | Field | Type | Mô tả |
 |---|---|---|
-| `id` | `long` | |
-| `rating` | `int` | Số sao: 1–5 |
-| `reviewText` | `String` | Nội dung review (nullable) |
-| `username` | `String` | Tên hiển thị của buyer (từ `users.full_name`) |
+| `id` | `long` | ID bản ghi review |
+| `rating` | `int` | Số sao đánh giá: 1–5 |
+| `comment` | `String` | Nội dung bình luận / đánh giá (chuẩn DB cột `comment`) |
+| `userName` | `String` | Tên hiển thị của người mua |
+| `userAvatarUrl` | `String` | URL ảnh đại diện của người mua |
+| `isVerifiedPurchase` | `Boolean` | Xác thực đã mua hàng (true) |
 | `variantSku` | `String` | SKU của variant đã mua (nullable) |
 | `variantAttributes` | `Map<String, String>` | Các thuộc tính của variant (nullable) |
-| `albumUrls` | `List<String>` | Danh sách ảnh album review (từ bảng `images`, owner_type=`REVIEW`) |
-| `sellerReply` | `String` | Phản hồi của seller (nullable) |
-| `sellerRepliedAt` | `Instant` | Thời gian seller phản hồi (nullable) |
+| `mediaUrls` / `album` | `List<String>` | Danh sách ảnh chụp thực tế sản phẩm |
+| `sellerReply` | `SellerReplyDto` | Phản hồi từ người bán dạng object (`content`, `storeName`, `repliedAt`) |
+| `sellerReplyAt` | `Instant` | Thời gian seller phản hồi (nullable) |
 | `createdAt` | `Instant` | Thời gian tạo review |
 
 **`RatingDistributionDto` fields:**
@@ -1205,6 +1244,7 @@ Upload ảnh mới vào gallery của một SKU cụ thể. Partial unique index
 | Method | Endpoint | Access | Mô tả |
 |---|---|---|---|
 | `GET` | `/api/v1/flash-sales/slots` | Public | DS phiên Flash Sale đang/sắp diễn ra + tồn kho realtime |
+| `GET` | `/api/v1/flash-sales/items/active` | Public | DS sản phẩm Flash Sale đang active phục vụ trang chủ (Realtime stock) |
 
 ### 15.1 `GET /api/v1/flash-sales/slots`
 
@@ -1246,9 +1286,29 @@ Upload ảnh mới vào gallery của một SKU cụ thể. Partial unique index
 
 ### 15.2 `GET /api/v1/flash-sales/items/active`
 
-> **Public API** — Lấy danh sách toàn bộ các sản phẩm Flash Sale đang ACTIVE trong các khung giờ hiện tại.
+> **Public API** — Lấy danh sách toàn bộ các sản phẩm Flash Sale đang ACTIVE trong các khung giờ hiện tại phục vụ hiển thị section Flash Sale trên trang chủ (không yêu cầu đăng nhập).
 
 **Response:** `List<PublicFlashSaleItemResponse>`
+
+```json
+[
+  {
+    "id": 7,
+    "slotId": 1,
+    "variantId": 42,
+    "sku": "AT-DEN-M",
+    "variantName": "Đen, Size M",
+    "productName": "Áo thun nam Cotton",
+    "imageUrl": "https://res.cloudinary.com/.../shirt.jpg",
+    "originalPrice": 199000,
+    "flashSalePrice": 99000,
+    "allocatedStock": 100,
+    "availableStock": 87,
+    "userPurchaseLimit": 2,
+    "status": "APPROVED"
+  }
+]
+```
 
 ---
 
@@ -1594,6 +1654,20 @@ Pre-warm nạp tồn kho ban đầu lên Redis bằng `SETNX` (idempotent, tính
       "platformFee": 18800,
       "sellerAmount": 169200,
       "status": "PENDING_PAYMENT",
+      "paymentMethod": "ZALOPAY",
+      "paymentStatus": "PENDING",
+      "paymentUrl": "https://zalopay.vn/...",
+      "qrCodeUrl": "https://...",
+      "trackingNumber": "VNPOST12345678",
+      "shippedAt": null,
+      "completedAt": null,
+      "timeline": [
+        {
+          "status": "PENDING_PAYMENT",
+          "label": "Chờ thanh toán",
+          "at": "2026-10-03T10:00:00.000Z"
+        }
+      ],
       "expiresAt": null,
       "createdAt": "2026-10-03T...",
       "updatedAt": "2026-10-03T...",

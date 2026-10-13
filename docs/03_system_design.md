@@ -173,6 +173,11 @@ erDiagram
         varchar status
         int total_sold
         varchar slug
+        jsonb specs
+        jsonb features
+        jsonb commitments
+        jsonb size_chart
+        jsonb description_rich
         timestamptz created_at
     }
 
@@ -256,6 +261,9 @@ erDiagram
         decimal platform_fee
         decimal seller_amount
         varchar status
+        varchar tracking_number
+        timestamptz shipped_at
+        timestamptz completed_at
         timestamptz expires_at
         timestamptz created_at
     }
@@ -584,6 +592,11 @@ erDiagram
 | `tier_variation_configs` | **`JSONB`** | NULL | Cấu hình các tầng lựa chọn (VD: `[{"name": "Màu sắc", "options": ["Đen", "Trắng", "Vàng"]}, {"name": "Kích thước", "options": ["S", "M", "L"]}]`). NULL nếu là hàng đơn không có phân loại |
 | `total_sold` | `INT` | DEFAULT 0 | Tổng số lượng đã bán (cập nhật khi đơn hàng COMPLETED). Dùng cho FE hiển thị "Đã bán X" |
 | `slug` | `VARCHAR(255)` | NULL, **UNIQUE (partial)** | Chuỗi định danh URL SEO (VD: "ao-thun-unisex-utc2"). Partial unique index `uq_products_slug` chỉ áp dụng khi `slug IS NOT NULL` (cho phép nhiều product có slug NULL). Backfill từ `name` bằng REGEXP_REPLACE (V8) |
+| `specs` | **`JSONB`** | NULL | Thông số kỹ thuật sản phẩm (category, material, origin, style, sku, careInstructions) phục vụ tab cấu hình (V10) |
+| `features` | **`JSONB`** | NULL | 3 khối lợi ích/tính năng nổi bật hiển thị trên storefront (icon, class, tiêu đề, mô tả) (V10) |
+| `commitments` | **`JSONB`** | NULL | Danh sách cam kết chính sách gian hàng (chính hãng, đổi trả, bảo hành) (V10) |
+| `size_chart` | **`JSONB`** | NULL | Bảng kích cỡ / hướng dẫn chọn size chuẩn cho biến thể thời trang (V10) |
+| `description_rich` | **`JSONB`** | NULL | Nội dung mô tả chi tiết bài viết rich text / HTML mở rộng (V10) |
 | `status` | `VARCHAR(20)` | DEFAULT 'ACTIVE' | `ACTIVE`, `INACTIVE`, `OUT_OF_STOCK` |
 | `created_at` | `TIMESTAMPTZ` | DEFAULT CURRENT_TIMESTAMP | Ngày tạo sản phẩm |
 * **Chỉ mục tối ưu (V8):**
@@ -671,6 +684,9 @@ erDiagram
   | `platform_fee` | `DECIMAL(15,2)`| **NOT NULL** | **Immutable Snapshot:** Số tiền hoa hồng sàn thu về |
   | `seller_amount` | `DECIMAL(15,2)`| **NOT NULL** | **Immutable Snapshot:** Số tiền shop thực nhận (`total_amount - platform_fee`) |
   | `status` | `VARCHAR(30)` | **NOT NULL** | `PENDING_PAYMENT`, `PAID`, `CONFIRMED`, `SHIPPING`, `COMPLETED`, `CANCELLED_TIMEOUT`, `CANCELLED_USER` |
+  | `tracking_number` | `VARCHAR(100)` | NULL | Mã vận đơn tracking hành trình giao nhận của đối tác vận chuyển (V10) |
+  | `shipped_at` | `TIMESTAMPTZ` | NULL | Thời điểm đơn hàng bắt đầu được bưu tá lấy đi giao (SHIPPING) (V10) |
+  | `completed_at` | `TIMESTAMPTZ` | NULL | Thời điểm đơn hàng giao thành công tới tay khách (COMPLETED) (V10) |
   | `expires_at` | `TIMESTAMPTZ` | NULL | Hết hạn giữ chỗ (`now() + 5 phút` nếu Flash Sale Online, NULL nếu COD/hàng thường) |
   | `created_at` | `TIMESTAMPTZ` | DEFAULT CURRENT_TIMESTAMP | Thời điểm bấm mua giữ chỗ |
   | `updated_at` | `TIMESTAMPTZ` | DEFAULT CURRENT_TIMESTAMP | Thời điểm cập nhật trạng thái gần nhất |
