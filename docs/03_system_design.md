@@ -141,6 +141,8 @@ erDiagram
         text description
         decimal default_commission_rate
         varchar status
+        varchar tier
+        timestamptz last_active_at
         timestamptz created_at
     }
 
@@ -155,7 +157,7 @@ erDiagram
     CATEGORIES {
         int id PK
         varchar name UK
-        varchar slug UK
+        varchar slug
         decimal commission_rate
         varchar description
     }
@@ -170,6 +172,7 @@ erDiagram
         jsonb tier_variation_configs
         varchar status
         int total_sold
+        varchar slug
         timestamptz created_at
     }
 
@@ -562,7 +565,7 @@ erDiagram
   | :--- | :--- | :--- | :--- |
   | `id` | `SERIAL` | **PRIMARY KEY** | ID ngành hàng |
   | `name` | `VARCHAR(100)` | **NOT NULL, UNIQUE** | Tên ngành hàng |
-  | `slug` | `VARCHAR(100)` | **NOT NULL, UNIQUE** | Chuỗi định danh URL (SEO friendly) |
+  | `slug` | `VARCHAR(255)` | NULL, **UNIQUE (partial)** | Chuỗi định danh URL (SEO friendly). Partial unique index `uq_categories_slug` chỉ áp dụng khi `slug IS NOT NULL` (cho phép nhiều category có slug NULL, tránh trùng slug khi đã gán). Backfill từ `name` bằng REGEXP_REPLACE (V9) |
   | `commission_rate` | `DECIMAL(5,4)` | DEFAULT 0.0500 | Tỷ lệ hoa hồng sàn mặc định theo ngành |
   | `description` | `VARCHAR(255)` | NULL | Mô tả ngành hàng |
 
@@ -580,7 +583,7 @@ erDiagram
   | `description` | `TEXT` | NULL | Bài viết mô tả chi tiết thông số |
 | `tier_variation_configs` | **`JSONB`** | NULL | Cấu hình các tầng lựa chọn (VD: `[{"name": "Màu sắc", "options": ["Đen", "Trắng", "Vàng"]}, {"name": "Kích thước", "options": ["S", "M", "L"]}]`). NULL nếu là hàng đơn không có phân loại |
 | `total_sold` | `INT` | DEFAULT 0 | Tổng số lượng đã bán (cập nhật khi đơn hàng COMPLETED). Dùng cho FE hiển thị "Đã bán X" |
-| `slug` | `VARCHAR(255)` | NULL | Chuỗi định danh URL SEO (VD: "ao-thun-unisex-utc2"). Backfill từ `name` bằng REGEXP_REPLACE (V8) |
+| `slug` | `VARCHAR(255)` | NULL, **UNIQUE (partial)** | Chuỗi định danh URL SEO (VD: "ao-thun-unisex-utc2"). Partial unique index `uq_products_slug` chỉ áp dụng khi `slug IS NOT NULL` (cho phép nhiều product có slug NULL). Backfill từ `name` bằng REGEXP_REPLACE (V8) |
 | `status` | `VARCHAR(20)` | DEFAULT 'ACTIVE' | `ACTIVE`, `INACTIVE`, `OUT_OF_STOCK` |
 | `created_at` | `TIMESTAMPTZ` | DEFAULT CURRENT_TIMESTAMP | Ngày tạo sản phẩm |
 * **Chỉ mục tối ưu (V8):**
