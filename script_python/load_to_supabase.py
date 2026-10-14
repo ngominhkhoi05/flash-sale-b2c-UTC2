@@ -1,15 +1,22 @@
 """Load CSV vao Supabase (Postgres) - dung column mapping de tranh schema drift.
 
 Thay vi COPY truc tiep (se loi neu CSV co cot khong co trong DB), script
-nay doc CSV bang DictReader, query information_schema de biet DB columns,
+nay doc CSV, query information_schema de biet DB columns,
 va insert cac cot co mat trong ca CSV va DB. Cot CSV thua (vd 'id' khi
 PK la composite) se duoc bo qua; cot CSV thieu se lay DEFAULT.
 
 Thuc hien trong 1 transaction: TRUNCATE + bulk insert. Neu loi o bat
 ky bang nao -> rollback toan bo.
 
+Sau COPY, script tu dong sync tat ca sequences (RESTART IDENTITY chi dat
+ve 1, COPY voi explicit ID khong advance sequence -> phai setval thu cong).
+
 Cai dat:
-    .venv\Scripts\python.exe -m pip install "psycopg[binary]"
+    pip install "psycopg[binary]"
+
+Su dung:
+    $env:SUPABASE_DB_URL = "postgresql://user:pass@host:5432/db?sslmode=require"
+    python load_to_supabase.py
 """
 
 import csv
@@ -20,10 +27,9 @@ from pathlib import Path
 
 import psycopg
 
+# Doc tu env var de tranh commit secret. Fallback chi de dev local.
 CONN_STR = os.environ.get(
     "SUPABASE_DB_URL",
-    # Fallback KHONG chua secret that - chi placeholder.
-    # Phai dat env var SUPABASE_DB_URL truoc khi chay.
     "postgresql://USER:PASSWORD@HOST:5432/DB?sslmode=require",
 )
 
@@ -135,6 +141,20 @@ def copy_csv_to_table(cur, table: str, csv_path: Path) -> int:
         return cur.fetchone()[0]
 
 
+def sync_sequences(cur, table: str) -> None:
+    """Sau COPY, sequence van o gia tri cu. COPY voi explicit ID khong advance sequence.
+    Phai setval ve max_id de INSERT tiep theo tra ID dung."""
+    cur.execute(
+        "SELECT pg_get_serial_sequence(%s, 'id'), "
+        "       (SELECT COALESCE(MAX(id), 0) FROM \"%s\")",
+        (table, table)
+    )
+    result = cur.fetchone()
+    if result and result[0]:
+        seq_name, max_id = result
+        cur.execute("SELECT setval(%s, %s, true)", (seq_name, max_id))
+
+
 def main() -> int:
     if not HERE.joinpath("roles.csv").exists():
         print("ERROR: CSV files khong ton tai. Chay generate_all_seeds.py truoc.")
@@ -170,6 +190,15 @@ def main() -> int:
                     conn.rollback()
                     print(f"   FAIL  {filename:30s} -> {table:20s} ERROR: {e}")
                     raise
+
+            # Sync sequences sau COPY (RESTART IDENTITY chi dat ve 1,
+            # COPY voi explicit ID khong advance sequence -> phai setval thu cong)
+            print("\n== Sync sequences ==")
+            with conn.cursor() as cur:
+                for _, table in LOAD_ORDER:
+                    sync_sequences(cur, table)
+                conn.commit()
+            print("   sequences synced")
 
             conn.execute("SET session_replication_role = 'origin'")
             conn.commit()
