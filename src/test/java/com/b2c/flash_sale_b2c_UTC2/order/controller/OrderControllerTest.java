@@ -10,6 +10,8 @@ import com.b2c.flash_sale_b2c_UTC2.order.dto.CheckoutItemRequest;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.CheckoutStoreOrderRequest;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.CreateOrderRequest;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.OrderResponse;
+import com.b2c.flash_sale_b2c_UTC2.order.dto.QrOrderDetailResponse;
+import com.b2c.flash_sale_b2c_UTC2.order.dto.QrShopOrderResponse;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.UpdateOrderStatusRequest;
 import com.b2c.flash_sale_b2c_UTC2.order.service.OrderService;
 import com.b2c.flash_sale_b2c_UTC2.user.entity.User;
@@ -217,5 +219,48 @@ class OrderControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("SHIPPED"));
+    }
+
+    @Test
+    @DisplayName("Buyer lấy mã QR thanh toán -> 200 OK")
+    void getOrderQrDetail_WithBuyerToken_ShouldReturn200() throws Exception {
+        QrShopOrderResponse shopOrder = QrShopOrderResponse.builder()
+                .storeId(10L)
+                .storeName("Shop ABC")
+                .storeBadge("OfficialMall")
+                .orderCode("FS-261001-A7K2Q")
+                .amount(new BigDecimal("199000"))
+                .itemSummary("Áo thun nam × 2, Quần dài × 1")
+                .build();
+
+        QrOrderDetailResponse response = QrOrderDetailResponse.builder()
+                .orderCode("FS-261001-A7K2Q")
+                .qrCodeUrl("https://api.vietqr.io/image/970422-9999999999-compact2.png?amount=199000&addInfo=FS-261001-A7K2Q")
+                .amount(new BigDecimal("199000"))
+                .totalAmount(new BigDecimal("199000"))
+                .shopOrders(List.of(shopOrder))
+                .build();
+
+        when(orderService.getOrderQrDetail(1L, "FS-261001-A7K2Q")).thenReturn(response);
+
+        mockMvc.perform(get("/api/v1/orders/FS-261001-A7K2Q/qr")
+                        .header("Authorization", "Bearer " + buyerToken)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.orderCode").value("FS-261001-A7K2Q"))
+                .andExpect(jsonPath("$.data.amount").value(199000))
+                .andExpect(jsonPath("$.data.totalAmount").value(199000))
+                .andExpect(jsonPath("$.data.shopOrders[0].storeName").value("Shop ABC"))
+                .andExpect(jsonPath("$.data.shopOrders[0].storeBadge").value("OfficialMall"))
+                .andExpect(jsonPath("$.data.shopOrders[0].itemSummary").value("Áo thun nam × 2, Quần dài × 1"));
+    }
+
+    @Test
+    @DisplayName("Lấy mã QR không có token -> 401 hoặc 403")
+    void getOrderQrDetail_WithoutToken_ShouldReturnUnauthorizedOrForbidden() throws Exception {
+        mockMvc.perform(get("/api/v1/orders/FS-261001-A7K2Q/qr")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().is4xxClientError());
     }
 }
