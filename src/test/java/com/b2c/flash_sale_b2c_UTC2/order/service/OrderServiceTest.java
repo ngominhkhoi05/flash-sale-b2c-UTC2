@@ -549,6 +549,9 @@ class OrderServiceTest {
         BusinessException ex = assertThrows(BusinessException.class, () ->
                 orderService.getOrderQrDetail(1L, "ORD-OTHER"));
         assertEquals(OrderErrorCode.ORDER_ACCESS_DENIED.getCode(), ex.getErrorCode().getCode());
+    }
+
+    @Test
     @DisplayName("getBuyerOrderDetail: Làm giàu imageUrl cho từng order item thành công")
     void getBuyerOrderDetail_EnrichesImageUrl_Success() {
         Long buyerId = 1L;

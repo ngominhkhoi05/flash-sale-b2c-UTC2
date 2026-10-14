@@ -373,14 +373,17 @@ public class OrderServiceImpl implements OrderService {
         if (orderCode == null || orderCode.isBlank()) {
             throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);
         }
+
         List<String> orderCodes = Arrays.stream(orderCode.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .distinct()
                 .toList();
+
         if (orderCodes.isEmpty()) {
             throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);
         }
+
         List<Order> orders = new ArrayList<>();
         for (String code : orderCodes) {
             Order order = orderRepository.findByOrderCode(code)
@@ -390,9 +393,11 @@ public class OrderServiceImpl implements OrderService {
             }
             orders.add(order);
         }
+
         BigDecimal totalAmount = BigDecimal.ZERO;
         Instant earliestExpiry = null;
         List<QrShopOrderResponse> shopOrders = new ArrayList<>();
+
         for (Order o : orders) {
             totalAmount = totalAmount.add(o.getTotalAmount());
             if (o.getExpiresAt() != null) {
@@ -400,10 +405,12 @@ public class OrderServiceImpl implements OrderService {
                     earliestExpiry = o.getExpiresAt();
                 }
             }
+
             List<OrderItem> items = orderItemRepository.findByOrderId(o.getId());
             String itemSummary = items.stream()
                     .map(item -> item.getProductName() + " × " + item.getQuantity())
                     .collect(Collectors.joining(", "));
+
             String storeBadge = "";
             if (o.getStore() != null && o.getStore().getTier() != null) {
                 switch (o.getStore().getTier()) {
@@ -412,63 +419,100 @@ public class OrderServiceImpl implements OrderService {
                     default -> storeBadge = "";
                 }
             }
+
             shopOrders.add(QrShopOrderResponse.builder()
-                    .orderId(o.getId())
-                    .orderCode(o.getOrderCode())
                     .storeId(o.getStore() != null ? o.getStore().getId() : null)
-                    .storeName(o.getStore() != null ? o.getStore().getStoreName() : null)
+                    .storeName(o.getStore() != null ? o.getStore().getStoreName() : "")
                     .storeBadge(storeBadge)
+                    .orderCode(o.getOrderCode())
                     .amount(o.getTotalAmount())
                     .itemSummary(itemSummary)
                     .build());
         }
-        String displayOrderCode = String.join(", ", orderCodes);
-        String cleanTransferContent = "PAY " + orderCodes.get(0).replaceAll("[^A-Za-z0-9]", "");
-        String qrCodeUrl = String.format(
-                "https://api.vietqr.io/image/%s-%s-%s.png?amount=%s&addInfo=%s&accountName=%s",
-                DEFAULT_BANK_BIN,
-                DEFAULT_ACCOUNT_NO,
-                DEFAULT_QR_TEMPLATE,
-                totalAmount.toPlainString(),
-                java.net.URLEncoder.encode(cleanTransferContent, java.nio.charset.StandardCharsets.UTF_8),
-                java.net.URLEncoder.encode(DEFAULT_ACCOUNT_NAME, java.nio.charset.StandardCharsets.UTF_8)
-        );
+
+        if (earliestExpiry == null) {
+            earliestExpiry = orders.get(0).getCreatedAt() != null ?
+                    orders.get(0).getCreatedAt().plusSeconds(900) : Instant.now().plusSeconds(900);
+        }
+
+        String amountStr = totalAmount.stripTrailingZeros().toPlainString();
+        String safeOrderCode = URLEncoder.encode(orderCode, StandardCharsets.UTF_8);
+        String qrCodeUrl = "https://api.vietqr.io/image/970422-9999999999-compact2.png?amount=" + amountStr + "&addInfo=" + safeOrderCode;
+        String paymentUrl = "https://qc.zalopay.vn/pay?order=" + safeOrderCode + "&amount=" + amountStr;
+
+        if (orders.size() == 1) {
+            List<Payment> payments = paymentRepository.findByOrderId(orders.get(0).getId());
+            if (payments != null && !payments.isEmpty()) {
+                Payment latest = payments.get(payments.size() - 1);
+                if (latest.getQrCodeData() != null && !latest.getQrCodeData().isBlank()) {
+                    qrCodeUrl = latest.getQrCodeData();
+                }
+                if (latest.getPaymentUrl() != null && !latest.getPaymentUrl().isBlank()) {
+                    paymentUrl = latest.getPaymentUrl();
+                }
+            }
+        }
+
         return QrOrderDetailResponse.builder()
-                .orderCode(displayOrderCode)
-                .amount(totalAmount)
-                .totalAmount(totalAmount)
+                .orderCode(orderCode)
+                .qrCodeUrl(qrCodeUrl)
                 .expiresAt(earliestExpiry)
                 .paymentExpiry(earliestExpiry)
-                .qrCodeUrl(qrCodeUrl)
-                .bankCode(DEFAULT_BANK_CODE)
-                .bankName(DEFAULT_BANK_NAME)
-                .accountNo(DEFAULT_ACCOUNT_NO)
-                .accountName(DEFAULT_ACCOUNT_NAME)
-                .transferContent(cleanTransferContent)
+                .amount(totalAmount)
+                .totalAmount(totalAmount)
+                .paymentUrl(paymentUrl)
                 .shopOrders(shopOrders)
                 .build();
     }
+
     private List<OrderItemResponse> enrichItemResponses(List<OrderItem> items) {
-        List<OrderItemResponse> itemResponses = orderMapper.toItemResponseList(items);
-        if (items.isEmpty()) {
-            return itemResponses;
+        if (items == null || items.isEmpty()) {
+            return List.of();
         }
+        List<OrderItemResponse> itemResponses = orderMapper.toItemResponseList(items);
+        if (itemResponses == null || itemResponses.isEmpty()) {
+            return itemResponses != null ? itemResponses : List.of();
+        }
+
+        List<Long> variantIds = items.stream()
+                .filter(i -> i.getVariant() != null)
+                .map(i -> i.getVariant().getId())
+                .distinct().toList();
         List<Long> productIds = items.stream()
-                .map(item -> item.getVariant() != null && item.getVariant().getProduct() != null
-                        ? item.getVariant().getProduct().getId()
-                        : null)
-                .filter(java.util.Objects::nonNull)
-                .distinct()
-                .toList();
-        Map<Long, String> primaryImageMap = imageService.getPrimaryImagesForEntities(ImageType.PRODUCT_COVER, productIds);
-        for (int i = 0; i < items.size(); i++) {
+                .filter(i -> i.getVariant() != null && i.getVariant().getProduct() != null)
+                .map(i -> i.getVariant().getProduct().getId())
+                .distinct().toList();
+
+        Map<Long, com.b2c.flash_sale_b2c_UTC2.image.dto.ImageResponse> variantImageMap =
+                (imageService == null || variantIds.isEmpty()) ? Map.of() :
+                        imageService.getPrimaryImagesByOwnerIds(ImageOwnerType.VARIANT, variantIds);
+        Map<Long, com.b2c.flash_sale_b2c_UTC2.image.dto.ImageResponse> productImageMap =
+                (imageService == null || productIds.isEmpty()) ? Map.of() :
+                        imageService.getPrimaryImagesByOwnerIds(ImageOwnerType.PRODUCT, productIds);
+
+        int count = Math.min(items.size(), itemResponses.size());
+        for (int i = 0; i < count; i++) {
             OrderItem item = items.get(i);
             OrderItemResponse dto = itemResponses.get(i);
-            if (item.getVariant() != null && item.getVariant().getProduct() != null) {
-                Long pId = item.getVariant().getProduct().getId();
-                dto.setImageUrl(primaryImageMap.get(pId));
+            if (dto != null && item.getVariant() != null) {
+                String img = null;
+                if (variantImageMap != null && variantImageMap.containsKey(item.getVariant().getId())) {
+                    var imgResp = variantImageMap.get(item.getVariant().getId());
+                    if (imgResp != null) {
+                        img = imgResp.getUrl();
+                    }
+                }
+                if (img == null && item.getVariant().getProduct() != null && productImageMap != null
+                        && productImageMap.containsKey(item.getVariant().getProduct().getId())) {
+                    var imgResp = productImageMap.get(item.getVariant().getProduct().getId());
+                    if (imgResp != null) {
+                        img = imgResp.getUrl();
+                    }
+                }
+                dto.setImageUrl(img);
             }
         }
+
         return itemResponses;
     }
 }
