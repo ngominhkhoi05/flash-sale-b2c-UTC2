@@ -245,4 +245,61 @@ class VoucherControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.code").value("PLATFORM100"));
     }
+
+    @Test
+    @DisplayName("Xem kho voucher cá nhân có token Buyer -> 200 OK")
+    void getMyVouchers_WithToken_ShouldReturn200() throws Exception {
+        com.b2c.flash_sale_b2c_UTC2.voucher.dto.UserVoucherResponse voucher =
+                com.b2c.flash_sale_b2c_UTC2.voucher.dto.UserVoucherResponse.builder()
+                        .id(1L)
+                        .code("VIEMART10")
+                        .label("Giảm 10K đơn từ 400K")
+                        .status("ACTIVE")
+                        .build();
+
+        when(voucherService.getMyVouchers(1L)).thenReturn(List.of(voucher));
+
+        mockMvc.perform(get("/api/v1/vouchers/mine")
+                        .header("Authorization", "Bearer " + buyerToken)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].code").value("VIEMART10"))
+                .andExpect(jsonPath("$.data[0].label").value("Giảm 10K đơn từ 400K"));
+    }
+
+    @Test
+    @DisplayName("Lưu voucher vào ví có token Buyer -> 200 OK")
+    void saveVoucherToWallet_WithToken_ShouldReturn200() throws Exception {
+        com.b2c.flash_sale_b2c_UTC2.voucher.dto.SaveVoucherRequest request =
+                com.b2c.flash_sale_b2c_UTC2.voucher.dto.SaveVoucherRequest.builder().code("VIEMART10").build();
+
+        com.b2c.flash_sale_b2c_UTC2.voucher.dto.UserVoucherResponse response =
+                com.b2c.flash_sale_b2c_UTC2.voucher.dto.UserVoucherResponse.builder()
+                        .id(1L)
+                        .code("VIEMART10")
+                        .label("Giảm 10K đơn từ 400K")
+                        .status("ACTIVE")
+                        .build();
+
+        when(voucherService.saveVoucherToWallet(eq(1L), any(com.b2c.flash_sale_b2c_UTC2.voucher.dto.SaveVoucherRequest.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/vouchers/mine")
+                        .header("Authorization", "Bearer " + buyerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.code").value("VIEMART10"));
+    }
+
+    @Test
+    @DisplayName("Xem kho voucher không có token -> 401 Unauthorized")
+    void getMyVouchers_WithoutToken_ShouldReturn401() throws Exception {
+        mockMvc.perform(get("/api/v1/vouchers/mine")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false));
+    }
 }
