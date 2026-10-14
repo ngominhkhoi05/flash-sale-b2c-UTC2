@@ -58,6 +58,21 @@ graph TD
 ### Phân hệ 3: Sản phẩm & Đăng ký Chiến dịch theo Mô hình SPU - SKU (Seller)
 * **FR-3.1 (Mô hình SPU - SKU):** Người bán quản lý danh mục sản phẩm gốc (`products` - SPU) và các biến thể phân loại hàng hóa (`product_variants` - SKU). Hỗ trợ cấu hình phân loại 2 tầng (`tier_variation_configs`, ví dụ: Màu sắc $\times$ Kích thước). Mỗi biến thể quản lý độc lập mã SKU, giá bán lẻ gốc và tồn kho thực tế.
 * **FR-3.2 (Đăng ký Flash Sale theo Biến thể):** Người bán gửi yêu cầu tham gia Flash Sale chi tiết đến từng biến thể SKU (`variant_id`): Chọn slot, định giá sốc riêng cho biến thể, số lượng trích từ kho biến thể sang mở bán (`allocated_stock`), giới hạn số lượng mua trên mỗi khách. Ràng buộc `0 <= available_stock <= allocated_stock` được bảo vệ ở cấp CSDL.
+* **FR-3.3 (Quản lý Ảnh Đa đối tượng qua bảng `images` Polymorphic):**
+  * Tất cả ảnh của sản phẩm (Product gallery, Variant gallery, User avatar, Store logo, Review album) được quản lý tập trung qua **bảng `images`** với cặp khóa "polymorphic" `(owner_type, owner_id)`.
+  * **5 loại owner_type**: `PRODUCT`, `VARIANT`, `USER`, `STORE`, `REVIEW`.
+  * **Quy tắc 1-1 (Partial Unique Index)**:
+    - 1 `USER` chỉ có tối đa 1 avatar ACTIVE: `UNIQUE (owner_id) WHERE owner_type='USER' AND status='ACTIVE'`.
+    - 1 `STORE` chỉ có tối đa 1 logo ACTIVE: `UNIQUE (owner_id) WHERE owner_type='STORE' AND status='ACTIVE'`.
+    - 1 `PRODUCT`/`VARIANT` chỉ có tối đa 1 ảnh primary ACTIVE: `UNIQUE (owner_type, owner_id) WHERE owner_type IN ('PRODUCT','VARIANT') AND is_primary=TRUE AND status='ACTIVE'`.
+  * **Quy tắc 1-N**: `REVIEW` cho phép nhiều ảnh trong album (không giới hạn, sắp xếp theo `display_order`).
+  * **Tích hợp Cloudinary**: Ảnh vật lý lưu trên Cloudinary. Bảng lưu `url` (hiển thị) và `cloudinary_public_id` (để gọi API destroy khi xóa).
+  * **Soft delete + Scheduled Cleanup**: Xóa ảnh set `status='INACTIVE'` (sync) → phát event async → Cloudinary destroy → flag `cloudinary_deleted=true` → Sau 30 ngày, scheduled job dọn record `INACTIVE AND cloudinary_deleted=true AND updated_at < NOW()-30 days`.
+  * **Tính toàn vẹn tham chiếu**: Do polymorphic không tạo được FK vật lý tới 5 bảng owner, Service **bắt buộc validate** `owner_id` tồn tại trong bảng tương ứng (theo `owner_type`) trước khi insert.
+  * Khi xóa owner (Product/Store/Review/User), Service phải soft delete tất cả `images` có `owner_id` tương ứng để tránh ảnh mồ côi trên Cloudinary.
+* **FR-3.4 (Đặc tả Chi Tiết Sản Phẩm & SEO Slug - V10):**
+  * Quản lý thông tin chi tiết SPU gồm chuỗi định danh SEO `slug`, cấu trúc thông số kỹ thuật `specs` JSONB (chất liệu, xuất xứ, phong cách, SKU, hướng dẫn bảo quản), khối lợi ích nổi bật `features` JSONB, cam kết gian hàng `commitments` JSONB, bảng kích cỡ `size_chart` JSONB và bài viết rich text `description_rich` JSONB.
+  * Hỗ trợ API công khai tra cứu sản phẩm chi tiết theo `slug` (`GET /api/v1/products/slug/{slug}` hoặc `?slug=`) tối ưu cho SEO và render Storefront.
 
 ### Phân hệ 4: Lõi Đặt hàng, Khóa Tồn kho & Giữ chỗ (Reservation & Anti-Overselling Core)
 * **FR-4.1 (Kiểm tra Giới hạn Mua - Purchase Limit Check):** Khi Buyer nhấn mua, hệ thống kiểm tra key `flash_sale:user_limit:{slotId}:{userId}:{itemId}` trên Redis xem Buyer đã đạt trần mua trong phiên hay chưa. Giới hạn này có thời gian sống (TTL) tương ứng với thời lượng còn lại của phiên Flash Sale (`slot.end_time - now()`), độc lập với thời gian giữ chỗ đơn hàng (Reservation TTL 300 giây).
@@ -84,6 +99,9 @@ graph TD
 * **FR-5.4 (Xử lý Hoàn tiền - Refund):**
   * Đối với các đơn hàng đã thanh toán Online qua ZaloPay bị hủy bởi shop (hết hàng, sự cố) hoặc hủy hợp lệ trước khi giao:
   * Hệ thống chuyển `payments.status = REFUNDED`, lưu vết thời gian `refunded_at` và lý do `refund_reason` để hỗ trợ đối soát kế toán.
+* **FR-5.5 (Theo dõi Vận chuyển & Timeline Trạng thái Đơn hàng - V10):**
+  * Bổ sung mã vận đơn `tracking_number` do đối tác vận chuyển cung cấp, ghi nhận thời điểm lấy hàng đi giao `shipped_at` và thời điểm giao thành công `completed_at` trong bảng `orders`.
+  * Cung cấp danh sách các mốc thời gian chuyển dịch trạng thái đơn hàng (`timeline`) gồm trạng thái, nhãn hiển thị và thời điểm tương ứng phục vụ người mua theo dõi hành trình đơn hàng.
 
 ### Phân hệ 6: Quản lý Tài chính & Hoa hồng Sàn (Commission & Wallet Settlement)
 * **FR-6.1:** Admin cấu hình tỷ lệ hoa hồng linh hoạt: Cố định toàn sàn (mặc định 5%), hoặc cấu hình riêng cho từng Store (`stores.default_commission_rate`), hoặc cấu hình riêng theo từng sản phẩm sale.
@@ -113,11 +131,11 @@ graph TD
 ### Phân hệ 9: Đánh giá & Phản hồi Khách hàng (Reviews & Ratings)
 * **FR-9.1 (Đánh giá Đã Mua Hàng - Verified Purchase Review):** Chỉ những khách hàng đã mua sản phẩm và đơn hàng đã hoàn tất (`status = 'COMPLETED'`) mới được quyền gửi đánh giá cho từng món hàng trong đơn (`order_item_id`). Khóa ngoại duy nhất `order_item_id UNIQUE` đảm bảo mỗi món trong đơn chỉ được đánh giá 1 lần duy nhất, chống spam và review ảo.
 * **FR-9.2 (Tối ưu hóa Truy vấn Đọc - Read Optimization):** Bảng `product_reviews` lưu trữ trực tiếp `product_id` (phi chuẩn hóa có chủ đích) nhằm tối ưu hóa câu truy vấn hiển thị danh sách đánh giá trên trang chi tiết sản phẩm Storefront mà không phải JOIN qua 3 bảng lớn. Service đảm bảo tính toàn vẹn bằng cách xác thực `order_item` thuộc đúng sản phẩm và người đánh giá là chủ sở hữu đơn hàng.
-* **FR-9.3 (Chấm điểm, Ảnh Feedback & Phản hồi của Shop):** Người mua chấm điểm từ 1 đến 5 sao (`rating`), viết nhận xét (`comment`), và đính kèm ảnh chụp thực tế (`image_urls` dạng JSONB). Chủ gian hàng có quyền gửi phản hồi chăm sóc khách hàng (`seller_reply`). Quản trị viên có thể ẩn các đánh giá vi phạm từ ngữ (`status = HIDDEN`).
+* **FR-9.3 (Chấm điểm, Ảnh Feedback & Phản hồi của Shop):** Người mua chấm điểm từ 1 đến 5 sao (`rating`), viết nhận xét (`comment`). Album ảnh chụp thực tế do khách đính kèm được lưu ở bảng `images` với `owner_type='REVIEW'` (xem FR-3.3). Chủ gian hàng có quyền gửi phản hồi chăm sóc khách hàng (`seller_reply`). Quản trị viên có thể ẩn các đánh giá vi phạm từ ngữ (`status = HIDDEN`).
 
 ---
 
-## 4. Bảng Danh mục Cơ sở Dữ liệu Tổng thể (24 bảng)
+## 4. Bảng Danh mục Cơ sở Dữ liệu Tổng thể (25 bảng)
 
 ```mermaid
 erDiagram
@@ -155,6 +173,13 @@ erDiagram
     users ||--o{ voucher_usages : "sử dụng"
     orders ||--o| voucher_usages : "áp dụng cho"
     orders ||--o| addresses : "tham chiếu địa chỉ giao"
+
+    %% Quan he polymorphic: bang images tham chieu den 5 owner types
+    products         ||--o{ images : "gallery (owner_type=PRODUCT)"
+    product_variants ||--o{ images : "gallery (owner_type=VARIANT)"
+    users            ||--o| images : "avatar (owner_type=USER, 1-1)"
+    stores           ||--o| images : "logo (owner_type=STORE, 1-1)"
+    product_reviews  ||--o{ images : "album (owner_type=REVIEW)"
 ```
 
 | STT | Bảng dữ liệu | Chức năng chính & Ràng buộc cốt lõi |
@@ -169,7 +194,7 @@ erDiagram
 | 8 | **`addresses`** | Sổ địa chỉ chuẩn hóa với 2 khóa ngoại vật lý (`user_id`, `store_id`), CHECK loại trừ XOR và tọa độ GPS. |
 | 9 | **`stores`** | Thông tin gian hàng của Seller, tỷ lệ hoa hồng riêng của shop. |
 | 10 | **`wallets`** | Ví tiền của Seller (số dư khả dụng, số dư đóng băng). |
-| 11 | **`categories`** | Danh mục ngành hàng (Thời trang, Điện tử, Đồ gia dụng...). |
+| 11 | **`categories`** | Danh mục ngành hàng (Thời trang, Điện tử, Đồ gia dụng...). Cột `slug VARCHAR(255)` (nullable, V9) dùng cho URL SEO, partial unique index `uq_categories_slug` đảm bảo không trùng slug khi đã gán. |
 | 12 | **`products`** | Thông tin sản phẩm gốc SPU (tên, ngành hàng, mô tả, cấu hình phân loại 2 cấp `tier_variation_configs`). |
 | 13 | **`product_variants`** | Chi tiết từng biến thể SKU (quản lý mã SKU, giá bán lẻ gốc, tồn kho thực tế, thuộc tính JSONB Màu x Size). |
 | 14 | **`flash_sale_slots`** | Khung giờ Flash Sale do Admin tạo (thời gian bắt đầu, kết thúc, TTL giữ kho `reservation_ttl_seconds`). |
@@ -182,7 +207,10 @@ erDiagram
 | 21 | **`voucher_usages`** | Lịch sử sử dụng voucher theo từng đơn hàng và người dùng (`order_id UNIQUE`). |
 | 22 | **`carts`** | Giỏ hàng cá nhân của Người mua (Quan hệ 1-1 với `users`). |
 | 23 | **`cart_items`** | Chi tiết từng biến thể SKU nhặt vào giỏ hàng (`cart_id`, `variant_id`, `quantity`). |
-| 24 | **`product_reviews`** | Đánh giá sản phẩm đã mua (1-5 sao, nhận xét, ảnh feedback JSONB, `order_item_id UNIQUE` đảm bảo Verified Purchase 1-1, lưu `product_id` để tối ưu truy vấn đọc). |
+| 24 | **`product_reviews`** | Đánh giá sản phẩm đã mua (1-5 sao, nhận xét, `order_item_id UNIQUE` đảm bảo Verified Purchase 1-1, lưu `product_id` để tối ưu truy vấn đọc). Album ảnh feedback lưu ở bảng `images`. |
+| 25 | **`images`** | Quản lý ảnh đa đối tượng Polymorphic với Cloudinary (avatar User, logo Store, gallery Product/Variant, album Review). Cặp `(owner_type, owner_id)` tham chiếu mềm tới 5 bảng owner. Partial Unique Index cho User (1 avatar), Store (1 logo), Product/Variant (1 primary). Soft delete (`status='INACTIVE'`) + async Cloudinary cleanup + scheduled job dọn record >30 ngày. |
+| 26 | **`banners`** | Banner homepage cho B2C Storefront (HERO carousel, FREESHIP, VOUCHER_NEW_SHOP, PROMOTION). Hỗ trợ lên lịch hiển thị qua `start_date`/`end_date`, sắp xếp theo `position`. |
+| 27 | **`store_followers`** | Theo dõi gian hàng — cho phép Buyer theo dõi Store để nhận thông báo. Unique constraint `(store_id, user_id)` đảm bảo mỗi user chỉ theo dõi 1 store 1 lần. |
 
 ---
 

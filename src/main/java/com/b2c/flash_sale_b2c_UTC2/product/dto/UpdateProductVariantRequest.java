@@ -42,9 +42,6 @@ public class UpdateProductVariantRequest {
     @Min(value = 0, message = "Số lượng tồn kho phải lớn hơn hoặc bằng 0")
     private Integer stockQuantity;
 
-    @Size(max = 255, message = "URL hình ảnh tối đa 255 ký tự")
-    private String imageUrl;
-
     @Pattern(regexp = "ACTIVE|INACTIVE|OUT_OF_STOCK", message = "Trạng thái biến thể chỉ có thể là ACTIVE, INACTIVE hoặc OUT_OF_STOCK")
     private String status;
 }

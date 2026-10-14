@@ -27,9 +27,6 @@ public class UpdateProductRequest {
     @Size(max = 255, message = "Tên sản phẩm tối đa 255 ký tự")
     private String name;
 
-    @Size(max = 255, message = "URL hình ảnh tối đa 255 ký tự")
-    private String imageUrl;
-
     private String description;
 
     private List<TierVariationConfigDto> tierVariationConfigs;

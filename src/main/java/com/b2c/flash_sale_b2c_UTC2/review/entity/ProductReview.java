@@ -18,8 +18,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
@@ -56,10 +54,6 @@ public class ProductReview {
 
     @Column(name = "comment", columnDefinition = "TEXT")
     private String comment;
-
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "image_urls", columnDefinition = "jsonb")
-    private java.util.List<String> imageUrls;
 
     @Column(name = "seller_reply", columnDefinition = "TEXT")
     private String sellerReply;

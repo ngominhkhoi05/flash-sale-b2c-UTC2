@@ -47,9 +47,6 @@ public class Product {
     @Column(name = "name", nullable = false)
     private String name;
 
-    @Column(name = "image_url")
-    private String imageUrl;
-
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
@@ -60,6 +57,33 @@ public class Product {
     @Column(name = "status", length = 20)
     @Builder.Default
     private String status = "ACTIVE";
+
+    @Column(name = "slug", length = 255)
+    private String slug;
+
+    @Column(name = "total_sold")
+    @Builder.Default
+    private Integer totalSold = 0;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "specs", columnDefinition = "jsonb")
+    private Object specs;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "features", columnDefinition = "jsonb")
+    private Object features;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "size_chart", columnDefinition = "jsonb")
+    private Object sizeChart;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "commitments", columnDefinition = "jsonb")
+    private Object commitments;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "description_rich", columnDefinition = "jsonb")
+    private Object descriptionRich;
 
     @Column(name = "created_at")
     private Instant createdAt;

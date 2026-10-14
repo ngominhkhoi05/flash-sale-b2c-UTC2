@@ -62,7 +62,7 @@ public class OrderController {
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<OrderResponse>> getOrderDetail(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long id
+            @PathVariable("id") Long id
     ) {
         OrderResponse response = orderService.getBuyerOrderDetail(userDetails.getUser().getId(), id);
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết đơn hàng thành công", response));
@@ -72,7 +72,7 @@ public class OrderController {
     @PatchMapping("/{id}/cancel")
     public ResponseEntity<ApiResponse<OrderResponse>> cancelOrder(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long id
+            @PathVariable("id") Long id
     ) {
         OrderResponse response = orderService.cancelOrder(userDetails.getUser().getId(), id);
         return ResponseEntity.ok(ApiResponse.success("Hủy đơn hàng thành công", response));

@@ -9,5 +9,6 @@ import org.mapstruct.Mapping;
 public interface ProductVariantMapper {
 
     @Mapping(source = "product.id", target = "productId")
+    @Mapping(target = "imageUrl", ignore = true)
     ProductVariantResponse toResponse(ProductVariant variant);
 }

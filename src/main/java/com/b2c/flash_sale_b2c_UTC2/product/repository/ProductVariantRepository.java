@@ -31,4 +31,10 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     @Modifying
     @Query("UPDATE ProductVariant v SET v.stockQuantity = v.stockQuantity + :quantity, v.version = v.version + 1 WHERE v.id = :id")
     int replenishStockQuantityConditionally(@Param("id") Long id, @Param("quantity") Integer quantity);
+
+    /**
+     * Count variants with stock quantity below a threshold for all products of a store.
+     */
+    @Query("SELECT COUNT(v) FROM ProductVariant v WHERE v.product.store.id = :storeId AND v.stockQuantity < :threshold")
+    long countByProductStoreIdAndStockQuantityLessThan(@Param("storeId") Long storeId, @Param("threshold") Integer threshold);
 }

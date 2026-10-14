@@ -73,12 +73,20 @@ public class SecurityConfig {
                         })
                 )
                 .authorizeHttpRequests(auth -> auth
+                        // WebSocket STOMP handshake endpoint (auth xử lý trong HandshakeInterceptor)
+                        .requestMatchers("/ws/**").permitAll()
+                        // CORS preflight: phải permitAll TRƯỚC tất cả rule khác.
+                        // Nếu thiếu, Spring Security trả 403 cho OPTIONS → browser block mọi
+                        // cross-origin request có body/header khác "simple".
+                        .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         // Public endpoints: Auth APIs
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         // Public endpoints: Xem công khai Store, Category, Product
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/stores/{id:[0-9]+}").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/categories/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/products/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/flash-sales/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/banners/**").permitAll()
                         // Seller endpoints: yêu cầu vai trò SELLER
                         .requestMatchers("/api/v1/seller/**").hasRole("SELLER")
                         // Admin endpoints: yêu cầu vai trò ADMIN
@@ -91,6 +99,11 @@ public class SecurityConfig {
                                 "/v3/api-docs",
                                 "/error"
                         ).permitAll()
+                        // Actuator health/info — Docker healthcheck gọi không có JWT.
+                        // Phải permitAll, nếu không /actuator/health trả 401 →
+                        // container luôn unhealthy → nginx (depends_on: service_healthy)
+                        // không khởi động → toàn bộ stack sập.
+                        .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                         // Tất cả các request còn lại bắt buộc phải xác thực qua JWT
                         .anyRequest().authenticated()
                 );

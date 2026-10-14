@@ -2,7 +2,12 @@ package com.b2c.flash_sale_b2c_UTC2.store.controller;
 
 import com.b2c.flash_sale_b2c_UTC2.auth.security.CustomUserDetails;
 import com.b2c.flash_sale_b2c_UTC2.common.api.ApiResponse;
+import com.b2c.flash_sale_b2c_UTC2.image.dto.ImageResponse;
+import com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType;
+import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.CreateStoreRequest;
+import com.b2c.flash_sale_b2c_UTC2.store.dto.FeaturedStoreResponse;
+import com.b2c.flash_sale_b2c_UTC2.store.dto.SidebarSummaryResponse;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.StoreResponse;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.UpdateStoreRequest;
 import com.b2c.flash_sale_b2c_UTC2.store.service.StoreService;
@@ -14,9 +19,13 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -27,6 +36,7 @@ import java.util.List;
 public class StoreController {
 
     private final StoreService storeService;
+    private final ImageService imageService;
 
     @Operation(summary = "Đăng ký mở gian hàng mới", description = "Người dùng đăng ký mở gian hàng (mỗi user tối đa 1 gian hàng, trạng thái ban đầu PENDING)")
     @PostMapping
@@ -48,6 +58,17 @@ public class StoreController {
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin gian hàng thành công", response));
     }
 
+    @Operation(summary = "Lấy tổng hợp metrics cho sidebar dashboard của seller",
+               description = "Seller chỉ — trả về totalProducts, activeFlashSales, pendingOrders, todayOrders, todayRevenue, monthRevenue, ratingAvg, ratingCount, lowStockProducts, storeStatus, tier")
+    @GetMapping("/sidebar/summary")
+    @PreAuthorize("hasRole('SELLER')")
+    public ResponseEntity<ApiResponse<SidebarSummaryResponse>> getSidebarSummary(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        SidebarSummaryResponse response = storeService.getSidebarSummary(userDetails.getUser().getId());
+        return ResponseEntity.ok(ApiResponse.success("Lấy tổng hợp sidebar thành công", response));
+    }
+
     @Operation(summary = "Cập nhật thông tin gian hàng của tôi", description = "Seller cập nhật tên, logo, mô tả gian hàng")
     @PutMapping("/me")
     public ResponseEntity<ApiResponse<StoreResponse>> updateMyStore(
@@ -58,9 +79,18 @@ public class StoreController {
         return ResponseEntity.ok(ApiResponse.success("Cập nhật thông tin gian hàng thành công", response));
     }
 
+    @Operation(summary = "Lấy danh sách gian hàng nổi bật", description = "Public - lấy danh sách gian hàng APPROVED cho section Vibe Mall trang chủ")
+    @GetMapping("/featured")
+    public ResponseEntity<ApiResponse<List<FeaturedStoreResponse>>> getFeaturedStores(
+            @RequestParam(value = "limit", defaultValue = "4") int limit
+    ) {
+        List<FeaturedStoreResponse> response = storeService.getFeaturedStores(limit);
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách gian hàng nổi bật thành công", response));
+    }
+
     @Operation(summary = "Xem thông tin công khai gian hàng", description = "Khách hàng xem thông tin gian hàng đã được duyệt (APPROVED)")
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<StoreResponse>> getStoreById(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<StoreResponse>> getStoreById(@PathVariable("id") Long id) {
         StoreResponse response = storeService.getStoreById(id);
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin gian hàng thành công", response));
     }
@@ -91,7 +121,7 @@ public class StoreController {
     @PutMapping("/me/addresses/{addressId}")
     public ResponseEntity<ApiResponse<AddressResponse>> updateStoreAddress(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long addressId,
+            @PathVariable("addressId") Long addressId,
             @Valid @RequestBody UpdateAddressRequest request
     ) {
         AddressResponse response = storeService.updateStoreAddress(userDetails.getUser().getId(), addressId, request);
@@ -102,7 +132,7 @@ public class StoreController {
     @DeleteMapping("/me/addresses/{addressId}")
     public ResponseEntity<ApiResponse<Void>> deleteStoreAddress(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long addressId
+            @PathVariable("addressId") Long addressId
     ) {
         storeService.deleteStoreAddress(userDetails.getUser().getId(), addressId);
         return ResponseEntity.ok(ApiResponse.success("Xóa địa chỉ kho thành công", null));
@@ -112,9 +142,23 @@ public class StoreController {
     @PatchMapping("/me/addresses/{addressId}/default")
     public ResponseEntity<ApiResponse<AddressResponse>> setDefaultStoreAddress(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long addressId
+            @PathVariable("addressId") Long addressId
     ) {
         AddressResponse response = storeService.setDefaultStoreAddress(userDetails.getUser().getId(), addressId);
         return ResponseEntity.ok(ApiResponse.success("Đặt địa chỉ kho mặc định thành công", response));
+    }
+
+    @Operation(summary = "Upload logo cho gian hàng", description = "Tự động soft-delete logo cũ (1 store = 1 logo ACTIVE).")
+    @PostMapping(value = "/me/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<ImageResponse>> uploadLogo(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestPart("file") MultipartFile file
+    ) {
+        Long currentUserId = userDetails.getUser().getId();
+        Long storeId = storeService.getMyStore(currentUserId).getId();
+        ImageResponse resp = imageService.attachImage(
+                currentUserId, ImageOwnerType.STORE, storeId, file, null, null);
+        return ResponseEntity.status(HttpStatusCode.valueOf(201))
+                .body(ApiResponse.success("Upload logo thành công", resp));
     }
 }

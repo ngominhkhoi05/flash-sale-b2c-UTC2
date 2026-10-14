@@ -9,7 +9,9 @@ import com.b2c.flash_sale_b2c_UTC2.config.SecurityConfig;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.CreateProductRequest;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductDetailResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductSummaryResponse;
+import com.b2c.flash_sale_b2c_UTC2.product.service.ProductSearchService;
 import com.b2c.flash_sale_b2c_UTC2.product.service.ProductService;
+import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
 import com.b2c.flash_sale_b2c_UTC2.user.entity.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -54,6 +56,12 @@ class ProductSecurityIntegrationTest {
     private ProductService productService;
 
     @MockitoBean
+    private ProductSearchService productSearchService;
+
+    @MockitoBean
+    private ImageService imageService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     @MockitoBean
@@ -79,6 +87,28 @@ class ProductSecurityIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.items[0].name").value("Sản phẩm Public"));
+    }
+
+    @Test
+    @DisplayName("Public tìm kiếm sản phẩm (/api/v1/products/search) không cần token -> 200 OK")
+    void searchPublicProducts_WithoutToken_ShouldReturn200() throws Exception {
+        com.b2c.flash_sale_b2c_UTC2.product.dto.ProductSearchResponse searchResponse =
+                com.b2c.flash_sale_b2c_UTC2.product.dto.ProductSearchResponse.builder()
+                        .items(List.of())
+                        .total(0L)
+                        .page(1)
+                        .pageSize(20)
+                        .build();
+        when(productSearchService.searchProducts(any())).thenReturn(searchResponse);
+
+        mockMvc.perform(get("/api/v1/products/search")
+                        .param("q", "laptop")
+                        .param("page", "1")
+                        .param("pageSize", "20")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.total").value(0));
     }
 
     @Test

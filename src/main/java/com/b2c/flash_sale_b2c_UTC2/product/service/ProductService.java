@@ -5,10 +5,13 @@ import com.b2c.flash_sale_b2c_UTC2.product.dto.CreateProductRequest;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductDetailResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductFilterRequest;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductSummaryResponse;
+import com.b2c.flash_sale_b2c_UTC2.product.dto.RecommendedProductsResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.UpdateProductRequest;
 import org.springframework.data.domain.Pageable;
 
 public interface ProductService {
+
+    RecommendedProductsResponse getRecommendedProducts(String tab, Long categoryId, int limit);
 
     ProductDetailResponse createProduct(Long userId, CreateProductRequest request);
 
@@ -20,7 +23,9 @@ public interface ProductService {
 
     PageResponse<ProductSummaryResponse> getPublicProducts(ProductFilterRequest filter, Pageable pageable);
 
-    ProductDetailResponse getPublicProductDetail(Long productId);
+        ProductDetailResponse getPublicProductDetail(Long productId);
+
+    ProductDetailResponse getPublicProductDetailBySlug(String slug);
 
     PageResponse<ProductSummaryResponse> getSellerProducts(Long userId, String status, Pageable pageable);
 

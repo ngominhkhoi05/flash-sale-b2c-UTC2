@@ -49,7 +49,7 @@ public class SellerOrderController {
     @PatchMapping("/{id}/status")
     public ResponseEntity<ApiResponse<OrderResponse>> updateOrderStatus(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody UpdateOrderStatusRequest request
     ) {
         OrderResponse response = orderService.updateOrderStatusBySeller(userDetails.getUser().getId(), id, request);

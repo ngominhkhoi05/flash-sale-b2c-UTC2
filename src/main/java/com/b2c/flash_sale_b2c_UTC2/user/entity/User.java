@@ -42,9 +42,6 @@ public class User {
     @Column(name = "phone", unique = true, length = 15)
     private String phone;
 
-    @Column(name = "avatar_url")
-    private String avatarUrl;
-
     @Column(name = "status", length = 20)
     @Builder.Default
     private String status = "ACTIVE";

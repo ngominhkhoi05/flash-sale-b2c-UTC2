@@ -1,0 +1,64 @@
+# ===================================================================
+# Flash Sale B2C - Test Profile (uses real Supabase Dev DB)
+# Used for RepositoryIT (via AbstractPostgresIT) and Full-flow IT.
+# No Testcontainers - requires user to have Docker (we removed that requirement).
+# Connection points to Supabase Pooler, same as application-local.yaml.
+# ===================================================================
+
+spring:
+  config:
+    activate:
+      on-profile: test
+
+  # Allow bean override in test profile (TestCorsConfig overrides CorsConfig)
+  main:
+    allow-bean-definition-overriding: true
+
+  # Disable Redis auto-configs (Redis is mocked in tests; no real Redis available)
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration
+
+  # --- PostgreSQL connection: configured in application-test-local.yaml ---
+  # Always activate "test-local" alongside "test" (or directly use "test-local" only)
+  # Spring profile chain: test → test-local → loaded together
+  # All sensitive credentials (DB password, Redis password) live in application-test-local.yaml
+
+  # --- JPA / Hibernate for Test ---
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        highlight_sql: false
+
+  # --- Redis: password is in application-test-local.yaml ---
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 1000ms
+
+# --- JWT secret for test (>= 64 chars) ---
+jwt:
+  secret: 07ebea14294a854e0b0c27f1adf042341b8736fbf7cf72df52d68667463c956f
+
+# --- Cloudinary: empty for test (mocked via @MockitoBean if needed) ---
+cloudinary:
+  cloud-name: ""
+  api-key: ""
+  api-secret: ""
+  folder: flash-sale-b2c/test
+
+# --- CORS: allow all origins in test ---
+cors:
+  allowed-origins: "*"
+
+# --- Logging: reduce noise ---
+logging:
+  level:
+    root: WARN
+    com.b2c: INFO
+    org.hibernate.SQL: OFF
+    org.springframework.test: INFO

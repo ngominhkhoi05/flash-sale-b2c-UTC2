@@ -2,13 +2,18 @@ package com.b2c.flash_sale_b2c_UTC2.store.service;
 
 import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.CreateStoreRequest;
+import com.b2c.flash_sale_b2c_UTC2.store.dto.FeaturedStoreResponse;
+import com.b2c.flash_sale_b2c_UTC2.store.dto.SidebarSummaryResponse;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.StoreResponse;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.UpdateStoreRequest;
 import com.b2c.flash_sale_b2c_UTC2.store.dto.UpdateStoreStatusRequest;
 import com.b2c.flash_sale_b2c_UTC2.store.entity.Store;
 import com.b2c.flash_sale_b2c_UTC2.store.exception.StoreErrorCode;
+import com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType;
+import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
 import com.b2c.flash_sale_b2c_UTC2.store.mapper.StoreMapper;
 import com.b2c.flash_sale_b2c_UTC2.store.repository.StoreRepository;
+import com.b2c.flash_sale_b2c_UTC2.image.repository.ImageRepository;
 import com.b2c.flash_sale_b2c_UTC2.user.dto.AddressResponse;
 import com.b2c.flash_sale_b2c_UTC2.user.dto.CreateAddressRequest;
 import com.b2c.flash_sale_b2c_UTC2.user.dto.UpdateAddressRequest;
@@ -24,6 +29,12 @@ import com.b2c.flash_sale_b2c_UTC2.user.repository.UserRepository;
 import com.b2c.flash_sale_b2c_UTC2.user.repository.UserRoleRepository;
 import com.b2c.flash_sale_b2c_UTC2.wallet.entity.Wallet;
 import com.b2c.flash_sale_b2c_UTC2.wallet.repository.WalletRepository;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.repository.FlashSaleItemRepository;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.repository.FlashSaleSlotRepository;
+import com.b2c.flash_sale_b2c_UTC2.order.repository.OrderRepository;
+import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductRepository;
+import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductVariantRepository;
+import com.b2c.flash_sale_b2c_UTC2.review.repository.ProductReviewRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,6 +42,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 
 @Slf4j
@@ -44,8 +57,16 @@ public class StoreServiceImpl implements StoreService {
     private final UserRoleRepository userRoleRepository;
     private final WalletRepository walletRepository;
     private final AddressRepository addressRepository;
+    private final ImageRepository imageRepository;
+    private final ProductRepository productRepository;
+    private final FlashSaleItemRepository flashSaleItemRepository;
+    private final FlashSaleSlotRepository flashSaleSlotRepository;
+    private final OrderRepository orderRepository;
+    private final ProductVariantRepository productVariantRepository;
+    private final ProductReviewRepository productReviewRepository;
     private final StoreMapper storeMapper;
     private final AddressMapper addressMapper;
+    private final ImageService imageService;
 
     @Override
     @Transactional
@@ -65,7 +86,6 @@ public class StoreServiceImpl implements StoreService {
         Store store = Store.builder()
                 .user(user)
                 .storeName(trimmedName)
-                .logoUrl(request.getLogoUrl() != null ? request.getLogoUrl().trim() : null)
                 .description(request.getDescription())
                 .defaultCommissionRate(new BigDecimal("0.0500"))
                 .status("PENDING")
@@ -84,14 +104,14 @@ public class StoreServiceImpl implements StoreService {
         walletRepository.save(wallet);
 
         log.info("Người dùng id={} đã đăng ký gian hàng '{}' thành công (chờ duyệt)", userId, trimmedName);
-        return storeMapper.toResponse(store);
+        return toResponseWithLogo(store);
     }
 
     @Override
     @Transactional(readOnly = true)
     public StoreResponse getMyStore(Long userId) {
         Store store = getStoreByUserIdOrThrow(userId);
-        return storeMapper.toResponse(store);
+        return toResponseWithLogo(store);
     }
 
     @Override
@@ -107,13 +127,10 @@ public class StoreServiceImpl implements StoreService {
             store.setStoreName(trimmedName);
         }
 
-        if (request.getLogoUrl() != null) {
-            store.setLogoUrl(request.getLogoUrl().trim());
-        }
         store.setDescription(request.getDescription());
 
         store = storeRepository.save(store);
-        return storeMapper.toResponse(store);
+        return toResponseWithLogo(store);
     }
 
     @Override
@@ -126,7 +143,7 @@ public class StoreServiceImpl implements StoreService {
             throw new BusinessException(StoreErrorCode.STORE_NOT_APPROVED);
         }
 
-        return storeMapper.toResponse(store);
+        return toResponseWithLogo(store);
     }
 
     @Override
@@ -145,7 +162,47 @@ public class StoreServiceImpl implements StoreService {
 
         store = storeRepository.save(store);
         log.info("Admin đã cập nhật trạng thái gian hàng id={} thành {}", storeId, newStatus);
-        return storeMapper.toResponse(store);
+        return toResponseWithLogo(store);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<FeaturedStoreResponse> getFeaturedStores(int limit) {
+        int safeLimit = Math.max(1, Math.min(8, limit));
+        List<Store> stores = storeRepository.findFeaturedStores(
+                org.springframework.data.domain.PageRequest.of(0, safeLimit));
+        return stores.stream()
+                .map(this::toFeaturedStoreResponse)
+                .toList();
+    }
+
+    private FeaturedStoreResponse toFeaturedStoreResponse(Store store) {
+        return FeaturedStoreResponse.builder()
+                .id(store.getId())
+                .name(store.getStoreName())
+                .logoUrl(resolveStoreLogoUrl(store))
+                .verified(true)
+                .rating(0.0)
+                .totalRatings(0L)
+                .followers(0L)
+                .productThumbnails(java.util.Collections.emptyList())
+                .totalProducts(0)
+                .createdAt(store.getCreatedAt())
+                .build();
+    }
+
+    private String resolveStoreLogoUrl(Store store) {
+        try {
+            return imageRepository
+                    .findFirstByOwnerTypeAndOwnerIdAndStatus(
+                            com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType.STORE,
+                            store.getId(), "ACTIVE")
+                    .map(img -> img.getUrl())
+                    .orElse(null);
+        } catch (Exception e) {
+            log.warn("Could not resolve logo for store {}: {}", store.getId(), e.getMessage());
+            return null;
+        }
     }
 
     @Override
@@ -291,5 +348,84 @@ public class StoreServiceImpl implements StoreService {
             userRoleRepository.save(userRole);
             log.info("Đã gán vai trò SELLER cho người dùng id={}", user.getId());
         }
+    }
+
+    /**
+     * Map Store → StoreResponse rồi bổ sung logoUrl lấy từ bảng images (owner_type=STORE).
+     */
+    private StoreResponse toResponseWithLogo(Store store) {
+        StoreResponse resp = storeMapper.toResponse(store);
+        com.b2c.flash_sale_b2c_UTC2.image.dto.ImageResponse logo = imageService.getPrimaryImage(ImageOwnerType.STORE, store.getId());
+        if (logo != null) {
+            resp.setLogoUrl(logo.getUrl());
+        }
+        return resp;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SidebarSummaryResponse getSidebarSummary(Long userId) {
+        Store store = getStoreByUserIdOrThrow(userId);
+        Long storeId = store.getId();
+
+        // Date boundaries
+        ZoneId zone = ZoneId.systemDefault();
+        LocalDate today = LocalDate.now(zone);
+        LocalDate monthStart = today.withDayOfMonth(1);
+        Instant todayStart = today.atStartOfDay(zone).toInstant();
+        Instant todayEnd = today.plusDays(1).atStartOfDay(zone).toInstant();
+        Instant monthStartInst = monthStart.atStartOfDay(zone).toInstant();
+
+        // Product count
+        long totalProducts = productRepository.countByStoreIdAndStatus(storeId, "ACTIVE");
+
+        // Active flash sales
+        long activeFlashSales = flashSaleItemRepository.countActiveByStoreId(storeId);
+
+        // Order counts
+        long pendingOrders = orderRepository.countByStoreIdAndStatus(storeId, "PENDING_PAYMENT");
+
+        // Today's orders
+        long todayOrders = orderRepository.countByStoreIdAndCreatedAtBetween(storeId, todayStart, todayEnd);
+
+        // Today's revenue (CONFIRMED + COMPLETED)
+        List<String> revenueStatuses = List.of("CONFIRMED", "COMPLETED");
+        BigDecimal todayRevenue = orderRepository.sumTotalAmountByStoreIdAndCreatedAtBetweenAndStatusIn(
+                storeId, todayStart, todayEnd, revenueStatuses);
+        if (todayRevenue == null) {
+            todayRevenue = BigDecimal.ZERO;
+        }
+
+        // Month revenue
+        BigDecimal monthRevenue = orderRepository.sumTotalAmountByStoreIdAndCreatedAtBetweenAndStatusIn(
+                storeId, monthStartInst, todayEnd, revenueStatuses);
+        if (monthRevenue == null) {
+            monthRevenue = BigDecimal.ZERO;
+        }
+
+        // Ratings
+        Double ratingAvg = productReviewRepository.avgRatingByStoreId(storeId);
+        if (ratingAvg == null) {
+            ratingAvg = 0.0;
+        }
+        long ratingCount = productReviewRepository.countByStoreId(storeId);
+
+        // Low stock products
+        long lowStockProducts = productVariantRepository.countByProductStoreIdAndStockQuantityLessThan(storeId, 10);
+
+        return SidebarSummaryResponse.builder()
+                .totalProducts(totalProducts)
+                .activeFlashSales(activeFlashSales)
+                .pendingOrders(pendingOrders)
+                .unpaidOrders(pendingOrders) // same as pending for this API design
+                .todayOrders(todayOrders)
+                .todayRevenue(todayRevenue)
+                .monthRevenue(monthRevenue)
+                .ratingAvg(ratingAvg)
+                .ratingCount(ratingCount)
+                .lowStockProducts(lowStockProducts)
+                .storeStatus(store.getStatus())
+                .tier(store.getTier().name())
+                .build();
     }
 }

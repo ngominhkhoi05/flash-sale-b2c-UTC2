@@ -156,7 +156,7 @@ class AuthServiceTest {
     @DisplayName("Đăng nhập thành công với thông tin chính xác")
     void login_Success() {
         LoginRequest request = LoginRequest.builder()
-                .email("test@example.com")
+                .usernameOrEmail("test@example.com")
                 .password("password123")
                 .build();
 
@@ -180,10 +180,40 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("Đăng nhập thất bại khi email không tồn tại trên hệ thống (404)")
+    void login_ShouldThrowException_WhenEmailNotFound() {
+        LoginRequest request = LoginRequest.builder()
+                .usernameOrEmail("notfound@example.com")
+                .password("password123")
+                .build();
+
+        when(userRepository.findByEmail("notfound@example.com")).thenReturn(Optional.empty());
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> authService.login(request));
+        assertEquals(AuthErrorCode.USER_NOT_FOUND.getCode(), exception.getErrorCode().getCode());
+        assertEquals(org.springframework.http.HttpStatus.NOT_FOUND, exception.getErrorCode().getHttpStatus());
+    }
+
+    @Test
+    @DisplayName("Đăng nhập thất bại khi số điện thoại không tồn tại trên hệ thống (404)")
+    void login_ShouldThrowException_WhenPhoneNotFound() {
+        LoginRequest request = LoginRequest.builder()
+                .usernameOrEmail("0988776655")
+                .password("password123")
+                .build();
+
+        when(userRepository.findByPhone("0988776655")).thenReturn(Optional.empty());
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> authService.login(request));
+        assertEquals(AuthErrorCode.USER_NOT_FOUND.getCode(), exception.getErrorCode().getCode());
+        assertEquals(org.springframework.http.HttpStatus.NOT_FOUND, exception.getErrorCode().getHttpStatus());
+    }
+
+    @Test
     @DisplayName("Đăng nhập thất bại khi sai mật khẩu")
     void login_ShouldThrowException_WhenPasswordIsIncorrect() {
         LoginRequest request = LoginRequest.builder()
-                .email("test@example.com")
+                .usernameOrEmail("test@example.com")
                 .password("wrong_password")
                 .build();
 
@@ -199,7 +229,7 @@ class AuthServiceTest {
     void login_ShouldThrowException_WhenAccountIsDisabled() {
         sampleUser.setStatus("LOCKED");
         LoginRequest request = LoginRequest.builder()
-                .email("test@example.com")
+                .usernameOrEmail("test@example.com")
                 .password("password123")
                 .build();
 

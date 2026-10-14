@@ -9,6 +9,8 @@ import com.b2c.flash_sale_b2c_UTC2.cart.exception.CartErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.cart.repository.CartItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.cart.repository.CartRepository;
 import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
+import com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType;
+import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.Product;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.ProductVariant;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductVariantRepository;
@@ -45,6 +47,9 @@ class CartServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private ImageService imageService;
 
     @InjectMocks
     private CartServiceImpl cartService;
@@ -84,6 +89,7 @@ class CartServiceTest {
         CartItem savedItem = CartItem.builder().id(1000L).cart(sampleCart).variant(sampleVariant).quantity(2).build();
         when(cartItemRepository.save(any(CartItem.class))).thenReturn(savedItem);
         when(cartItemRepository.findByCartId(10L)).thenReturn(List.of(savedItem));
+        when(imageService.getPrimaryImagesByOwnerIds(any(ImageOwnerType.class), any())).thenReturn(java.util.Map.of());
 
         CartResponse response = cartService.addToCart(1L, request);
 
@@ -114,6 +120,7 @@ class CartServiceTest {
         when(cartRepository.findByUserId(1L)).thenReturn(Optional.of(sampleCart));
         when(cartItemRepository.findById(1000L)).thenReturn(Optional.of(existingItem));
         when(cartItemRepository.findByCartId(10L)).thenReturn(List.of(existingItem));
+        when(imageService.getPrimaryImagesByOwnerIds(any(ImageOwnerType.class), any())).thenReturn(java.util.Map.of());
 
         CartResponse response = cartService.updateCartItem(1L, 1000L, request);
 
@@ -130,5 +137,117 @@ class CartServiceTest {
         cartService.clearCart(1L);
 
         verify(cartItemRepository).deleteAllByCartId(10L);
+    }
+
+    @Test
+    @DisplayName("Lấy giỏ hàng thành công gom nhóm theo cửa hàng")
+    void getCart_Success() {
+        CartItem item = CartItem.builder().id(1000L).cart(sampleCart).variant(sampleVariant).quantity(2).build();
+        when(cartRepository.findByUserId(1L)).thenReturn(Optional.of(sampleCart));
+        when(cartItemRepository.findByCartId(10L)).thenReturn(List.of(item));
+        when(imageService.getPrimaryImagesByOwnerIds(any(ImageOwnerType.class), any())).thenReturn(java.util.Map.of());
+
+        CartResponse response = cartService.getCart(1L);
+
+        assertNotNull(response);
+        assertEquals(1, response.getStoreGroups().size());
+        assertEquals(new BigDecimal("300000.00"), response.getGrandTotal());
+    }
+
+    @Test
+    @DisplayName("Thêm sản phẩm đã có sẵn trong giỏ -> cộng dồn số lượng")
+    void addToCart_ItemAlreadyExists_ShouldAccumulateQuantity() {
+        AddToCartRequest request = AddToCartRequest.builder().variantId(500L).quantity(3).build();
+        CartItem existingItem = CartItem.builder().id(1000L).cart(sampleCart).variant(sampleVariant).quantity(2).build();
+
+        when(cartRepository.findByUserId(1L)).thenReturn(Optional.of(sampleCart));
+        when(productVariantRepository.findById(500L)).thenReturn(Optional.of(sampleVariant));
+        when(cartItemRepository.findByCartIdAndVariantId(10L, 500L)).thenReturn(Optional.of(existingItem));
+        when(cartItemRepository.findByCartId(10L)).thenReturn(List.of(existingItem));
+        when(imageService.getPrimaryImagesByOwnerIds(any(ImageOwnerType.class), any())).thenReturn(java.util.Map.of());
+
+        CartResponse response = cartService.addToCart(1L, request);
+
+        assertNotNull(response);
+        assertEquals(5, existingItem.getQuantity()); // 2 + 3 = 5
+        verify(cartItemRepository).save(existingItem);
+    }
+
+    @Test
+    @DisplayName("Thêm sản phẩm đã có sẵn nhưng tổng số lượng cộng dồn vượt kho -> ném lỗi INSUFFICIENT_STOCK")
+    void addToCart_ItemAlreadyExists_ExceedsStock_ShouldThrowException() {
+        AddToCartRequest request = AddToCartRequest.builder().variantId(500L).quantity(5).build();
+        CartItem existingItem = CartItem.builder().id(1000L).cart(sampleCart).variant(sampleVariant).quantity(18).build(); // 18 + 5 = 23 > 20
+
+        when(cartRepository.findByUserId(1L)).thenReturn(Optional.of(sampleCart));
+        when(productVariantRepository.findById(500L)).thenReturn(Optional.of(sampleVariant));
+        when(cartItemRepository.findByCartIdAndVariantId(10L, 500L)).thenReturn(Optional.of(existingItem));
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> cartService.addToCart(1L, request));
+        assertEquals(CartErrorCode.INSUFFICIENT_STOCK.getCode(), exception.getErrorCode().getCode());
+        verify(cartItemRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Cập nhật số lượng item ném lỗi khi số lượng <= 0 (INVALID_QUANTITY)")
+    void updateCartItem_ThrowsException_WhenInvalidQuantity() {
+        UpdateCartItemRequest request = UpdateCartItemRequest.builder().quantity(0).build();
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> cartService.updateCartItem(1L, 1000L, request));
+        assertEquals(CartErrorCode.INVALID_QUANTITY.getCode(), exception.getErrorCode().getCode());
+    }
+
+    @Test
+    @DisplayName("Cập nhật số lượng item ném lỗi khi vượt tồn kho (INSUFFICIENT_STOCK)")
+    void updateCartItem_ThrowsException_WhenExceedStock() {
+        CartItem existingItem = CartItem.builder().id(1000L).cart(sampleCart).variant(sampleVariant).quantity(2).build();
+        UpdateCartItemRequest request = UpdateCartItemRequest.builder().quantity(50).build(); // 50 > 20 stock
+
+        when(cartRepository.findByUserId(1L)).thenReturn(Optional.of(sampleCart));
+        when(cartItemRepository.findById(1000L)).thenReturn(Optional.of(existingItem));
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> cartService.updateCartItem(1L, 1000L, request));
+        assertEquals(CartErrorCode.INSUFFICIENT_STOCK.getCode(), exception.getErrorCode().getCode());
+    }
+
+    @Test
+    @DisplayName("Cập nhật số lượng item ném lỗi khi item không thuộc giỏ của user (CART_ITEM_ACCESS_DENIED)")
+    void updateCartItem_ThrowsException_WhenItemNotOwned() {
+        Cart otherCart = Cart.builder().id(999L).build();
+        CartItem otherItem = CartItem.builder().id(1000L).cart(otherCart).variant(sampleVariant).quantity(2).build();
+        UpdateCartItemRequest request = UpdateCartItemRequest.builder().quantity(3).build();
+
+        when(cartRepository.findByUserId(1L)).thenReturn(Optional.of(sampleCart));
+        when(cartItemRepository.findById(1000L)).thenReturn(Optional.of(otherItem));
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> cartService.updateCartItem(1L, 1000L, request));
+        assertEquals(CartErrorCode.CART_ITEM_ACCESS_DENIED.getCode(), exception.getErrorCode().getCode());
+    }
+
+    @Test
+    @DisplayName("Xóa một món hàng khỏi giỏ thành công")
+    void removeCartItem_Success() {
+        CartItem existingItem = CartItem.builder().id(1000L).cart(sampleCart).variant(sampleVariant).quantity(2).build();
+
+        when(cartRepository.findByUserId(1L)).thenReturn(Optional.of(sampleCart));
+        when(cartItemRepository.findById(1000L)).thenReturn(Optional.of(existingItem));
+
+        cartService.removeCartItem(1L, 1000L);
+
+        verify(cartItemRepository).delete(existingItem);
+    }
+
+    @Test
+    @DisplayName("Xóa một món hàng ném lỗi khi món hàng không thuộc giỏ của user (CART_ITEM_ACCESS_DENIED)")
+    void removeCartItem_ThrowsException_WhenItemNotOwned() {
+        Cart otherCart = Cart.builder().id(999L).build();
+        CartItem otherItem = CartItem.builder().id(1000L).cart(otherCart).variant(sampleVariant).quantity(2).build();
+
+        when(cartRepository.findByUserId(1L)).thenReturn(Optional.of(sampleCart));
+        when(cartItemRepository.findById(1000L)).thenReturn(Optional.of(otherItem));
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> cartService.removeCartItem(1L, 1000L));
+        assertEquals(CartErrorCode.CART_ITEM_ACCESS_DENIED.getCode(), exception.getErrorCode().getCode());
+        verify(cartItemRepository, never()).delete(any());
     }
 }

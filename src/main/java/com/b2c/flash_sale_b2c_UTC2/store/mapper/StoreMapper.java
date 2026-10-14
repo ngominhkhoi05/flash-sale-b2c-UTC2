@@ -9,5 +9,6 @@ import org.mapstruct.Mapping;
 public interface StoreMapper {
 
     @Mapping(source = "user.id", target = "userId")
+    @Mapping(target = "logoUrl", ignore = true)
     StoreResponse toResponse(Store store);
 }

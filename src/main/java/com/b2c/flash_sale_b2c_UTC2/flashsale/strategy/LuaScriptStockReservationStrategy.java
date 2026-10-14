@@ -36,6 +36,11 @@ public class LuaScriptStockReservationStrategy implements StockReservationStrate
 
     @Override
     public long reserveStock(Long slotId, Long userId, Long itemId, int quantity, int userPurchaseLimit, long slotRemainingTtlSeconds) {
+        return reserveStock(slotId, userId, itemId, quantity, userPurchaseLimit, slotRemainingTtlSeconds, null);
+    }
+
+    @Override
+    public long reserveStock(Long slotId, Long userId, Long itemId, int quantity, int userPurchaseLimit, long slotRemainingTtlSeconds, String orderCode) {
         if (redisTemplate == null) {
             log.warn("Redis is not available. Lua reservation skipped.");
             return 1;
@@ -43,14 +48,22 @@ public class LuaScriptStockReservationStrategy implements StockReservationStrate
 
         String stockKey = STOCK_KEY_PREFIX + itemId;
         String userLimitKey = USER_LIMIT_KEY_PREFIX + slotId + ":" + userId + ":" + itemId;
+        String pendingResKey = (orderCode != null && !orderCode.isBlank())
+                ? "flash_sale:pending_res:" + orderCode : "flash_sale:dummy_pending";
+        String pendingIndexKey = "flash_sale:pending_res_index";
 
         try {
             Long result = redisTemplate.execute(
                     reserveScript,
-                    List.of(stockKey, userLimitKey),
+                    List.of(stockKey, userLimitKey, pendingResKey, pendingIndexKey),
                     String.valueOf(quantity),
                     String.valueOf(userPurchaseLimit),
-                    String.valueOf(Math.max(slotRemainingTtlSeconds, 60))
+                    String.valueOf(Math.max(slotRemainingTtlSeconds, 60)),
+                    orderCode != null ? orderCode : "",
+                    String.valueOf(userId),
+                    String.valueOf(slotId),
+                    String.valueOf(itemId),
+                    String.valueOf(86400) // 24 hours TTL for pending record
             );
 
             if (result == null || result == -2) {
@@ -66,11 +79,31 @@ public class LuaScriptStockReservationStrategy implements StockReservationStrate
         }
     }
 
-    private boolean hasStockInRedis(String stockKey) {
+    @Override
+    public boolean rollbackStockWithMarker(Long slotId, Long userId, Long itemId, int quantity, String orderCode) {
+        if (redisTemplate == null) {
+            return true;
+        }
+
+        String stockKey = STOCK_KEY_PREFIX + itemId;
+        String userLimitKey = USER_LIMIT_KEY_PREFIX + slotId + ":" + userId + ":" + itemId;
+        String markerKey = "flash_sale:rollback:" + orderCode + ":" + itemId;
+        String pendingResKey = "flash_sale:pending_res:" + orderCode;
+        String pendingIndexKey = "flash_sale:pending_res_index";
+
         try {
-            String val = redisTemplate.opsForValue().get(stockKey);
-            return val != null && Integer.parseInt(val) >= 0;
+            Long result = redisTemplate.execute(
+                    rollbackScript,
+                    List.of(stockKey, userLimitKey, markerKey, pendingResKey, pendingIndexKey),
+                    String.valueOf(quantity),
+                    String.valueOf(86400), // marker TTL 24h
+                    orderCode != null ? orderCode : ""
+            );
+            log.info("Atomic rollbackStockWithMarker executed for orderCode: {}, itemId: {}. Result: {}",
+                    orderCode, itemId, result);
+            return result != null && result > 0;
         } catch (Exception e) {
+            log.error("Failed to execute atomic rollback for orderCode: {}, itemId: {}: {}", orderCode, itemId, e.getMessage(), e);
             return false;
         }
     }
@@ -83,13 +116,18 @@ public class LuaScriptStockReservationStrategy implements StockReservationStrate
 
         String stockKey = STOCK_KEY_PREFIX + itemId;
         String userLimitKey = USER_LIMIT_KEY_PREFIX + slotId + ":" + userId + ":" + itemId;
+        String dummyMarkerKey = "flash_sale:rollback:comp_" + System.currentTimeMillis() + ":" + itemId;
+        String dummyPendingResKey = "flash_sale:dummy_pending";
+        String dummyIndexKey = "flash_sale:dummy_index";
 
         try {
-            redisTemplate.opsForValue().increment(stockKey, quantity);
-            Long remainingLimit = redisTemplate.opsForValue().decrement(userLimitKey, quantity);
-            if (remainingLimit != null && remainingLimit <= 0) {
-                redisTemplate.delete(userLimitKey);
-            }
+            redisTemplate.execute(
+                    rollbackScript,
+                    List.of(stockKey, userLimitKey, dummyMarkerKey, dummyPendingResKey, dummyIndexKey),
+                    String.valueOf(quantity),
+                    "60",
+                    ""
+            );
             log.info("Compensated Redis stock (+{}) and limit for FlashSaleItem ID: {}, user ID: {}", quantity, itemId, userId);
         } catch (Exception e) {
             log.error("Failed to compensate Redis for item ID: {}, user ID: {}: {}", itemId, userId, e.getMessage(), e);
@@ -104,21 +142,19 @@ public class LuaScriptStockReservationStrategy implements StockReservationStrate
 
         String stockKey = STOCK_KEY_PREFIX + itemId;
         String userLimitKey = USER_LIMIT_KEY_PREFIX + slotId + ":" + userId + ":" + itemId;
+        String markerKey = "flash_sale:rollback:safe_" + System.currentTimeMillis() + ":" + itemId;
+        String dummyPendingResKey = "flash_sale:dummy_pending";
+        String dummyIndexKey = "flash_sale:dummy_index";
 
         try {
             Long result = redisTemplate.execute(
                     rollbackScript,
-                    List.of(stockKey),
+                    List.of(stockKey, userLimitKey, markerKey, dummyPendingResKey, dummyIndexKey),
                     String.valueOf(quantity),
-                    String.valueOf(fallbackStock),
-                    String.valueOf(Math.max(remainingTtlSeconds, 60))
+                    String.valueOf(Math.max(remainingTtlSeconds, 60)),
+                    ""
             );
             log.info("Safe rollback of stock executed for item ID: {}. Redis stock is now: {}", itemId, result);
-
-            Long remainingLimit = redisTemplate.opsForValue().decrement(userLimitKey, quantity);
-            if (remainingLimit != null && remainingLimit <= 0) {
-                redisTemplate.delete(userLimitKey);
-            }
         } catch (Exception e) {
             log.error("Failed to execute safe rollback for item ID: {}, user ID: {}: {}", itemId, userId, e.getMessage(), e);
         }

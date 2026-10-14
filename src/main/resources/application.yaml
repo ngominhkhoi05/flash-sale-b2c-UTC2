@@ -35,6 +35,14 @@ spring:
     time-zone: UTC
     date-format: yyyy-MM-dd'T'HH:mm:ss.SSSXXX
 
+  # --- Multipart Upload (Image Module - Cloudinary) ---
+  # Ảnh Cloudinary upload giới hạn tối đa 10MB/file, request gồm nhiều file tối đa 50MB.
+  # Có thể override trong từng profile nếu cần.
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 50MB
+
 # --- Server Web & Cổng dịch vụ ---
 server:
   port: ${PORT:8080}
@@ -63,7 +71,18 @@ logging:
 
 # --- Cấu hình JWT (JSON Web Token) ---
 jwt:
-  secret: ${JWT_SECRET:}
+  secret: ${JWT_SECRET:037f7fe6a78573fa5da54a56894babbc65a04cd73beb0fd7e37891658ffe668d65ae4ab65d3f74a7f60b0b98773307c1d8f870c21d33f4c82af0be34d7c11a7e}
   expiration-ms: ${JWT_EXPIRATION_MS:3600000} # 1 giờ
   refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000} # 7 ngày
+
+# --- Cloudinary (Lưu trữ ảnh đa đối tượng - Image Module) ---
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+  api-key: ${CLOUDINARY_API_KEY:}
+  api-secret: ${CLOUDINARY_API_SECRET:}
+  folder: ${CLOUDINARY_FOLDER:flash-sale-b2c/local}
+
+# --- CORS: đọc từ env var CORS_ALLOWED_ORIGINS (comma-separated) ---
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000}
 

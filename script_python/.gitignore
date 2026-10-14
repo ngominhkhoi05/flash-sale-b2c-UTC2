@@ -1,0 +1,15 @@
+# Generated CSV files (kept locally, never committed)
+*.csv
+
+# Python virtual environment
+.venv/
+venv/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Editor
+.vscode/
+.idea/

@@ -57,9 +57,6 @@ public class ProductVariant {
     @Column(name = "stock_quantity", nullable = false)
     private Integer stockQuantity;
 
-    @Column(name = "image_url")
-    private String imageUrl;
-
     @Column(name = "status", length = 20)
     @Builder.Default
     private String status = "ACTIVE";

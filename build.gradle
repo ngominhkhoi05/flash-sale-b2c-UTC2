@@ -23,12 +23,18 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	// WebSocket STOMP + SockJS (realtime stock push)
+	implementation 'org.springframework.boot:spring-boot-starter-websocket'
+	// Spring Boot Actuator (health check cho Docker)
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.flywaydb:flyway-database-postgresql'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0'
 	// Redis (Lettuce + Lua Scripting Core)
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 	// Redisson (Distributed Lock & benchmark alternative)
 	implementation 'org.redisson:redisson:3.45.0'
+	// Cloudinary SDK (upload/destroy ảnh cho Image Module polymorphic storage)
+	implementation 'com.cloudinary:cloudinary-http5:2.4.0'
 
 	// JWT (JSON Web Token)
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
@@ -43,6 +49,8 @@ dependencies {
 	annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
 	annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
 
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'org.springframework.boot:spring-boot-test-autoconfigure'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-flyway-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
@@ -57,8 +65,13 @@ dependencies {
 	testAnnotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
 }
 
+tasks.withType(JavaCompile).configureEach {
+	options.encoding = 'UTF-8'
+	options.compilerArgs << '-parameters'
+}
+
 compileJava {
-	options.compilerArgs = [
+	options.compilerArgs += [
 		'-Amapstruct.defaultComponentModel=spring',
 		'-Amapstruct.unmappedTargetPolicy=IGNORE'
 	]
@@ -66,4 +79,10 @@ compileJava {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	// Supabase Pooler (IPv4) + DbCleaner TRUNCATE cần serial forks.
+	// Mặc định Gradle chạy parallel — gây context load fail ở fork đầu,
+	// Spring's failure-threshold(1) skip tất cả instance còn lại → fail toàn bộ.
+	// forkEvery = 1L: mỗi test class chạy trong JVM riêng (an toàn cho full Spring context).
+	maxParallelForks = 1
+	forkEvery = 1L
 }

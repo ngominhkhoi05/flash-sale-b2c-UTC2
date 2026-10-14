@@ -1,0 +1,5 @@
+-- V7: Add total_sold column to products table
+ALTER TABLE products ADD COLUMN total_sold INT DEFAULT 0 NOT NULL;
+
+CREATE INDEX idx_products_total_sold ON products(total_sold DESC);
+CREATE INDEX idx_products_status_active ON products(status) WHERE status = 'ACTIVE';

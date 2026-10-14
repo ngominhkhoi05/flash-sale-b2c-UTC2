@@ -1,0 +1,83 @@
+# ===================================================================
+# .dockerignore cho Backend (Spring Boot / Gradle)
+# ===================================================================
+# Giam build context, bao ve file nhay cam (local config, secret, IDE).
+# ===================================================================
+
+### --- Build artifacts (se duoc tao lai trong container) ---
+.gradle/
+build/
+out/
+bin/
+*.class
+*.jar
+*.war
+
+### --- IDE / Editor ---
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.classpath
+.project
+.settings/
+.factorypath
+.springBeans
+.sts4-cache
+.history/
+
+### --- Local config (CHUA SECRET - KHONG DUOC COPY VAO IMAGE) ---
+**/application-local.yaml
+**/application-local.yml
+**/application-local.yaml.example
+**/application-local.yml.example
+**/application-dev.yaml
+**/application-dev.yml
+**/application-test.yaml
+**/application-test.yml
+
+### --- Secrets & Keys ---
+.env
+.env.*
+*.pem
+*.key
+*.cert
+*.p12
+*.jks
+keystore.*
+truststore.*
+
+### --- Database dumps ---
+*.sql
+*.sql.gz
+*.dump
+*.backup
+
+### --- Logs ---
+*.log
+logs/
+*.log.*
+
+### --- OS junk ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+### --- Git ---
+.git/
+.gitignore
+.gitattributes
+
+### --- Test reports ---
+test-results/
+build/reports/
+build/test-results/
+coverage/
+*.lcov
+
+### --- Docker artifacts ---
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+deploy/

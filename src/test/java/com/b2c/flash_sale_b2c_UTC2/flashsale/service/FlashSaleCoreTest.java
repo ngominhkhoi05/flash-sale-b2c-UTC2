@@ -292,7 +292,7 @@ class FlashSaleCoreTest {
 
             when(addressRepository.findById(101L)).thenReturn(Optional.of(address));
             when(itemRepository.findById(500L)).thenReturn(Optional.of(approvedItem));
-            when(stockReservationStrategy.reserveStock(eq(1L), eq(99L), eq(500L), eq(1), eq(1), anyLong()))
+            when(stockReservationStrategy.reserveStock(eq(1L), eq(99L), eq(500L), eq(1), eq(1), anyLong(), anyString()))
                     .thenReturn(1L);
             when(itemRepository.deductAvailableStockConditionally(500L, 1)).thenReturn(1);
             when(orderPort.createPendingOrder(any())).thenReturn(new OrderRef(1001L, "FS-ORDER-1001"));
@@ -315,7 +315,7 @@ class FlashSaleCoreTest {
 
             when(addressRepository.findById(101L)).thenReturn(Optional.of(address));
             when(itemRepository.findById(500L)).thenReturn(Optional.of(approvedItem));
-            when(stockReservationStrategy.reserveStock(eq(1L), eq(99L), eq(500L), eq(1), eq(1), anyLong()))
+            when(stockReservationStrategy.reserveStock(eq(1L), eq(99L), eq(500L), eq(1), eq(1), anyLong(), anyString()))
                     .thenReturn(0L); // out of stock
 
             BusinessException ex = assertThrows(BusinessException.class,
@@ -334,7 +334,7 @@ class FlashSaleCoreTest {
 
             when(addressRepository.findById(101L)).thenReturn(Optional.of(address));
             when(itemRepository.findById(500L)).thenReturn(Optional.of(approvedItem));
-            when(stockReservationStrategy.reserveStock(eq(1L), eq(99L), eq(500L), eq(2), eq(1), anyLong()))
+            when(stockReservationStrategy.reserveStock(eq(1L), eq(99L), eq(500L), eq(2), eq(1), anyLong(), anyString()))
                     .thenReturn(-1L); // limit exceeded
 
             BusinessException ex = assertThrows(BusinessException.class,
@@ -353,7 +353,7 @@ class FlashSaleCoreTest {
 
             when(addressRepository.findById(101L)).thenReturn(Optional.of(address));
             when(itemRepository.findById(500L)).thenReturn(Optional.of(approvedItem));
-            when(stockReservationStrategy.reserveStock(eq(1L), eq(99L), eq(500L), eq(1), eq(1), anyLong()))
+            when(stockReservationStrategy.reserveStock(eq(1L), eq(99L), eq(500L), eq(1), eq(1), anyLong(), anyString()))
                     .thenReturn(1L);
             when(itemRepository.deductAvailableStockConditionally(500L, 1)).thenReturn(1);
             when(orderPort.createPendingOrder(any())).thenThrow(new RuntimeException("DB Connection timeout!"));
@@ -363,7 +363,7 @@ class FlashSaleCoreTest {
             assertEquals(FlashSaleErrorCode.ORDER_CREATION_FAILED, ex.getErrorCode());
 
             // Xác minh bù hoàn
-            verify(stockReservationStrategy).compensate(1L, 99L, 500L, 1);
+            verify(stockReservationStrategy).rollbackStockWithMarker(eq(1L), eq(99L), eq(500L), eq(1), anyString());
             verify(itemRepository).replenishAvailableStockConditionally(500L, 1);
         }
     }

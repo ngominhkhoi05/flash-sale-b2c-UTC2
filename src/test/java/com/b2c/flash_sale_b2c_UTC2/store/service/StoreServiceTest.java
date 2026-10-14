@@ -22,6 +22,7 @@ import com.b2c.flash_sale_b2c_UTC2.user.repository.UserRepository;
 import com.b2c.flash_sale_b2c_UTC2.user.repository.UserRoleRepository;
 import com.b2c.flash_sale_b2c_UTC2.wallet.entity.Wallet;
 import com.b2c.flash_sale_b2c_UTC2.wallet.repository.WalletRepository;
+import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -63,6 +64,9 @@ class StoreServiceTest {
     private StoreMapper storeMapper;
 
     @Mock
+    private ImageService imageService;
+
+    @Mock
     private AddressMapper addressMapper;
 
     @InjectMocks
@@ -83,9 +87,8 @@ class StoreServiceTest {
         sampleStore = Store.builder()
                 .id(10L)
                 .user(sampleUser)
-                .storeName("Shop Công Nghệ UTC2")
-                .logoUrl("https://example.com/logo.png")
-                .description("Gian hàng chính hãng")
+                .storeName("Shop Cong Nghe UTC2")
+                .description("Gian hang chinh hang")
                 .defaultCommissionRate(new BigDecimal("0.0500"))
                 .status("PENDING")
                 .createdAt(Instant.now())
@@ -96,23 +99,22 @@ class StoreServiceTest {
     @DisplayName("Đăng ký gian hàng thành công khởi tạo trạng thái PENDING và tạo ví tiền")
     void registerStore_Success() {
         CreateStoreRequest request = CreateStoreRequest.builder()
-                .storeName("Shop Công Nghệ UTC2")
-                .logoUrl("https://example.com/logo.png")
-                .description("Gian hàng chính hãng")
+                .storeName("Shop Cong Nghe UTC2")
+                .description("Gian hang chinh hang")
                 .build();
 
         when(userRepository.findById(1L)).thenReturn(Optional.of(sampleUser));
         when(storeRepository.existsByUserId(1L)).thenReturn(false);
-        when(storeRepository.existsByStoreName("Shop Công Nghệ UTC2")).thenReturn(false);
+        when(storeRepository.existsByStoreName("Shop Cong Nghe UTC2")).thenReturn(false);
         when(storeRepository.save(any(Store.class))).thenReturn(sampleStore);
         when(storeMapper.toResponse(sampleStore)).thenReturn(StoreResponse.builder()
-                .id(10L).userId(1L).storeName("Shop Công Nghệ UTC2").status("PENDING").build());
+                .id(10L).userId(1L).storeName("Shop Cong Nghe UTC2").status("PENDING").build());
 
         StoreResponse response = storeService.registerStore(1L, request);
 
         assertNotNull(response);
         assertEquals("PENDING", response.getStatus());
-        assertEquals("Shop Công Nghệ UTC2", response.getStoreName());
+        assertEquals("Shop Cong Nghe UTC2", response.getStoreName());
         verify(walletRepository).save(any(Wallet.class));
         verify(storeRepository).save(any(Store.class));
     }
@@ -216,5 +218,98 @@ class StoreServiceTest {
         BusinessException exception = assertThrows(BusinessException.class, () -> storeService.deleteStoreAddress(1L, 200L));
         assertEquals(StoreErrorCode.STORE_ADDRESS_ACCESS_DENIED.getCode(), exception.getErrorCode().getCode());
         verify(addressRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("Lấy thông tin gian hàng của tôi thành công")
+    void getMyStore_Success() {
+        when(storeRepository.findByUserId(1L)).thenReturn(Optional.of(sampleStore));
+        when(storeMapper.toResponse(sampleStore)).thenReturn(StoreResponse.builder().id(10L).storeName("Shop Cong Nghe UTC2").build());
+
+        StoreResponse response = storeService.getMyStore(1L);
+
+        assertNotNull(response);
+        assertEquals(10L, response.getId());
+    }
+
+    @Test
+    @DisplayName("Lấy thông tin gian hàng thất bại khi người dùng chưa có gian hàng STORE_NOT_FOUND (404)")
+    void getMyStore_ShouldThrowException_WhenStoreNotFound() {
+        when(storeRepository.findByUserId(1L)).thenReturn(Optional.empty());
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> storeService.getMyStore(1L));
+        assertEquals(StoreErrorCode.STORE_NOT_FOUND.getCode(), exception.getErrorCode().getCode());
+    }
+
+    @Test
+    @DisplayName("Cập nhật thông tin gian hàng thành công")
+    void updateMyStore_Success() {
+        UpdateStoreRequest request = UpdateStoreRequest.builder()
+                .storeName("Shop Updated")
+                .description("Mo ta moi")
+                .build();
+
+        when(storeRepository.findByUserId(1L)).thenReturn(Optional.of(sampleStore));
+        when(storeRepository.existsByStoreName("Shop Updated")).thenReturn(false);
+        when(storeRepository.save(any(Store.class))).thenReturn(sampleStore);
+        when(storeMapper.toResponse(sampleStore)).thenReturn(StoreResponse.builder().id(10L).storeName("Shop Updated").build());
+
+        StoreResponse response = storeService.updateMyStore(1L, request);
+
+        assertNotNull(response);
+        assertEquals("Shop Updated", response.getStoreName());
+    }
+
+    @Test
+    @DisplayName("Cập nhật gian hàng thất bại khi tên mới bị trùng lặp")
+    void updateMyStore_ShouldThrowException_WhenStoreNameExists() {
+        UpdateStoreRequest request = UpdateStoreRequest.builder()
+                .storeName("Shop Trùng")
+                .build();
+
+        when(storeRepository.findByUserId(1L)).thenReturn(Optional.of(sampleStore));
+        when(storeRepository.existsByStoreName("Shop Trùng")).thenReturn(true);
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> storeService.updateMyStore(1L, request));
+        assertEquals(StoreErrorCode.STORE_NAME_ALREADY_EXISTS.getCode(), exception.getErrorCode().getCode());
+        verify(storeRepository, never()).save(any(Store.class));
+    }
+
+    @Test
+    @DisplayName("Xem thông tin gian hàng công khai thành công khi gian hàng đã APPROVED")
+    void getStoreById_Success_WhenApproved() {
+        sampleStore.setStatus("APPROVED");
+        when(storeRepository.findById(10L)).thenReturn(Optional.of(sampleStore));
+        when(storeMapper.toResponse(sampleStore)).thenReturn(StoreResponse.builder().id(10L).status("APPROVED").build());
+
+        StoreResponse response = storeService.getStoreById(10L);
+
+        assertNotNull(response);
+        assertEquals("APPROVED", response.getStatus());
+    }
+
+    @Test
+    @DisplayName("Xem thông tin gian hàng công khai thất bại khi gian hàng chưa duyệt STORE_NOT_APPROVED")
+    void getStoreById_ShouldThrowException_WhenNotApproved() {
+        sampleStore.setStatus("PENDING");
+        when(storeRepository.findById(10L)).thenReturn(Optional.of(sampleStore));
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> storeService.getStoreById(10L));
+        assertEquals(StoreErrorCode.STORE_NOT_APPROVED.getCode(), exception.getErrorCode().getCode());
+    }
+
+    @Test
+    @DisplayName("Admin từ chối REJECTED không gán vai trò SELLER")
+    void updateStoreStatus_Rejected_ShouldNotAssignSellerRole() {
+        UpdateStoreStatusRequest request = new UpdateStoreStatusRequest("REJECTED");
+
+        when(storeRepository.findById(10L)).thenReturn(Optional.of(sampleStore));
+        when(storeRepository.save(any(Store.class))).thenReturn(sampleStore);
+        when(storeMapper.toResponse(sampleStore)).thenReturn(StoreResponse.builder().id(10L).status("REJECTED").build());
+
+        StoreResponse response = storeService.updateStoreStatus(10L, request);
+
+        assertEquals("REJECTED", response.getStatus());
+        verify(userRoleRepository, never()).save(any(UserRole.class));
     }
 }

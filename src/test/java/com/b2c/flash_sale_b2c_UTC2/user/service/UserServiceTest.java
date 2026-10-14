@@ -8,6 +8,7 @@ import com.b2c.flash_sale_b2c_UTC2.user.entity.User;
 import com.b2c.flash_sale_b2c_UTC2.user.exception.UserErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.user.mapper.UserMapper;
 import com.b2c.flash_sale_b2c_UTC2.user.repository.UserRepository;
+import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,13 @@ class UserServiceTest {
     private UserRepository userRepository;
 
     @Mock
+    private com.b2c.flash_sale_b2c_UTC2.user.repository.UserRoleRepository userRoleRepository;
+
+    @Mock
     private UserMapper userMapper;
+
+    @Mock
+    private ImageService imageService;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -83,7 +90,6 @@ class UserServiceTest {
         UpdateProfileRequest request = UpdateProfileRequest.builder()
                 .fullName("User Updated")
                 .phone("0988888888")
-                .avatarUrl("https://example.com/avatar.png")
                 .build();
 
         when(userRepository.findById(1L)).thenReturn(Optional.of(sampleUser));
@@ -132,6 +138,32 @@ class UserServiceTest {
 
         BusinessException exception = assertThrows(BusinessException.class, () -> userService.changePassword(1L, request));
         assertEquals(UserErrorCode.OLD_PASSWORD_INCORRECT.getCode(), exception.getErrorCode().getCode());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    @DisplayName("Lấy hồ sơ người dùng thất bại khi không tìm thấy USER_NOT_FOUND (404)")
+    void getProfile_ShouldThrowException_WhenUserNotFound() {
+        when(userRepository.findById(999L)).thenReturn(Optional.empty());
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> userService.getProfile(999L));
+        assertEquals(UserErrorCode.USER_NOT_FOUND.getCode(), exception.getErrorCode().getCode());
+    }
+
+    @Test
+    @DisplayName("Cập nhật hồ sơ thất bại khi số điện thoại bị trùng với người dùng khác")
+    void updateProfile_ShouldThrowException_WhenPhoneAlreadyExists() {
+        UpdateProfileRequest request = UpdateProfileRequest.builder()
+                .fullName("User Test")
+                .phone("0988888888")
+                .build();
+
+        User anotherUser = User.builder().id(2L).phone("0988888888").build();
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(sampleUser));
+        when(userRepository.findByPhone("0988888888")).thenReturn(Optional.of(anotherUser));
+
+        assertThrows(BusinessException.class, () -> userService.updateProfile(1L, request));
         verify(userRepository, never()).save(any(User.class));
     }
 }

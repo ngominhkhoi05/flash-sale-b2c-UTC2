@@ -1,0 +1,49 @@
+-- V8: Add tier to stores (Official Mall badge) + slug to products (SEO URL)
+-- This migration adds the store tier system for B2C marketplace badges and
+-- product SEO-friendly slugs.
+
+-- ============================================================
+-- STORES: Add tier column (Official Mall / Preferred / Normal)
+-- ============================================================
+
+ALTER TABLE stores ADD COLUMN tier VARCHAR(20) NOT NULL DEFAULT 'NORMAL';
+ALTER TABLE stores ADD CONSTRAINT chk_stores_tier
+  CHECK (tier IN ('NORMAL', 'OFFICIAL_MALL', 'PREFERRED'));
+
+-- Partial index for efficient queries on non-NORMAL tiers
+-- Only indexes rows where tier != 'NORMAL' (OFFICIAL_MALL or PREFERRED)
+CREATE INDEX idx_stores_tier ON stores(tier) WHERE tier <> 'NORMAL';
+
+-- ============================================================
+-- STORES: Add last_active_at for store profile
+-- ============================================================
+
+ALTER TABLE stores ADD COLUMN last_active_at TIMESTAMPTZ;
+
+-- ============================================================
+-- PRODUCTS: Add slug column (SEO-friendly URL identifier)
+-- ============================================================
+
+ALTER TABLE products ADD COLUMN slug VARCHAR(255);
+
+-- Partial unique index: only one non-null slug per product
+-- Multiple products can have NULL slug (for future products without SEO)
+CREATE UNIQUE INDEX uq_products_slug ON products(slug) WHERE slug IS NOT NULL;
+
+-- ============================================================
+-- BACKFILL: Generate slug from product name for existing products
+-- Converts Vietnamese text to ASCII-safe lowercase hyphen-separated format
+-- Idempotent: only sets slug where slug IS NULL
+-- ============================================================
+
+UPDATE products
+SET slug = LOWER(
+    REGEXP_REPLACE(
+        REGEXP_REPLACE(
+            REGEXP_REPLACE(name, '[^a-zA-Z0-9[:space:]]', '', 'g'),
+            '[[:space:]]+', '-', 'g'
+        ),
+        '-+', '-', 'g'
+    )
+)
+WHERE slug IS NULL;

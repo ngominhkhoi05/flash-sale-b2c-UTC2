@@ -19,7 +19,4 @@ public class UpdateProfileRequest {
 
     @Size(max = 15, message = "Số điện thoại không được vượt quá 15 ký tự")
     private String phone;
-
-    @Size(max = 255, message = "Đường dẫn ảnh đại diện không hợp lệ")
-    private String avatarUrl;
 }

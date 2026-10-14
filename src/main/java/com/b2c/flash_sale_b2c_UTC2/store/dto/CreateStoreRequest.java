@@ -19,8 +19,5 @@ public class CreateStoreRequest {
     @Size(min = 2, max = 150, message = "Tên gian hàng phải từ 2 đến 150 ký tự")
     private String storeName;
 
-    @Size(max = 255, message = "URL logo không được vượt quá 255 ký tự")
-    private String logoUrl;
-
     private String description;
 }

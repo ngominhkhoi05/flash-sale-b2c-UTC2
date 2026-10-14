@@ -24,4 +24,11 @@ public interface VoucherService {
     Voucher validateVoucherForOrder(String voucherCode, Long userId, Long storeId, BigDecimal orderSubtotal);
 
     BigDecimal calculateDiscountAmount(Voucher voucher, BigDecimal subtotal);
+
+    /**
+     * Bồi hoàn lại lượt dùng của voucher và xóa bản ghi voucher_usages khi đơn hàng bị hủy.
+     *
+     * @param orderId ID đơn hàng bị hủy
+     */
+    void rollbackVoucherUsage(Long orderId);
 }

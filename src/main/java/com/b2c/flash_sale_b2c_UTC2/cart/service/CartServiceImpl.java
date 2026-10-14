@@ -10,6 +10,8 @@ import com.b2c.flash_sale_b2c_UTC2.cart.entity.CartItem;
 import com.b2c.flash_sale_b2c_UTC2.cart.exception.CartErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.cart.repository.CartItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.cart.repository.CartRepository;
+import com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType;
+import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
 import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.ProductVariant;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductVariantRepository;
@@ -38,6 +40,7 @@ public class CartServiceImpl implements CartService {
     private final CartItemRepository cartItemRepository;
     private final ProductVariantRepository productVariantRepository;
     private final UserRepository userRepository;
+    private final ImageService imageService;
 
     @Override
     @Transactional
@@ -158,6 +161,18 @@ public class CartServiceImpl implements CartService {
         int totalItems = 0;
         BigDecimal grandTotal = BigDecimal.ZERO;
 
+        // Batch-load ảnh variant và product (1 query mỗi loại) để tránh N+1
+        java.util.List<Long> variantIds = items.stream().map(i -> i.getVariant().getId()).toList();
+        java.util.List<Long> productIds = items.stream().map(i -> i.getVariant().getProduct().getId()).distinct().toList();
+        java.util.Map<Long, String> variantImageMap = variantIds.isEmpty() ? java.util.Map.of() :
+                imageService.getPrimaryImagesByOwnerIds(ImageOwnerType.VARIANT, variantIds)
+                        .entrySet().stream()
+                        .collect(java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey, e -> e.getValue().getUrl()));
+        java.util.Map<Long, String> productImageMap = productIds.isEmpty() ? java.util.Map.of() :
+                imageService.getPrimaryImagesByOwnerIds(ImageOwnerType.PRODUCT, productIds)
+                        .entrySet().stream()
+                        .collect(java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey, e -> e.getValue().getUrl()));
+
         for (CartItem item : items) {
             ProductVariant variant = item.getVariant();
             Store store = variant.getProduct().getStore();
@@ -165,13 +180,19 @@ public class CartServiceImpl implements CartService {
             BigDecimal price = variant.getOriginalPrice();
             BigDecimal itemSubtotal = price.multiply(BigDecimal.valueOf(item.getQuantity()));
 
+            // Ưu tiên ảnh variant, fallback ảnh product
+            String imageUrl = variantImageMap.get(variant.getId());
+            if (imageUrl == null) {
+                imageUrl = productImageMap.get(variant.getProduct().getId());
+            }
+
             CartItemResponse itemDto = CartItemResponse.builder()
                     .id(item.getId())
                     .variantId(variant.getId())
                     .sku(variant.getSku())
                     .productName(variant.getProduct().getName())
                     .variantName(variant.getVariantName())
-                    .imageUrl(variant.getImageUrl() != null ? variant.getImageUrl() : variant.getProduct().getImageUrl())
+                    .imageUrl(imageUrl)
                     .price(price)
                     .stockQuantity(variant.getStockQuantity())
                     .quantity(item.getQuantity())

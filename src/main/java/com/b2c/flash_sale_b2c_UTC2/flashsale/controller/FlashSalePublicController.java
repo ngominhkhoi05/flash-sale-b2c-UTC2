@@ -27,4 +27,11 @@ public class FlashSalePublicController {
         List<PublicFlashSaleSlotResponse> response = itemService.getPublicSlots();
         return ResponseEntity.ok(ApiResponse.success(response));
     }
+
+    @GetMapping("/items/active")
+    @Operation(summary = "Xem danh sách các sản phẩm Flash Sale đang mở bán active cho trang chủ", description = "Trả về danh sách sản phẩm đang trong phiên Flash Sale ACTIVE kèm tồn kho khả dụng thời gian thực")
+    public ResponseEntity<ApiResponse<List<PublicFlashSaleSlotResponse.PublicFlashSaleItemResponse>>> getActiveItems() {
+        List<PublicFlashSaleSlotResponse.PublicFlashSaleItemResponse> response = itemService.getActiveItems();
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
 }

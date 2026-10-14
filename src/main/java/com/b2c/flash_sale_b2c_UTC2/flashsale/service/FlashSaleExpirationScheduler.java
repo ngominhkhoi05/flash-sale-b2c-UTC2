@@ -4,6 +4,7 @@ import com.b2c.flash_sale_b2c_UTC2.flashsale.entity.FlashSaleItem;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.entity.FlashSaleSlot;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.port.ExpiredOrderRef;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.port.FlashSaleOrderPort;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.realtime.FlashSaleWsBroadcaster;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.repository.FlashSaleItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.repository.FlashSaleSlotRepository;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.strategy.StockReservationStrategy;
@@ -28,6 +29,7 @@ public class FlashSaleExpirationScheduler {
     private final FlashSaleItemRepository itemRepository;
     private final ProductVariantRepository variantRepository;
     private final StockReservationStrategy stockReservationStrategy;
+    private final FlashSaleWsBroadcaster wsBroadcaster;
 
     @Autowired(required = false)
     private FlashSaleOrderPort orderPort;
@@ -84,6 +86,18 @@ public class FlashSaleExpirationScheduler {
         // 1. Rollback DB available_stock conditionally (available_stock + qty <= allocated_stock)
         itemRepository.replenishAvailableStockConditionally(ref.flashSaleItemId(), ref.quantity());
 
+        // Broadcast stock restored via WebSocket
+        try {
+            FlashSaleItem refreshed = itemRepository.findById(ref.flashSaleItemId()).orElse(null);
+            if (refreshed != null) {
+                wsBroadcaster.broadcastStockRestored(ref.slotId(), ref.flashSaleItemId(),
+                        refreshed.getAvailableStock(), ref.quantity());
+            }
+        } catch (Exception e) {
+            log.warn("[WS] Failed to broadcast stock restoration for expired order itemId={}: {}",
+                    ref.flashSaleItemId(), e.getMessage());
+        }
+
         // 2. Safe rollback of Redis stock and purchase limit (verifying key existence or reconstructing from DB)
         FlashSaleItem item = itemRepository.findById(ref.flashSaleItemId()).orElse(null);
         if (item != null) {
@@ -133,6 +147,13 @@ public class FlashSaleExpirationScheduler {
                 slot.setStatus("ACTIVE");
                 slotRepository.save(slot);
                 log.info("Activated FlashSaleSlot ID: {} - {}", slot.getId(), slot.getTitle());
+                // Broadcast slot activated via WebSocket
+                try {
+                    wsBroadcaster.broadcastSlotStatus(slot.getId(), "ACTIVE");
+                } catch (Exception e) {
+                    log.warn("[WS] Failed to broadcast slot ACTIVE for slotId={}: {}",
+                            slot.getId(), e.getMessage());
+                }
             }
 
         } catch (Exception e) {
@@ -168,6 +189,14 @@ public class FlashSaleExpirationScheduler {
                             unsoldStock, item.getVariant().getId(), item.getId());
                 }
 
+                // Broadcast unsold stock returned via WebSocket
+                try {
+                    wsBroadcaster.broadcastUnsoldStockReturned(slot.getId(), item.getId(), 0);
+                } catch (Exception e) {
+                    log.warn("[WS] Failed to broadcast unsold stock returned for itemId={}: {}",
+                            item.getId(), e.getMessage());
+                }
+
                 item.setStatus("ENDED");
                 itemRepository.save(item);
 
@@ -185,5 +214,13 @@ public class FlashSaleExpirationScheduler {
         slot.setStatus("ENDED");
         slotRepository.save(slot);
         log.info("FlashSaleSlot ID: {} successfully closed with status ENDED.", slot.getId());
+
+        // Broadcast slot closed via WebSocket
+        try {
+            wsBroadcaster.broadcastSlotStatus(slot.getId(), "ENDED");
+        } catch (Exception e) {
+            log.warn("[WS] Failed to broadcast slot ENDED for slotId={}: {}",
+                    slot.getId(), e.getMessage());
+        }
     }
 }

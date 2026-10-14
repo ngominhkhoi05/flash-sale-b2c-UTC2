@@ -57,42 +57,42 @@ class EntityMappingValidationTest {
     );
 
     @Test
-    @DisplayName("Xác nhận đúng 24 Entity JPA tương ứng với 24 bảng trong V1__init_schema.sql")
+    @DisplayName("XÃ¡c nháº­n Ä‘Ãºng 24 Entity JPA tÆ°Æ¡ng á»©ng vá»›i 24 báº£ng trong V1__init_schema.sql")
     void testExact24EntityCount() {
-        assertEquals(24, all24Entities.size(), "Phải có đúng 24 Entity JPA tương ứng với kiến trúc 24 bảng");
+        assertEquals(24, all24Entities.size(), "Pháº£i cÃ³ Ä‘Ãºng 24 Entity JPA tÆ°Æ¡ng á»©ng vá»›i kiáº¿n trÃºc 24 báº£ng");
     }
 
     @Test
-    @DisplayName("Xác nhận toàn bộ 24 Entity đều có annotation @Entity và @Table")
+    @DisplayName("XÃ¡c nháº­n toÃ n bá»™ 24 Entity Ä‘á»u cÃ³ annotation @Entity vÃ  @Table")
     void testEntityAnnotationsAndNoData() {
         for (Class<?> clazz : all24Entities) {
-            assertTrue(clazz.isAnnotationPresent(Entity.class), clazz.getSimpleName() + " phải có @Entity");
-            assertTrue(clazz.isAnnotationPresent(Table.class), clazz.getSimpleName() + " phải có @Table");
-            assertNotNull(clazz.getAnnotation(Table.class).name(), clazz.getSimpleName() + " phải có tên bảng @Table(name=...)");
+            assertTrue(clazz.isAnnotationPresent(Entity.class), clazz.getSimpleName() + " pháº£i cÃ³ @Entity");
+            assertTrue(clazz.isAnnotationPresent(Table.class), clazz.getSimpleName() + " pháº£i cÃ³ @Table");
+            assertNotNull(clazz.getAnnotation(Table.class).name(), clazz.getSimpleName() + " pháº£i cÃ³ tÃªn báº£ng @Table(name=...)");
         }
     }
 
     @Test
-    @DisplayName("Xác nhận mọi quan hệ @ManyToOne và @OneToOne trong 24 Entity đều cấu hình FetchType.LAZY")
+    @DisplayName("XÃ¡c nháº­n má»i quan há»‡ @ManyToOne vÃ  @OneToOne trong 24 Entity Ä‘á»u cáº¥u hÃ¬nh FetchType.LAZY")
     void testAllRelationshipsUseLazyFetch() {
         for (Class<?> clazz : all24Entities) {
             for (Field field : clazz.getDeclaredFields()) {
                 if (field.isAnnotationPresent(ManyToOne.class)) {
                     ManyToOne manyToOne = field.getAnnotation(ManyToOne.class);
                     assertEquals(FetchType.LAZY, manyToOne.fetch(),
-                            "Trường " + clazz.getSimpleName() + "." + field.getName() + " phải có fetch = FetchType.LAZY");
+                            "TrÆ°á»ng " + clazz.getSimpleName() + "." + field.getName() + " pháº£i cÃ³ fetch = FetchType.LAZY");
                 }
                 if (field.isAnnotationPresent(OneToOne.class)) {
                     OneToOne oneToOne = field.getAnnotation(OneToOne.class);
                     assertEquals(FetchType.LAZY, oneToOne.fetch(),
-                            "Trường " + clazz.getSimpleName() + "." + field.getName() + " phải có fetch = FetchType.LAZY");
+                            "TrÆ°á»ng " + clazz.getSimpleName() + "." + field.getName() + " pháº£i cÃ³ fetch = FetchType.LAZY");
                 }
             }
         }
     }
 
     @Test
-    @DisplayName("Xác nhận mọi Entity đều có khóa chính @Id (đơn hoặc composite key)")
+    @DisplayName("XÃ¡c nháº­n má»i Entity Ä‘á»u cÃ³ khÃ³a chÃ­nh @Id (Ä‘Æ¡n hoáº·c composite key)")
     void testAllEntitiesHaveId() {
         for (Class<?> clazz : all24Entities) {
             boolean hasId = false;
@@ -102,7 +102,7 @@ class EntityMappingValidationTest {
                     break;
                 }
             }
-            assertTrue(hasId, clazz.getSimpleName() + " phải có @Id hoặc @EmbeddedId");
+            assertTrue(hasId, clazz.getSimpleName() + " pháº£i cÃ³ @Id hoáº·c @EmbeddedId");
         }
     }
 }

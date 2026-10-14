@@ -2,6 +2,7 @@ package com.b2c.flash_sale_b2c_UTC2.voucher.service;
 
 import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
 import com.b2c.flash_sale_b2c_UTC2.store.entity.Store;
+import com.b2c.flash_sale_b2c_UTC2.store.exception.StoreErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.store.repository.StoreRepository;
 import com.b2c.flash_sale_b2c_UTC2.user.entity.User;
 import com.b2c.flash_sale_b2c_UTC2.voucher.dto.ApplyVoucherRequest;
@@ -9,6 +10,7 @@ import com.b2c.flash_sale_b2c_UTC2.voucher.dto.CreateVoucherRequest;
 import com.b2c.flash_sale_b2c_UTC2.voucher.dto.VoucherCalculationResponse;
 import com.b2c.flash_sale_b2c_UTC2.voucher.dto.VoucherResponse;
 import com.b2c.flash_sale_b2c_UTC2.voucher.entity.Voucher;
+import com.b2c.flash_sale_b2c_UTC2.voucher.entity.VoucherUsage;
 import com.b2c.flash_sale_b2c_UTC2.voucher.exception.VoucherErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.voucher.mapper.VoucherMapper;
 import com.b2c.flash_sale_b2c_UTC2.voucher.repository.VoucherRepository;
@@ -25,6 +27,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -186,4 +189,152 @@ class VoucherServiceTest {
                 voucherService.validateVoucherForOrder("UTC2DISCOUNT", 1L, 999L, new BigDecimal("300000.00"))); // storeId khác 10L
         assertEquals(VoucherErrorCode.VOUCHER_STORE_MISMATCH.getCode(), exception.getErrorCode().getCode());
     }
+
+    @Test
+    @DisplayName("Bồi hoàn voucher thành công: giảm used_quantity và xóa bản ghi voucher_usages")
+    void rollbackVoucherUsage_Success() {
+        Voucher voucher = Voucher.builder()
+                .id(1L)
+                .code("UTC2DISCOUNT")
+                .usedQuantity(3)
+                .build();
+
+        VoucherUsage usage = VoucherUsage.builder()
+                .id(100L)
+                .voucher(voucher)
+                .discountAmount(new BigDecimal("50000.00"))
+                .build();
+
+        when(voucherUsageRepository.findByOrderId(1000L)).thenReturn(Optional.of(usage));
+
+        voucherService.rollbackVoucherUsage(1000L);
+
+        assertEquals(2, voucher.getUsedQuantity());
+        verify(voucherRepository).save(voucher);
+        verify(voucherUsageRepository).delete(usage);
+    }
+
+    @Test
+    @DisplayName("Bồi hoàn voucher không ném lỗi khi không tìm thấy voucher_usages")
+    void rollbackVoucherUsage_NoUsageFound_ShouldDoNothing() {
+        when(voucherUsageRepository.findByOrderId(9999L)).thenReturn(Optional.empty());
+
+        assertDoesNotThrow(() -> voucherService.rollbackVoucherUsage(9999L));
+        verify(voucherRepository, never()).save(any());
+        verify(voucherUsageRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("Bồi hoàn voucher không ném lỗi khi orderId là null")
+    void rollbackVoucherUsage_NullOrderId_ShouldDoNothing() {
+        assertDoesNotThrow(() -> voucherService.rollbackVoucherUsage(null));
+        verify(voucherUsageRepository, never()).findByOrderId(any());
+    }
+
+    @Test
+    @DisplayName("Áp dụng voucher ném lỗi khi voucher ở trạng thái không ACTIVE (VOUCHER_INACTIVE)")
+    void validateVoucher_ThrowsException_WhenInactive() {
+        Voucher inactiveVoucher = Voucher.builder().id(103L).code("INACTIVE_VOUCHER").status("INACTIVE").build();
+        when(voucherRepository.findByCode("INACTIVE_VOUCHER")).thenReturn(Optional.of(inactiveVoucher));
+
+        BusinessException exception = assertThrows(BusinessException.class, () ->
+                voucherService.validateVoucherForOrder("INACTIVE_VOUCHER", 1L, 10L, new BigDecimal("300000.00")));
+        assertEquals(VoucherErrorCode.VOUCHER_INACTIVE.getCode(), exception.getErrorCode().getCode());
+    }
+
+    @Test
+    @DisplayName("Áp dụng voucher ném lỗi khi chưa tới thời gian bắt đầu (VOUCHER_NOT_STARTED)")
+    void validateVoucher_ThrowsException_WhenNotStarted() {
+        Voucher notStartedVoucher = Voucher.builder()
+                .id(104L)
+                .code("FUTURE_VOUCHER")
+                .status("ACTIVE")
+                .startTime(Instant.now().plus(2, ChronoUnit.DAYS))
+                .endTime(Instant.now().plus(10, ChronoUnit.DAYS))
+                .build();
+        when(voucherRepository.findByCode("FUTURE_VOUCHER")).thenReturn(Optional.of(notStartedVoucher));
+
+        BusinessException exception = assertThrows(BusinessException.class, () ->
+                voucherService.validateVoucherForOrder("FUTURE_VOUCHER", 1L, 10L, new BigDecimal("300000.00")));
+        assertEquals(VoucherErrorCode.VOUCHER_NOT_STARTED.getCode(), exception.getErrorCode().getCode());
+    }
+
+    @Test
+    @DisplayName("Áp dụng voucher ném lỗi khi đã hết lượt dùng toàn sàn (VOUCHER_OUT_OF_STOCK)")
+    void validateVoucher_ThrowsException_WhenOutOfStock() {
+        Voucher outOfStockVoucher = Voucher.builder()
+                .id(105L)
+                .code("OUT_OF_STOCK")
+                .status("ACTIVE")
+                .startTime(Instant.now().minus(1, ChronoUnit.DAYS))
+                .endTime(Instant.now().plus(5, ChronoUnit.DAYS))
+                .totalQuantity(10)
+                .usedQuantity(10) // Hết lượt
+                .build();
+        when(voucherRepository.findByCode("OUT_OF_STOCK")).thenReturn(Optional.of(outOfStockVoucher));
+
+        BusinessException exception = assertThrows(BusinessException.class, () ->
+                voucherService.validateVoucherForOrder("OUT_OF_STOCK", 1L, 10L, new BigDecimal("300000.00")));
+        assertEquals(VoucherErrorCode.VOUCHER_OUT_OF_STOCK.getCode(), exception.getErrorCode().getCode());
+    }
+
+    @Test
+    @DisplayName("Áp dụng voucher ném lỗi khi đơn chưa đạt giá trị tối thiểu (VOUCHER_MIN_AMOUNT_NOT_MET)")
+    void validateVoucher_ThrowsException_WhenMinAmountNotMet() {
+        when(voucherRepository.findByCode("UTC2DISCOUNT")).thenReturn(Optional.of(sampleVoucher));
+
+        BusinessException exception = assertThrows(BusinessException.class, () ->
+                voucherService.validateVoucherForOrder("UTC2DISCOUNT", 1L, 10L, new BigDecimal("100000.00"))); // Min là 200k
+        assertEquals(VoucherErrorCode.VOUCHER_MIN_AMOUNT_NOT_MET.getCode(), exception.getErrorCode().getCode());
+    }
+
+    @Test
+    @DisplayName("Áp dụng voucher ném lỗi khi tài khoản đã dùng hết hạn mức cá nhân (VOUCHER_USER_LIMIT_EXCEEDED)")
+    void validateVoucher_ThrowsException_WhenUserLimitExceeded() {
+        when(voucherRepository.findByCode("UTC2DISCOUNT")).thenReturn(Optional.of(sampleVoucher));
+        when(voucherUsageRepository.countByVoucherIdAndUserId(100L, 1L)).thenReturn(1L); // Đã dùng 1 lần, max là 1
+
+        BusinessException exception = assertThrows(BusinessException.class, () ->
+                voucherService.validateVoucherForOrder("UTC2DISCOUNT", 1L, 10L, new BigDecimal("300000.00")));
+        assertEquals(VoucherErrorCode.VOUCHER_USER_LIMIT_EXCEEDED.getCode(), exception.getErrorCode().getCode());
+    }
+
+    @Test
+    @DisplayName("Lấy danh sách voucher toàn sàn thành công")
+    void getPlatformVouchers_Success() {
+        when(voucherRepository.findByStoreIdIsNull()).thenReturn(List.of(sampleVoucher));
+        when(voucherMapper.toResponse(sampleVoucher)).thenReturn(VoucherResponse.builder().id(100L).code("UTC2DISCOUNT").build());
+
+        List<VoucherResponse> responses = voucherService.getPlatformVouchers();
+
+        assertNotNull(responses);
+        assertEquals(1, responses.size());
+        assertEquals("UTC2DISCOUNT", responses.get(0).getCode());
+    }
+
+    @Test
+    @DisplayName("Lấy danh sách voucher của gian hàng thành công")
+    void getStoreVouchers_Success() {
+        when(voucherRepository.findByStoreId(10L)).thenReturn(List.of(sampleVoucher));
+        when(voucherMapper.toResponse(sampleVoucher)).thenReturn(VoucherResponse.builder().id(100L).code("UTC2DISCOUNT").build());
+
+        List<VoucherResponse> responses = voucherService.getStoreVouchers(10L);
+
+        assertNotNull(responses);
+        assertEquals(1, responses.size());
+    }
+
+    @Test
+    @DisplayName("Seller lấy danh sách voucher của gian hàng mình thành công")
+    void getMyStoreVouchers_Success() {
+        when(storeRepository.findByUserId(1L)).thenReturn(Optional.of(sampleStore));
+        when(voucherRepository.findByStoreId(10L)).thenReturn(List.of(sampleVoucher));
+        when(voucherMapper.toResponse(sampleVoucher)).thenReturn(VoucherResponse.builder().id(100L).code("UTC2DISCOUNT").build());
+
+        List<VoucherResponse> responses = voucherService.getMyStoreVouchers(1L);
+
+        assertNotNull(responses);
+        assertEquals(1, responses.size());
+    }
 }
+

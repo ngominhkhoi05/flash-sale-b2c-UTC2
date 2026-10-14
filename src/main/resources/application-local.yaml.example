@@ -1,11 +1,10 @@
 # ===================================================================
-# Flash Sale B2C - Local Development Profile (EXAMPLE TEMPLATE)
-# File mẫu được đẩy lên GitHub để hướng dẫn cấu hình môi trường local.
+# Flash Sale B2C - Profile local cho moi truong phat trien
+# Copy file nay thanh application-local.yaml roi dien secret thay vao.
+# application-local.yaml KHONG commit (da duoc .gitignore che).
 #
-# Hướng dẫn sử dụng:
-# 1. Tạo bản sao file này và đặt tên là: application-local.yaml
-# 2. Điền thông tin kết nối PostgreSQL và Redis trên máy cá nhân của bạn
-# 3. File application-local.yaml đã nằm trong .gitignore và sẽ không bị đẩy lên GitHub.
+# Cau truc nay MIRROR DUNG application-local.yaml.
+# Moi key co comment # TODO ... la nhung thong tin ban can tu dien.
 # ===================================================================
 
 spring:
@@ -13,9 +12,10 @@ spring:
     activate:
       on-profile: local
 
-  # --- Kết nối CSDL PostgreSQL Local ---
+  # --- Ket noi CSDL PostgreSQL ---
+  # TODO: Thay bang DB local cua ban (hoac Supabase Pooler URL neu dung cloud dev DB).
   datasource:
-    url: jdbc:postgresql://localhost:5432/flash_sale_db
+    url: jdbc:postgresql://localhost:5432/flash_sale_b2c
     username: postgres
     password: postgres
     driver-class-name: org.postgresql.Driver
@@ -27,7 +27,7 @@ spring:
       connection-timeout: 20000
       max-lifetime: 1200000
 
-  # --- JPA / Hibernate Cấu hình cho Local Dev ---
+  # --- JPA / Hibernate ---
   jpa:
     show-sql: true
     properties:
@@ -35,7 +35,7 @@ spring:
         format_sql: true
         highlight_sql: true
 
-  # --- Cấu hình Redis Local (Distributed Lock & Caching) ---
+  # --- Redis ---
   data:
     redis:
       host: localhost
@@ -43,10 +43,24 @@ spring:
       password: ""
       timeout: 3000ms
 
-# --- Logging chi tiết cho môi trường Local ---
+# --- Logging chi tiet cho local ---
 logging:
   level:
     root: INFO
     com.b2c: DEBUG
     org.hibernate.SQL: DEBUG
     org.hibernate.orm.jdbc.bind: TRACE
+
+# --- Cloudinary (Luu tru anh da doi tuong - Image Module) ---
+# TODO: Dang ky tai khoan free tai https://cloudinary.com/console roi dien 3 bien sau.
+cloudinary:
+  cloud-name: YOUR_CLOUD_NAME
+  api-key: YOUR_API_KEY
+  api-secret: YOUR_API_SECRET
+  folder: flash-sale-b2c/local
+
+# --- JWT (dev secret) ---
+# TODO: Tao chuoi random >= 64 ky tu (vd: (hs256) ...).
+# Hoac export JWT_SECRET trong terminal thay vi commit secret vao file.
+jwt:
+  secret:037f7fe6a78573fa5da54a56894babbc65a04cd73beb0fd7e37891658ffe668d65ae4ab65d3f74a7f60b0b98773307c1d8f870c21d33f4c82af0be34d7c11a7e

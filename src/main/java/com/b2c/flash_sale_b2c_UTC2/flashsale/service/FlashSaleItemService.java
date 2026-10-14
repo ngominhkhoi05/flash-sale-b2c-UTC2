@@ -11,6 +11,8 @@ import com.b2c.flash_sale_b2c_UTC2.flashsale.mapper.FlashSaleItemMapper;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.port.FlashSaleOrderPort;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.repository.FlashSaleItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.repository.FlashSaleSlotRepository;
+import com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType;
+import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.ProductVariant;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductVariantRepository;
 import com.b2c.flash_sale_b2c_UTC2.store.entity.Store;
@@ -38,6 +40,7 @@ public class FlashSaleItemService {
     private final ProductVariantRepository variantRepository;
     private final StoreRepository storeRepository;
     private final FlashSaleItemMapper itemMapper;
+    private final ImageService imageService;
 
     @Autowired(required = false)
     private StringRedisTemplate redisTemplate;
@@ -139,17 +142,35 @@ public class FlashSaleItemService {
             List<FlashSaleItem> approvedItems = itemRepository.findApprovedItemsWithDetailsBySlotId(slot.getId());
             List<PublicFlashSaleSlotResponse.PublicFlashSaleItemResponse> itemDtos = new ArrayList<>();
 
+            // Batch-load ảnh variant + product để tránh N+1
+            java.util.List<Long> variantIds = approvedItems.stream().map(i -> i.getVariant().getId()).toList();
+            java.util.List<Long> productIds = approvedItems.stream().map(i -> i.getVariant().getProduct().getId()).distinct().toList();
+            java.util.Map<Long, String> variantImageMap = variantIds.isEmpty() ? java.util.Map.of() :
+                    imageService.getPrimaryImagesByOwnerIds(ImageOwnerType.VARIANT, variantIds)
+                            .entrySet().stream()
+                            .collect(java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey, e -> e.getValue().getUrl()));
+            java.util.Map<Long, String> productImageMap = productIds.isEmpty() ? java.util.Map.of() :
+                    imageService.getPrimaryImagesByOwnerIds(ImageOwnerType.PRODUCT, productIds)
+                            .entrySet().stream()
+                            .collect(java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey, e -> e.getValue().getUrl()));
+
             for (FlashSaleItem item : approvedItems) {
                 int displayStock = getRealtimeStock(item);
+                Long vId = item.getVariant().getId();
+                Long pId = item.getVariant().getProduct().getId();
+                String imageUrl = variantImageMap.get(vId);
+                if (imageUrl == null) {
+                    imageUrl = productImageMap.get(pId);
+                }
 
                 itemDtos.add(PublicFlashSaleSlotResponse.PublicFlashSaleItemResponse.builder()
                         .id(item.getId())
                         .slotId(slot.getId())
-                        .variantId(item.getVariant().getId())
+                        .variantId(vId)
                         .sku(item.getVariant().getSku())
                         .variantName(item.getVariant().getVariantName())
                         .productName(item.getVariant().getProduct().getName())
-                        .imageUrl(item.getVariant().getImageUrl() != null ? item.getVariant().getImageUrl() : item.getVariant().getProduct().getImageUrl())
+                        .imageUrl(imageUrl)
                         .originalPrice(item.getVariant().getOriginalPrice())
                         .flashSalePrice(item.getFlashSalePrice())
                         .allocatedStock(item.getAllocatedStock())
@@ -171,6 +192,14 @@ public class FlashSaleItemService {
         }
 
         return responseList;
+    }
+
+        @Transactional(readOnly = true)
+    public List<PublicFlashSaleSlotResponse.PublicFlashSaleItemResponse> getActiveItems() {
+        return getPublicSlots().stream()
+                .filter(slot -> "ACTIVE".equalsIgnoreCase(slot.getStatus()))
+                .flatMap(slot -> slot.getItems().stream())
+                .toList();
     }
 
     public int getRealtimeStock(FlashSaleItem item) {
