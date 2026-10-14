@@ -15,9 +15,24 @@ public interface StockReservationStrategy {
     long reserveStock(Long slotId, Long userId, Long itemId, int quantity, int userPurchaseLimit, long slotRemainingTtlSeconds);
 
     /**
+     * Overloaded reservation method with orderCode tracking for pending reservation record.
+     */
+    default long reserveStock(Long slotId, Long userId, Long itemId, int quantity, int userPurchaseLimit, long slotRemainingTtlSeconds, String orderCode) {
+        return reserveStock(slotId, userId, itemId, quantity, userPurchaseLimit, slotRemainingTtlSeconds);
+    }
+
+    /**
      * Compensates (rolls back) the reservation in cache if downstream actions fail.
      */
     void compensate(Long slotId, Long userId, Long itemId, int quantity);
+
+    /**
+     * Atomic rollback using Lua script with idempotency marker and pending record cleanup.
+     */
+    default boolean rollbackStockWithMarker(Long slotId, Long userId, Long itemId, int quantity, String orderCode) {
+        compensate(slotId, userId, itemId, quantity);
+        return true;
+    }
 
     /**
      * Safe rollback of stock that prevents orphan INCRBY on non-existent keys.

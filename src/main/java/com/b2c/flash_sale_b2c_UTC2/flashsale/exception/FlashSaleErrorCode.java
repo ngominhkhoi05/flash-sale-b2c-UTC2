@@ -27,10 +27,13 @@ public enum FlashSaleErrorCode implements ErrorCode {
 
     OUT_OF_STOCK(HttpStatus.CONFLICT, "FS_409_OUT_OF_STOCK", "Sản phẩm Flash Sale đã hết hàng tồn kho"),
     PURCHASE_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "FS_409_PURCHASE_LIMIT_EXCEEDED", "Bạn đã vượt quá giới hạn số lượng mua cho sản phẩm này trong phiên Flash Sale"),
+    ADDRESS_REQUIRED(HttpStatus.BAD_REQUEST, "FS_400_ADDRESS_REQUIRED", "Vui lòng thêm địa chỉ nhận hàng trước khi tham gia Flash Sale"),
     ADDRESS_NOT_FOUND_OR_NOT_OWNED(HttpStatus.FORBIDDEN, "FS_403_ADDRESS_INVALID", "Địa chỉ giao hàng không hợp lệ hoặc không thuộc về người dùng"),
     IDEMPOTENCY_KEY_MISSING(HttpStatus.BAD_REQUEST, "FS_400_IDEMPOTENCY_KEY_MISSING", "Yêu cầu thiếu Idempotency-Key"),
     IDEMPOTENCY_CONFLICT(HttpStatus.CONFLICT, "FS_409_IDEMPOTENCY_CONFLICT", "Yêu cầu với Idempotency-Key này đang được xử lý, vui lòng không gửi lặp lại"),
-    ORDER_CREATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "FS_500_ORDER_FAILED", "Hệ thống bận khi khởi tạo đơn hàng Flash Sale");
+    ORDER_CREATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "FS_500_ORDER_FAILED", "Hệ thống bận khi khởi tạo đơn hàng Flash Sale"),
+    RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "FS_404_RESERVATION_NOT_FOUND", "Không tìm thấy thông tin giữ chỗ Flash Sale"),
+    CANNOT_CANCEL_NON_PENDING_RESERVATION(HttpStatus.BAD_REQUEST, "FS_400_CANNOT_CANCEL_RESERVATION", "Chỉ có thể hủy giữ chỗ đối với đơn hàng đang chờ thanh toán");
 
     private final HttpStatus httpStatus;
     private final String code;

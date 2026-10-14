@@ -16,7 +16,10 @@ public class CreateReservationRequest {
     @NotNull(message = "ID mục Flash Sale không được để trống")
     private Long flashSaleItemId;
 
-    @NotNull(message = "ID địa chỉ nhận hàng không được để trống")
+    /**
+     * ID địa chỉ nhận hàng (tùy chọn).
+     * Nếu không truyền, hệ thống sẽ tự động dùng địa chỉ mặc định của người dùng.
+     */
     private Long addressId;
 
     @NotNull(message = "Số lượng đặt mua không được để trống")
