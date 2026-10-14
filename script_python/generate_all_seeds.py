@@ -61,7 +61,7 @@ HERE = Path(__file__).resolve().parent
 N_ROLES = 3
 N_PERMISSION_GROUPS = 3
 N_PERMISSIONS = 29
-N_USERS = 30                # 1 admin + 4 seller + 25 buyer
+N_USERS = 36                # 1 admin + 10 seller + 25 buyer
 N_CATEGORIES = 10
 N_BANNERS = 8
 N_STORES = 10
@@ -257,8 +257,9 @@ def make_users(n: int, fake: Faker) -> list:
              "$2a$10$placeholder.bcrypt.hash.admin123",
              "ACTIVE", "admin")
 
-    # 4 sellers (also become store owners below)
-    for i in range(2, 6):
+    # 10 sellers (also become store owners below)
+    # 10 sellers (one per store) so stores.user_id stays UNIQUE
+    for i in range(2, 12):
         suffix = f"seller{i-1}"
         add_user(i, f"Seller {i-1}",
                  f"{suffix}@demo.local",
@@ -266,7 +267,7 @@ def make_users(n: int, fake: Faker) -> list:
              "ACTIVE", "seller")
 
     # remaining are buyers
-    for i in range(6, n + 1):
+    for i in range(12, n + 1):
         name = fake.name()
         # slugify email
         slug = name.lower().replace(" ", ".").replace(",", "")
@@ -437,9 +438,11 @@ def main() -> int:
 
     # -------------------------------------------------------------- stores
     seller_users = [u for u in users if u["_role"] == "seller"]
-    # We need N_STORES stores but only have 4 sellers. Reuse them with multiple stores each.
+    # 1 store per seller (stores.user_id is UNIQUE in DB) — N_STORES == len(seller_users)
+    assert N_STORES == len(seller_users), (
+        f"N_STORES={N_STORES} must equal number of seller users={len(seller_users)}"
+    )
     store_rows = []
-    store_id = 1
     store_tiers = ["OFFICIAL_MALL", "PREFERRED", "NORMAL", "NORMAL", "NORMAL",
                    "NORMAL", "NORMAL", "PREFERRED", "NORMAL", "NORMAL"]
     store_names_seed = [
@@ -447,16 +450,15 @@ def main() -> int:
         "Book World", "Beauty Hub", "Sports Arena", "Home Essentials",
         "Audio Pro", "Mobile Center", "Pet Paradise",
     ]
-    while store_rows.__len__() < N_STORES:
-        owner = seller_users[len(store_rows) % len(seller_users)]
-        name = store_names_seed[len(store_rows)]
-        tier = store_tiers[len(store_rows)]
+    for i, owner in enumerate(seller_users):
+        store_id = i + 1
+        name = store_names_seed[i]
+        tier = store_tiers[i]
         desc = f"Demo store #{store_id} - {name}"
         status = "APPROVED" if store_id <= 7 else "PENDING"
         store_rows.append([
             store_id, owner["id"], name, desc, "0.0500", status, tier, "", now,
         ])
-        store_id += 1
     write_csv(out / "stores.csv",
               ["id", "user_id", "store_name", "description",
                "default_commission_rate", "status", "tier", "last_active_at",
@@ -595,7 +597,7 @@ def main() -> int:
             random.randint(500, 5000), 0,
             1,
             now, (datetime.datetime.now() + datetime.timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S"),
-            "ACTIVE",
+            "ACTIVE", now,
         ])
     for vid in range(7, 13):
         code = f"STORE{vid:02d}"
@@ -612,7 +614,7 @@ def main() -> int:
             random.randint(100, 1000), 0,
             random.choice([1, 1, 2]),
             now, (datetime.datetime.now() + datetime.timedelta(days=14)).strftime("%Y-%m-%d %H:%M:%S"),
-            random.choice(VOUCHER_STATUSES),
+            random.choice(VOUCHER_STATUSES), now,
         ])
     write_csv(out / "vouchers.csv",
               ["id", "code", "store_id", "discount_type", "discount_value",
@@ -657,14 +659,14 @@ def main() -> int:
         comment = fake.paragraph(nb_sentences=1)
         review_rows.append([
             rv_id, buyer["id"], product_id, rv_id,  # order_item_id = rv_id (placeholder; real app must point to real order_items)
-            rating, comment, "[]",                # image_urls = empty JSON
+            rating, comment,
             "", "",                              # seller_reply + seller_reply_at
             random.choice(REVIEW_STATUSES), now, now,
         ])
         rv_id += 1
     write_csv(out / "product_reviews.csv",
               ["id", "user_id", "product_id", "order_item_id", "rating",
-               "comment", "image_urls", "seller_reply", "seller_reply_at",
+               "comment", "seller_reply", "seller_reply_at",
                "status", "created_at", "updated_at"], review_rows)
     print(f"  product_reviews.csv        {len(review_rows):>4} rows")
 
