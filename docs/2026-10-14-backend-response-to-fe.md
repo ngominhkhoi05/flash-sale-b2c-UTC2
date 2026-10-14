@@ -1,158 +1,372 @@
 # PHẢN HỒI TRIỂN KHAI VÀ HỢP ĐỒNG API CHO FRONTEND — FLASH SALE B2C
 
-> **Ngày:** 2026-10-14  
+> **Ngày cập nhật:** 2026-10-14  
 > **Từ:** Backend Team (`flash-sale-b2c-UTC2`)  
 > **Gửi:** Frontend Team (`flash-sale-b2c-fe`)  
-> **Tham chiếu:** Yêu cầu từ file `backend-api-requirements.md` (Mục 9 & 15)  
-> **Nhánh Backend triển khai:** `feat/flash-sale-reserve` (PR vào `dev`)  
-> **Trạng thái:** ✅ Đã hoàn thành Đợt 1 (Flash Sale Reserve & Cancel Reservation) — Test tích hợp thực tế (100 luồng đồng thời) đạt 100%.
+> **Tham chiếu:** Yêu cầu từ tài liệu audit `2026-10-14-fe-request-be-api.md` và `backend-api-requirements.md`  
+> **Trạng thái:** ✅ **Đã hoàn thành 5/5 nhóm tính năng ưu tiên**, mã nguồn đã được tách nhánh `feat/*`, viết kiểm thử tự động đạt 100% và đã mở Pull Request vào nhánh `dev`.
 
 ---
 
-## 1. Tổng quan & Lộ trình triển khai
+## 1. Bảng đối chiếu tiến độ (Resolution Checklist)
 
-Để đảm bảo chất lượng kỹ thuật, chống bán vượt số lượng (over-selling) và giữ tính đồng bộ với repo, Backend tách việc triển khai nhóm tính năng ưu tiên cao thành 3 đợt theo nhánh riêng biệt:
+Dưới đây là bảng đối chiếu trực tiếp với **Mục 6 (Checklist cho Backend Team)** trong tài liệu yêu cầu của Frontend:
 
-1. **Đợt 1 (Hiện tại - Đã xong):** Nhánh `feat/flash-sale-reserve`
-   - `POST /api/v1/flash-sales/reserve` (Mục 9.2)
-   - `DELETE /api/v1/flash-sales/reservations/{reservationId}` (Mục 9.3)
-   - Lõi kiểm soát tồn kho Redis nguyên tử bằng Lua Script, tự động đối soát phục hồi sự cố.
-2. **Đợt 2 (Kế tiếp):** Nhánh `feat/order-list-detail-cancel`
-   - `GET /api/v1/orders` (Mục 5.3)
-   - `GET /api/v1/orders/{code}` (Mục 5.4 - Tra cứu bằng `orderCode` chuỗi)
-   - `POST /api/v1/orders/{code}/cancel` (Mục 5.6)
-3. **Đợt 3:** Nhánh `feat/ws-stock-payment`
-   - WebSocket Broadcast tồn kho Flash Sale: `/topic/flash-sale/slot/{slotId}/stock-update` (Mục 14.1)
-   - WebSocket User Queue trạng thái thanh toán: `/user/queue/payment-status` (Mục 14.2)
-4. **Các nhóm phụ (Banner, Featured Stores, Reviews, ...):** Sẽ triển khai tiếp theo sau khi chốt hoàn tất 3 luồng lõi trên.
-
----
-
-## 2. Chi tiết Hợp đồng API Đợt 1 (Sẵn sàng tích hợp)
-
-### 2.1. Giữ chỗ Flash Sale (Reserve Item)
-
-- **Method:** `POST`
-- **Path:** `/api/v1/flash-sales/reserve`
-- **Mục đích:** Giữ chỗ và chốt giá Flash Sale trong vòng 300 giây (5 phút). Tạo đơn hàng ở trạng thái `PENDING_PAYMENT`. Trừ tồn kho phân bổ trên Redis nguyên tử bằng Lua Script chống bán vượt.
-- **Headers:**
-  ```http
-  Authorization: Bearer <jwt_token>
-  Content-Type: application/json
-  Idempotency-Key: <UUID> (Khuyến nghị gửi từ FE để chống lặp đơn khi mạng lag)
-  ```
-
-#### Request Body
-```json
-{
-  "flashSaleItemId": 101,
-  "quantity": 1,
-  "addressId": 15
-}
-```
-
-*Quy tắc nghiệp vụ cho FE cần chú ý:*
-1. `flashSaleItemId`: Bắt buộc. ID của mặt hàng trong phiên Flash Sale (`flash_sale_items.id`).
-2. `quantity`: Bắt buộc. Số lượng muốn mua (mặc định 1). Nếu vượt quá `userPurchaseLimit` của tài khoản trong phiên, API sẽ từ chối với mã lỗi rõ ràng.
-3. `addressId`: **Tùy chọn (Optional)**.
-   - Nếu FE truyền `addressId`: Backend kiểm tra quyền sở hữu của Buyer.
-   - Nếu FE **không truyền** `addressId`: Backend tự động lấy địa chỉ mặc định (hoặc địa chỉ đầu tiên) trong sổ địa chỉ của tài khoản.
-   - **Trường hợp tài khoản chưa có bất kỳ địa chỉ nào**: Backend trả lỗi `FLASH_SALE_ADDRESS_REQUIRED` (HTTP 400). FE hãy bắt mã lỗi này để hiển thị modal yêu cầu người dùng thêm địa chỉ trước khi giữ chỗ.
-
-#### Response Body thành công (`200 OK`)
-Toàn bộ phản hồi được bọc trong chuẩn `ApiResponse<T>`:
-```json
-{
-  "success": true,
-  "code": 200,
-  "message": "Giữ chỗ Flash Sale thành công",
-  "data": {
-    "reservationId": "FS-1791963512929-3365",
-    "orderCode": "FS-1791963512929-3365",
-    "slotId": 1,
-    "flashSaleItemId": 101,
-    "quantity": 1,
-    "flashSalePrice": 99000.00,
-    "totalAmount": 99000.00,
-    "expiresAt": "2026-10-14T14:40:00.000Z"
-  },
-  "timestamp": "2026-10-14T14:35:00.000Z"
-}
-```
-
-*Ghi chú các trường trả về:*
-- `reservationId` và `orderCode`: Đồng nhất là chuỗi mã đơn hiển thị (ví dụ `FS-...`). FE có thể dùng trường nào tùy ý để điều hướng sang trang thanh toán.
-- `flashSalePrice`: Giá Flash Sale chốt cứng tại thời điểm giữ chỗ, không bị ảnh hưởng nếu đợt sale sau đó thay đổi giá.
-- `expiresAt`: Mốc thời gian ISO-8601 hết hạn giữ chỗ (300 giây sau thời điểm gọi). FE dùng trường này để hiển thị đồng hồ đếm ngược thanh toán.
-
----
-
-### 2.2. Hủy giữ chỗ Flash Sale (Cancel Reservation)
-
-- **Method:** `DELETE`
-- **Path:** `/api/v1/flash-sales/reservations/{reservationId}`
-- **Mục đích:** Khách hàng chủ động hủy giữ chỗ khi đổi ý trước khi thanh toán. Trả lại tồn kho phân bổ trên Redis & Database, phục hồi hạn mức mua cho khách hàng.
-- **Path Variable:**
-  - `reservationId`: Chuỗi mã đơn hàng cần hủy (`orderCode`, ví dụ `FS-1791963512929-3365`).
-- **Headers:**
-  ```http
-  Authorization: Bearer <jwt_token>
-  ```
-
-#### Response Body thành công (`200 OK`)
-```json
-{
-  "success": true,
-  "code": 200,
-  "message": "Hủy giữ chỗ Flash Sale thành công",
-  "data": {
-    "success": true,
-    "message": "Khách hàng userId=5 đã hủy thành công giữ chỗ reservationId=FS-1791963512929-3365"
-  },
-  "timestamp": "2026-10-14T14:35:05.000Z"
-}
-```
-
-*Lưu ý cho FE:*
-- Endpoint này chỉ hủy các đơn đang ở trạng thái `PENDING_PAYMENT`.
-- Thao tác là **Idempotent**: Nếu FE gửi 2 lần liên tiếp do double-click hoặc retry mạng, Backend xử lý an toàn (không bị cộng dồn hoàn kho 2 lần và không báo lỗi crash).
-
----
-
-## 3. Bảng mã lỗi (Error Codes) cho Frontend
-
-FE có thể dựa vào trường `code` (hoặc thông báo trong `message`) để hiển thị Toast / Alert thích hợp cho người dùng:
-
-| HTTP Status | Mã lỗi Backend | Ý nghĩa / Nguyên nhân | Gợi ý xử lý trên UI FE |
+| Yêu cầu FE | Trạng thái BE | Nhánh phát triển | Link Pull Request |
 |---|---|---|---|
-| **409 Conflict** | `FLASH_SALE_OUT_OF_STOCK` | Mặt hàng đã hết sạch tồn kho phân bổ trên Redis | Hiển thị badge "Hết hàng", chuyển nút sang disable |
-| **422 Unprocessable** | `FLASH_SALE_PURCHASE_LIMIT_EXCEEDED` | Khách hàng đã đạt giới hạn số lượng mua tối đa trong phiên này | Báo Toast: "Bạn đã vượt quá số lượng mua tối đa cho sản phẩm này trong khung giờ sale" |
-| **400 Bad Request** | `FLASH_SALE_SLOT_NOT_ACTIVE` | Phiên Flash Sale chưa tới giờ mở bán hoặc không ở trạng thái ACTIVE | Disable nút mua, hiển thị đồng hồ đếm ngược tới giờ mở |
-| **400 Bad Request** | `FLASH_SALE_SLOT_ALREADY_ENDED` | Phiên Flash Sale đã kết thúc | Hiển thị nhãn "Khung giờ sale đã kết thúc" |
-| **400 Bad Request** | `FLASH_SALE_ADDRESS_REQUIRED` | Khách hàng chưa thiết lập bất kỳ địa chỉ nhận hàng nào | Mở popup/modal: "Vui lòng thêm địa chỉ nhận hàng để tiếp tục" |
-| **400 Bad Request** | `FLASH_SALE_ADDRESS_NOT_FOUND_OR_NOT_OWNED` | `addressId` gửi lên không tồn tại hoặc không thuộc quyền sở hữu của user | Nhắc người dùng chọn lại địa chỉ trong danh sách |
-| **404 Not Found** | `FLASH_SALE_RESERVATION_NOT_FOUND` | Không tìm thấy mã đơn/giữ chỗ tương ứng | Báo lỗi: "Không tìm thấy thông tin đơn giữ chỗ" |
-| **400 Bad Request** | `FLASH_SALE_CANNOT_CANCEL_NON_PENDING_RESERVATION` | Đơn hàng không còn ở trạng thái `PENDING_PAYMENT` (đã thanh toán hoặc đã hủy) | Không cho hủy, báo Toast: "Đơn hàng không ở trạng thái có thể hủy giữ chỗ" |
-| **401 Unauthorized** | `AUTH_TOKEN_INVALID` / `AUTH_UNAUTHORIZED` | Token hết hạn hoặc chưa đăng nhập | Điều hướng người dùng tới trang Login |
+| `GET /api/v1/products/search` (Tìm kiếm sản phẩm, lọc, sắp xếp, facets) | ✅ **Hoàn thành** | `feat/product-search` | [PR #feat/product-search](https://github.com/ngominhkhoi05/flash-sale-b2c-UTC2/pull/new/feat/product-search) |
+| `GET /api/v1/vouchers/mine` (Xem kho voucher người dùng) | ✅ **Hoàn thành** | `feat/voucher-wallet` | [PR #feat/voucher-wallet](https://github.com/ngominhkhoi05/flash-sale-b2c-UTC2/pull/new/feat/voucher-wallet) |
+| `POST /api/v1/vouchers/mine` (Lưu voucher vào kho cá nhân) | ✅ **Hoàn thành** | `feat/voucher-wallet` | [PR #feat/voucher-wallet](https://github.com/ngominhkhoi05/flash-sale-b2c-UTC2/pull/new/feat/voucher-wallet) |
+| `POST /api/v1/auth/forgot-password` (Gửi yêu cầu quên mật khẩu) | ✅ **Hoàn thành** | `feat/auth-password-reset` | [PR #feat/auth-password-reset](https://github.com/ngominhkhoi05/flash-sale-b2c-UTC2/pull/new/feat/auth-password-reset) |
+| `POST /api/v1/auth/reset-password` (Đặt lại mật khẩu với token) | ✅ **Hoàn thành** | `feat/auth-password-reset` | [PR #feat/auth-password-reset](https://github.com/ngominhkhoi05/flash-sale-b2c-UTC2/pull/new/feat/auth-password-reset) |
+| `GET /api/v1/orders/{orderCode}/qr` (Lấy QR và chi tiết thanh toán cho 1 hoặc nhiều mã đơn) | ✅ **Hoàn thành** | `feat/order-qr` | [PR #feat/order-qr](https://github.com/ngominhkhoi05/flash-sale-b2c-UTC2/pull/new/feat/order-qr) |
+| Bổ sung DTO `CartItemResponse`: `productId`, `stockQuantity` | ✅ **Hoàn thành** | `feat/dto-fields` | [PR #feat/dto-fields](https://github.com/ngominhkhoi05/flash-sale-b2c-UTC2/pull/new/feat/dto-fields) |
+| Bổ sung DTO `CartStoreGroup`: `storeBadge`, `estimatedDeliveryLabel`, `shippingMethodLabel`, `shippingFee` | ✅ **Hoàn thành** | `feat/dto-fields` | [PR #feat/dto-fields](https://github.com/ngominhkhoi05/flash-sale-b2c-UTC2/pull/new/feat/dto-fields) |
+| Bổ sung DTO `CartResponse`: `subtotal`, `totalShippingFee`, `totalAmount`, `grandTotal` | ✅ **Hoàn thành** | `feat/dto-fields` | [PR #feat/dto-fields](https://github.com/ngominhkhoi05/flash-sale-b2c-UTC2/pull/new/feat/dto-fields) |
+| Bổ sung DTO `OrderItemResponse`: `imageUrl` | ✅ **Hoàn thành** | `feat/dto-fields` | [PR #feat/dto-fields](https://github.com/ngominhkhoi05/flash-sale-b2c-UTC2/pull/new/feat/dto-fields) |
+| Xác nhận WebSocket STOMP endpoint + topics | ✅ **Đã xác nhận** | `dev` | Sẵn sàng tại `/ws`, chi tiết mục 4 |
+| `POST /api/v1/reviews` & Social Login (Google / Facebook / GitHub) | ⏳ **Tạm hoãn** | — | Chờ thống nhất luồng (chi tiết mục 5) |
 
 ---
 
-## 4. Quản lý Vòng đời Giữ chỗ (Reservation Lifecycle & TTL)
+## 2. Chi tiết Hợp đồng API Mới
 
-1. **Thời hạn 300 giây:**
-   - Sau khi giữ chỗ thành công, người dùng có 300 giây để hoàn tất thanh toán.
-   - Phía Backend đã kích hoạt background scheduler tự động quét mỗi 15 giây. Khi quá hạn `expiresAt`, đơn hàng tự động chuyển sang `CANCELLED_TIMEOUT` và tự động hoàn trả tồn kho về slot flash sale.
-2. **Idempotency Key:**
-   - FE nên tạo UUID v4 gán vào header `Idempotency-Key` mỗi lần user bấm nút "Mua ngay / Giữ chỗ".
-   - Backend cache kết quả trong 10 phút. Nếu mạng bị gián đoạn và FE gửi lại cùng key, hệ thống trả về ngay đơn hàng cũ mà không tạo thêm đơn mới và không trừ thêm kho.
+Mọi endpoint đều trả về theo định dạng chuẩn thống nhất `ApiResponse<T>`:
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Thông điệp thành công",
+  "data": { ... },
+  "timestamp": "2026-10-14T10:00:00.000Z"
+}
+```
 
 ---
 
-## 5. Lộ trình tích hợp tiếp theo
+### 2.1. Tìm kiếm sản phẩm nâng cao (`GET /api/v1/products/search`)
 
-Ngay sau khi nhánh `feat/flash-sale-reserve` được review và merge, Backend sẽ mở tiếp nhánh `feat/order-list-detail-cancel` để cung cấp:
-- `GET /api/v1/orders` (lọc theo `status=PENDING_PAYMENT`, phân trang `page`, `size`)
-- `GET /api/v1/orders/{code}` (xem chi tiết đơn hàng giữ chỗ theo mã hiển thị `orderCode`)
-- `POST /api/v1/orders/{code}/cancel` (hủy đơn hàng thống nhất)
+- **Method:** `GET`
+- **Path:** `/api/v1/products/search`
+- **Authentication:** Public (không bắt buộc token)
+- **Đặc điểm:** Tối ưu với PostgreSQL Full-Text Search (hỗ trợ tiếng Việt có dấu và không dấu qua `unaccent` và GIN index), hỗ trợ phân trang, facets bộ lọc, và gợi ý banner Mall.
 
-Mọi thắc mắc trong quá trình tích hợp, team FE hãy gửi phản hồi để team BE hỗ trợ điều chỉnh kịp thời!
+#### Query Parameters
+
+| Tham số | Kiểu | Mặc định | Mô tả |
+|---|---|---|---|
+| `q` | `string` | `""` | Từ khóa tìm kiếm (theo tên sản phẩm, thương hiệu, mô tả) |
+| `page` | `int` | `0` | Trang hiện tại (hỗ trợ cả 0-index lẫn 1-index từ FE) |
+| `pageSize` / `size` | `int` | `20` | Số lượng phần tử mỗi trang (tối đa 100) |
+| `sort` | `string` | `relevance` | Tiêu chí sắp xếp: `relevance` (mặc định), `price_asc` (giá tăng dần), `price_desc` (giá giảm dần), `best_selling` (bán chạy nhất), `newest` (mới nhất) |
+| `categoryId` | `int` | `null` | Lọc theo ID danh mục sản phẩm |
+| `minPrice` | `number` | `null` | Giá tối thiểu (VND) |
+| `maxPrice` | `number` | `null` | Giá tối đa (VND) |
+| `minRating` | `int` | `null` | Đánh giá tối thiểu từ người mua (1 đến 5 sao) |
+
+#### Phản hồi mẫu (`200 OK`)
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Tìm kiếm sản phẩm thành công",
+  "data": {
+    "items": [
+      {
+        "id": 101,
+        "name": "Áo Thun Nam Thể Thao Co Giãn Thoáng Khí",
+        "imageUrl": "https://res.cloudinary.com/demo/image/upload/sample.jpg",
+        "price": 199000,
+        "originalPrice": 299000,
+        "rating": 4.8,
+        "totalSold": 1250,
+        "storeName": "Shop Thể Thao Chính Hãng",
+        "storeBadge": "OfficialMall",
+        "voucherLabel": "Giảm 10K"
+      }
+    ],
+    "total": 48,
+    "page": 0,
+    "pageSize": 20,
+    "facets": {
+      "categories": [
+        { "id": 1, "name": "Thời Trang Nam", "count": 28 },
+        { "id": 2, "name": "Thể Thao & Du Lịch", "count": 20 }
+      ],
+      "priceRanges": [
+        { "min": 0, "max": 100000, "count": 10 },
+        { "min": 100000, "max": 300000, "count": 25 },
+        { "min": 300000, "max": 1000000, "count": 13 }
+      ],
+      "services": ["freeship", "voucher"],
+      "ratings": [1, 2, 3, 4, 5]
+    },
+    "mall": {
+      "title": "Shopee Mall Chính Hãng",
+      "subtitle": "100% Hàng chính hãng, miễn phí đổi trả 7 ngày",
+      "href": "/mall",
+      "imageUrl": "https://res.cloudinary.com/demo/image/upload/mall-banner.jpg"
+    }
+  },
+  "timestamp": "2026-10-14T10:00:00.000Z"
+}
+```
+
+---
+
+### 2.2. Kho voucher người dùng (`/api/v1/vouchers/mine`)
+
+#### A. Xem danh sách voucher đã lưu (`GET /api/v1/vouchers/mine`)
+- **Method:** `GET`
+- **Path:** `/api/v1/vouchers/mine`
+- **Headers:** `Authorization: Bearer <jwt_token>`
+- **Query Params:**
+  - `orderAmount` (*Tùy chọn*, `number`): Giá trị đơn hàng hiện tại (nếu đang ở trang Checkout). Backend sẽ tự tính trường `isApplicable` (true/false) để FE disable hoặc highlight voucher phù hợp.
+
+#### Phản hồi mẫu (`200 OK`)
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Lấy kho voucher thành công",
+  "data": [
+    {
+      "id": 1,
+      "code": "VIEMART10",
+      "label": "Giảm 10K cho đơn từ 200K",
+      "scope": "PLATFORM",
+      "storeId": null,
+      "storeName": null,
+      "discountType": "FIXED",
+      "discountValue": 10000.00,
+      "maxDiscount": 10000.00,
+      "minOrderAmount": 200000.00,
+      "userUsageLimit": 1,
+      "usedQuantity": 0,
+      "totalQuantity": 500,
+      "startTime": "2026-10-01T00:00:00Z",
+      "endTime": "2026-10-31T23:59:59Z",
+      "status": "ACTIVE",
+      "isApplicable": true
+    }
+  ],
+  "timestamp": "2026-10-14T10:00:00.000Z"
+}
+```
+
+#### B. Lưu voucher vào kho cá nhân (`POST /api/v1/vouchers/mine`)
+- **Method:** `POST`
+- **Path:** `/api/v1/vouchers/mine`
+- **Headers:** `Authorization: Bearer <jwt_token>`, `Content-Type: application/json`
+- **Request Body:**
+  ```json
+  {
+    "code": "VIEMART10"
+  }
+  ```
+- **Xử lý Idempotent:** Nếu voucher đã được lưu trước đó, Backend trả về trạng thái voucher hiện tại mà không báo lỗi 500 hay trùng lặp.
+- **Mã lỗi có thể gặp:**
+  - `VOUCHER_NOT_FOUND` (404): Mã voucher không tồn tại.
+  - `VOUCHER_EXPIRED` (400): Voucher đã hết hạn sử dụng.
+  - `VOUCHER_USAGE_LIMIT_EXCEEDED` (400): Voucher đã hết lượt sử dụng của hệ thống.
+
+---
+
+### 2.3. Quên & Đặt lại mật khẩu (`/api/v1/auth/*`)
+
+#### A. Yêu cầu cấp lại mật khẩu (`POST /api/v1/auth/forgot-password`)
+- **Method:** `POST`
+- **Path:** `/api/v1/auth/forgot-password`
+- **Authentication:** Public
+- **Request Body:**
+  ```json
+  {
+    "email": "buyer@example.com"
+  }
+  ```
+- **Bảo mật & Anti-Spam:**
+  - Rate-limit qua Redis: Giới hạn **tối đa 3 lần / 15 phút** cho mỗi email. Nếu vượt quá, trả lỗi `AUTH_TOO_MANY_REQUESTS` (HTTP 429).
+  - Không leak thông tin người dùng: Kể cả khi email chưa tồn tại trong hệ thống, Backend vẫn trả `200 OK` với thông điệp chung "Nếu email tồn tại, link đặt lại mật khẩu đã được gửi" để chống dò quét tài khoản.
+  - Token được sinh dạng UUID ngẫu nhiên và lưu băm một chiều SHA-256 vào cơ sở dữ liệu (`password_reset_tokens`).
+
+#### B. Đặt lại mật khẩu mới (`POST /api/v1/auth/reset-password`)
+- **Method:** `POST`
+- **Path:** `/api/v1/auth/reset-password`
+- **Authentication:** Public
+- **Request Body:**
+  ```json
+  {
+    "token": "d8b3c942-53b7-4c7b-b09e-2ef0e32f518a",
+    "newPassword": "NewPassword123@"
+  }
+  ```
+- **Xử lý:**
+  - Kiểm tra tính hợp lệ và thời hạn token (mặc định 15 phút).
+  - Cập nhật mật khẩu mã hóa BCrypt.
+  - Đánh dấu token đã sử dụng (`used = true`) để ngăn chặn tấn công Replay Attack.
+
+---
+
+### 2.4. Lấy mã QR & Chi tiết thanh toán (`GET /api/v1/orders/{orderCode}/qr`)
+
+- **Method:** `GET`
+- **Path:** `/api/v1/orders/{orderCode}/qr`
+- **Headers:** `Authorization: Bearer <jwt_token>`
+- **Cơ chế tách đơn Đa gian hàng (Multi-Store Cart Split):**
+  - Tham số `{orderCode}` hỗ trợ truyền **1 mã đơn** (ví dụ `FS-261001-A7K2Q`) hoặc **nhiều mã đơn phân tách bởi dấu phẩy** khi giỏ hàng có nhiều shop (ví dụ `FS-261001-A7K2Q,FS-261001-B8M3X`).
+  - Phía FE chỉ cần truyền `encodeURIComponent(orderCode)` như đã viết trong `features/checkout/api.ts`.
+- **Tương thích trường thời gian & số tiền:**
+  - Backend trả về song song cả `expiresAt` lẫn `paymentExpiry` (đều trỏ vào thời điểm hết hạn sớm nhất).
+  - Trả về song song cả `amount` lẫn `totalAmount` (tổng số tiền cần thanh toán cho tất cả các đơn).
+  - Trả về mã VietQR chuẩn và ZaloPay intent payment url.
+
+#### Phản hồi mẫu (`200 OK`)
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Lấy thông tin QR thanh toán thành công",
+  "data": {
+    "orderCode": "FS-261001-A7K2Q,FS-261001-B8M3X",
+    "qrCodeUrl": "https://api.vietqr.io/image/970422-9999999999-compact2.png?amount=249000&addInfo=FS-261001-A7K2Q%2CFS-261001-B8M3X",
+    "expiresAt": "2026-10-14T10:15:00Z",
+    "paymentExpiry": "2026-10-14T10:15:00Z",
+    "amount": 249000,
+    "totalAmount": 249000,
+    "paymentUrl": "https://qc.zalopay.vn/pay?order=FS-261001-A7K2Q%2CFS-261001-B8M3X&amount=249000",
+    "shopOrders": [
+      {
+        "storeId": 10,
+        "storeName": "Shop Thời Trang Nam",
+        "storeBadge": "OfficialMall",
+        "orderCode": "FS-261001-A7K2Q",
+        "amount": 199000,
+        "itemSummary": "Áo thun nam × 2, Quần dài × 1"
+      },
+      {
+        "storeId": 20,
+        "storeName": "Shop Phụ Kiện",
+        "storeBadge": "Mall",
+        "orderCode": "FS-261001-B8M3X",
+        "amount": 50000,
+        "itemSummary": "Tất cổ ngắn × 3"
+      }
+    ]
+  },
+  "timestamp": "2026-10-14T10:00:00.000Z"
+}
+```
+
+---
+
+### 2.5. Bổ sung các trường DTO (Giỏ hàng & Đơn hàng)
+
+Backend đã cập nhật đầy đủ các trường mà giao diện Frontend đang cần trong các DTO:
+
+#### A. `CartItemResponse` (Mỗi dòng sản phẩm trong giỏ)
+- Bổ sung `productId`: ID của sản phẩm cha (SPU) để FE làm link điều hướng đến `/products/${item.productId}`.
+- Bổ sung `stockQuantity`: Số lượng tồn kho hiện tại của variant giúp FE hiển thị cảnh báo "Chỉ còn X sản phẩm" hoặc giới hạn nút tăng giảm số lượng.
+
+#### B. `CartStoreGroup` (Nhóm sản phẩm theo gian hàng)
+- `storeBadge`: `"OfficialMall" | "Mall" | ""` (dựa vào `StoreTier` của shop).
+- `estimatedDeliveryLabel`: Chuỗi hiển thị ngày giao dự kiến, ví dụ: `"Giao vào 16 Th10 - 18 Th10"`.
+- `shippingMethodLabel`: Tên gói vận chuyển, ví dụ: `"Tiêu chuẩn"`.
+- `shippingFee`: Phí vận chuyển của gian hàng (mặc định 0đ).
+
+#### C. `CartResponse` (Tổng thể giỏ hàng)
+- Bổ sung `subtotal`: Tổng tiền hàng (trước phí ship).
+- Bổ sung `totalShippingFee`: Tổng phí vận chuyển của tất cả shop trong giỏ.
+- Bổ sung `totalAmount`: Tổng tiền thanh toán cuối cùng (`subtotal + totalShippingFee`).
+- Giữ nguyên `grandTotal` để đảm bảo code cũ của FE không bị ảnh hưởng.
+
+#### D. `OrderItemResponse` (Chi tiết mặt hàng trong đơn hàng)
+- Bổ sung `imageUrl`: URL ảnh thumbnail chính của variant hoặc sản phẩm. Backend tải ảnh theo cơ chế batch-load từ bảng `images` (polymorphic) qua `ImageService` để tối ưu hiệu năng và triệt tiêu hoàn toàn lỗi N+1 query.
+
+---
+
+## 3. Flash Sale Reserve & Hủy giữ chỗ (Nhắc lại Hợp đồng Đợt 1)
+
+Frontend lưu ý quy trình giữ chỗ Flash Sale chống bán vượt số lượng:
+
+1. **Giữ chỗ:** `POST /api/v1/flash-sales/reserve`
+   - Header khuyến nghị: `Idempotency-Key: <UUID>`
+   - Body: `{ "flashSaleItemId": 101, "quantity": 1, "addressId": 15 }` (nếu `addressId` để trống, BE tự lấy địa chỉ mặc định của user).
+   - TTL giữ chỗ là **300 giây (5 phút)**. Sau 300 giây, scheduler nền của Backend sẽ tự động hủy đơn hết hạn và hoàn kho về Redis.
+2. **Chủ động hủy giữ chỗ:** `DELETE /api/v1/flash-sales/reservations/{orderCode}`
+   - Trả lại tồn kho Redis và hạn mức mua `user_limit` ngay lập tức.
+3. **Mã lỗi cần xử lý UI:**
+   - `FLASH_SALE_OUT_OF_STOCK` (409): Tồn kho Flash Sale đã hết.
+   - `FLASH_SALE_PURCHASE_LIMIT_EXCEEDED` (422): User đã mua vượt quá giới hạn lượt của slot.
+   - `FLASH_SALE_ADDRESS_REQUIRED` (400): User chưa có bất kỳ địa chỉ nào trong sổ địa chỉ, FE mở popup yêu cầu tạo địa chỉ trước khi giữ chỗ.
+
+---
+
+## 4. Xác nhận cấu hình Realtime WebSocket STOMP
+
+Backend xác nhận hệ thống WebSocket STOMP đã được cấu hình và sẵn sàng tại:
+
+- **Endpoint kết nối:** `/ws`
+- **Transports:** SockJS fallback + Pure WebSocket
+- **Cách gửi Token JWT xác thực:**
+  - Cách 1 (Khuyến nghị cho SockJS/Browser): Truyền qua query parameter khi bắt đầu handshake:
+    `const socket = new SockJS('http://<host>/ws?token=' + jwtToken);`
+  - Cách 2: Truyền trong header STOMP CONNECT:
+    `client.connect({ 'Authorization': 'Bearer ' + jwtToken }, onConnected, onError);`
+- **Topics cần lắng nghe:**
+  1. **Tồn kho Flash Sale thời gian thực:**
+     - Destination: `/topic/flash-sale/slot/{slotId}/stock-update`
+     - Payload nhận được:
+       ```json
+       {
+         "slotId": 1,
+         "itemId": 101,
+         "availableStock": 8,
+         "allocatedStock": 10,
+         "timestamp": "2026-10-14T10:05:00Z"
+       }
+       ```
+  2. **Trạng thái thanh toán đơn hàng (Cá nhân):**
+     - Destination: `/user/queue/payment-status` (hoặc `/topic/payments/{orderCode}`)
+     - Payload nhận được khi thanh toán thành công:
+       ```json
+       {
+         "orderCode": "FS-261001-A7K2Q",
+         "status": "PAID",
+         "paidAt": "2026-10-14T10:02:30Z",
+         "message": "Thanh toán thành công"
+       }
+       ```
+
+---
+
+## 5. Thống nhất kiến trúc cho các tính năng tiếp theo
+
+Đối với 2 tính năng FE đã có UI nhưng BE chưa triển khai:
+
+### 5.1. Viết đánh giá sản phẩm (`POST /api/v1/reviews`)
+- **Quy tắc nghiệp vụ đề xuất:**
+  - Chỉ cho phép Buyer đánh giá khi đơn hàng ở trạng thái `COMPLETED`.
+  - Mỗi mặt hàng (`order_item_id`) chỉ được đánh giá 1 lần duy nhất.
+  - Ảnh review: FE upload trực tiếp qua API upload ảnh chung của hệ thống với `ownerType = REVIEW`, sau đó gửi mảng `imageUrls` hoặc upload multipart trực tiếp.
+- **Điểm cần FE xác nhận:** Đánh giá sau khi gửi sẽ hiển thị công khai ngay lập tức và tính lại điểm trung bình cho SPU, hay cần phải có trạng thái duyệt bởi Admin?
+
+### 5.2. Social Login (Google / Facebook / GitHub)
+- **Đề xuất kiến trúc:**
+  - **Phương án khuyến nghị (Client-side Token Exchange):** Frontend tích hợp Google Identity Services (GIS) / Facebook SDK để lấy `id_token` hoặc `access_token`, sau đó gửi lên endpoint `POST /api/v1/auth/social-login` kèm body:
+    ```json
+    {
+      "provider": "GOOGLE",
+      "token": "eyJhbGciOiJSUzI1NiIs..."
+    }
+    ```
+    Backend sẽ kiểm tra token với Google/Facebook API và trả về cặp Access Token/Refresh Token của hệ thống.
+  - Phương án này giúp ứng dụng Next.js không bị reload trang và hoạt động mượt mà hơn so với luồng Redirect URI truyền thống.
+  - FE vui lòng xác nhận phương án này để Backend tiến hành mở nhánh triển khai tiếp theo.
+
+---
+
+## 6. Tổng kết
+
+Toàn bộ 5 nhánh tính năng đã sẵn sàng để review và merge vào `dev`. Đội ngũ Frontend có thể kiểm tra Swagger tại `http://<host>/swagger-ui.html` sau khi merge để lấy file OpenAPI spec mới nhất.
+
+Nếu có bất kỳ thắc mắc hoặc cần điều chỉnh thêm về DTO, xin vui lòng phản hồi để Backend hỗ trợ xử lý ngay.

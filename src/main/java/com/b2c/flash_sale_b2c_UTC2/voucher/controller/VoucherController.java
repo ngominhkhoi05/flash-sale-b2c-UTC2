@@ -2,7 +2,11 @@ package com.b2c.flash_sale_b2c_UTC2.voucher.controller;
 
 import com.b2c.flash_sale_b2c_UTC2.auth.security.CustomUserDetails;
 import com.b2c.flash_sale_b2c_UTC2.common.api.ApiResponse;
+import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
+import com.b2c.flash_sale_b2c_UTC2.user.exception.UserErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.voucher.dto.ApplyVoucherRequest;
+import com.b2c.flash_sale_b2c_UTC2.voucher.dto.SaveVoucherRequest;
+import com.b2c.flash_sale_b2c_UTC2.voucher.dto.UserVoucherResponse;
 import com.b2c.flash_sale_b2c_UTC2.voucher.dto.VoucherCalculationResponse;
 import com.b2c.flash_sale_b2c_UTC2.voucher.dto.VoucherResponse;
 import com.b2c.flash_sale_b2c_UTC2.voucher.service.VoucherService;
@@ -41,6 +45,31 @@ public class VoucherController {
     public ResponseEntity<ApiResponse<List<VoucherResponse>>> getStoreVouchers(@PathVariable("storeId") Long storeId) {
         List<VoucherResponse> response = voucherService.getStoreVouchers(storeId);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách voucher gian hàng thành công", response));
+    }
+
+    @Operation(summary = "Xem danh sách voucher trong kho của tôi", description = "Lấy danh sách mã giảm giá đã lưu trong ví cá nhân")
+    @GetMapping("/mine")
+    public ResponseEntity<ApiResponse<List<UserVoucherResponse>>> getMyVouchers(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        if (userDetails == null) {
+            throw new BusinessException(UserErrorCode.USER_NOT_FOUND);
+        }
+        List<UserVoucherResponse> response = voucherService.getMyVouchers(userDetails.getUser().getId());
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách kho voucher thành công", response));
+    }
+
+    @Operation(summary = "Lưu mã giảm giá vào kho voucher cá nhân", description = "Lưu voucher theo mã code vào ví voucher người dùng")
+    @PostMapping("/mine")
+    public ResponseEntity<ApiResponse<UserVoucherResponse>> saveVoucherToWallet(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody SaveVoucherRequest request
+    ) {
+        if (userDetails == null) {
+            throw new BusinessException(UserErrorCode.USER_NOT_FOUND);
+        }
+        UserVoucherResponse response = voucherService.saveVoucherToWallet(userDetails.getUser().getId(), request);
+        return ResponseEntity.ok(ApiResponse.success("Lưu voucher vào ví thành công", response));
     }
 
     @Operation(summary = "Kiểm tra và áp dụng thử voucher", description = "Tính toán số tiền giảm giá và số tiền thanh toán cuối cùng khi áp mã")

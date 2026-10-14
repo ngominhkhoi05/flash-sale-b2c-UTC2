@@ -15,6 +15,7 @@ import com.b2c.flash_sale_b2c_UTC2.product.entity.Product;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.ProductVariant;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductVariantRepository;
 import com.b2c.flash_sale_b2c_UTC2.store.entity.Store;
+import com.b2c.flash_sale_b2c_UTC2.store.enums.StoreTier;
 import com.b2c.flash_sale_b2c_UTC2.user.entity.User;
 import com.b2c.flash_sale_b2c_UTC2.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,7 +65,7 @@ class CartServiceTest {
     void setUp() {
         sampleUser = User.builder().id(1L).email("buyer@example.com").build();
         sampleCart = Cart.builder().id(10L).user(sampleUser).build();
-        sampleStore = Store.builder().id(100L).storeName("Shop UTC2").build();
+        sampleStore = Store.builder().id(100L).storeName("Shop UTC2").tier(StoreTier.OFFICIAL_MALL).build();
 
         sampleProduct = Product.builder().id(50L).name("Áo thun UTC2").store(sampleStore).build();
         sampleVariant = ProductVariant.builder()
@@ -97,6 +98,17 @@ class CartServiceTest {
         assertEquals(1, response.getStoreGroups().size());
         assertEquals("Shop UTC2", response.getStoreGroups().get(0).getStoreName());
         assertEquals(new BigDecimal("300000.00"), response.getGrandTotal());
+        assertEquals(new BigDecimal("300000.00"), response.getSubtotal());
+        assertEquals(BigDecimal.ZERO, response.getTotalShippingFee());
+        assertEquals(new BigDecimal("300000.00"), response.getTotalAmount());
+
+        assertEquals("OfficialMall", response.getStoreGroups().get(0).getStoreBadge());
+        assertNotNull(response.getStoreGroups().get(0).getEstimatedDeliveryLabel());
+        assertEquals("Tiêu chuẩn", response.getStoreGroups().get(0).getShippingMethodLabel());
+        assertEquals(BigDecimal.ZERO, response.getStoreGroups().get(0).getShippingFee());
+
+        assertEquals(50L, response.getStoreGroups().get(0).getItems().get(0).getProductId());
+        assertEquals(20, response.getStoreGroups().get(0).getItems().get(0).getStockQuantity());
     }
 
     @Test

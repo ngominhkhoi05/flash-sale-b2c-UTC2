@@ -4,9 +4,13 @@ import com.b2c.flash_sale_b2c_UTC2.cart.repository.CartItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.cart.repository.CartRepository;
 import com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse;
 import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
+import com.b2c.flash_sale_b2c_UTC2.image.dto.ImageResponse;
+import com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType;
+import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.CheckoutItemRequest;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.CheckoutStoreOrderRequest;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.CreateOrderRequest;
+import com.b2c.flash_sale_b2c_UTC2.order.dto.OrderItemResponse;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.OrderResponse;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.QrOrderDetailResponse;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.QrShopOrderResponse;
@@ -49,6 +53,7 @@ import org.springframework.data.domain.Pageable;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -96,6 +101,9 @@ class OrderServiceTest {
 
     @Mock
     private PaymentRepository paymentRepository;
+
+    @Mock
+    private ImageService imageService;
 
     @InjectMocks
     private OrderServiceImpl orderService;
@@ -541,5 +549,32 @@ class OrderServiceTest {
         BusinessException ex = assertThrows(BusinessException.class, () ->
                 orderService.getOrderQrDetail(1L, "ORD-OTHER"));
         assertEquals(OrderErrorCode.ORDER_ACCESS_DENIED.getCode(), ex.getErrorCode().getCode());
+    @DisplayName("getBuyerOrderDetail: Làm giàu imageUrl cho từng order item thành công")
+    void getBuyerOrderDetail_EnrichesImageUrl_Success() {
+        Long buyerId = 1L;
+        Long orderId = 100L;
+
+        User buyerUser = User.builder().id(buyerId).build();
+        Order order = Order.builder().id(orderId).buyer(buyerUser).build();
+
+        ProductVariant testVariant = ProductVariant.builder().id(500L).product(Product.builder().id(50L).build()).build();
+        OrderItem item = OrderItem.builder().id(10L).order(order).variant(testVariant).productName("Áo thun").quantity(1).build();
+
+        OrderItemResponse itemDto = OrderItemResponse.builder().id(10L).variantId(500L).productName("Áo thun").quantity(1).build();
+
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(orderMapper.toResponse(order)).thenReturn(OrderResponse.builder().id(orderId).build());
+        when(orderItemRepository.findByOrderId(orderId)).thenReturn(List.of(item));
+        when(orderMapper.toItemResponseList(List.of(item))).thenReturn(List.of(itemDto));
+
+        ImageResponse imgResp = ImageResponse.builder().url("https://res.cloudinary.com/demo/image/upload/sample.jpg").build();
+        when(imageService.getPrimaryImagesByOwnerIds(eq(ImageOwnerType.VARIANT), anyList()))
+                .thenReturn(Map.of(500L, imgResp));
+
+        OrderResponse response = orderService.getBuyerOrderDetail(buyerId, orderId);
+
+        assertNotNull(response);
+        assertEquals(1, response.getItems().size());
+        assertEquals("https://res.cloudinary.com/demo/image/upload/sample.jpg", response.getItems().get(0).getImageUrl());
     }
 }

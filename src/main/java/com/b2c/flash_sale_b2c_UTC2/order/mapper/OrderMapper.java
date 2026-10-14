@@ -24,6 +24,7 @@ public interface OrderMapper {
     @Mapping(source = "variant.id", target = "variantId")
     @Mapping(source = "flashSaleItem.id", target = "flashSaleItemId")
     @Mapping(target = "itemSubtotal", expression = "java(calculateItemSubtotal(orderItem))")
+    @Mapping(target = "imageUrl", ignore = true)
     OrderItemResponse toItemResponse(OrderItem orderItem);
 
     List<OrderItemResponse> toItemResponseList(List<OrderItem> orderItems);
