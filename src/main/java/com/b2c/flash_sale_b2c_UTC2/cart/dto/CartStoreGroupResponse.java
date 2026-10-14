@@ -15,6 +15,10 @@ import java.util.List;
 public class CartStoreGroupResponse {
     private Long storeId;
     private String storeName;
+    private String storeBadge;
+    private String estimatedDeliveryLabel;
+    private String shippingMethodLabel;
+    private BigDecimal shippingFee;
     private List<CartItemResponse> items;
     private BigDecimal storeSubtotal;
 }

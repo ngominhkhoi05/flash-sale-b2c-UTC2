@@ -5,6 +5,8 @@ import com.b2c.flash_sale_b2c_UTC2.cart.repository.CartItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.cart.repository.CartRepository;
 import com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse;
 import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
+import com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType;
+import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.CheckoutItemRequest;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.CheckoutStoreOrderRequest;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.CreateOrderRequest;
@@ -45,7 +47,9 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -65,6 +69,7 @@ public class OrderServiceImpl implements OrderService {
         private final CartRepository cartRepository;
     private final com.b2c.flash_sale_b2c_UTC2.payment.repository.PaymentRepository paymentRepository;
     private final CartItemRepository cartItemRepository;
+    private final ImageService imageService;
     private final OrderMapper orderMapper;
 
     @Override
@@ -203,7 +208,7 @@ public class OrderServiceImpl implements OrderService {
             }
 
             OrderResponse response = orderMapper.toResponse(order);
-            List<OrderItemResponse> itemResponses = orderMapper.toItemResponseList(orderItemsToSave);
+            List<OrderItemResponse> itemResponses = enrichItemResponses(orderItemsToSave);
             response.setItems(itemResponses);
 
             createdOrders.add(response);
@@ -325,7 +330,7 @@ public class OrderServiceImpl implements OrderService {
     private OrderResponse enrichOrderResponse(Order order) {
         OrderResponse response = orderMapper.toResponse(order);
         List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
-        response.setItems(orderMapper.toItemResponseList(items));
+        response.setItems(enrichItemResponses(items));
 
         // Enrich payment info from payments table
         List<com.b2c.flash_sale_b2c_UTC2.payment.entity.Payment> payments =
@@ -353,5 +358,56 @@ public class OrderServiceImpl implements OrderService {
         response.setTimeline(timeline);
 
         return response;
+    }
+
+    private List<OrderItemResponse> enrichItemResponses(List<OrderItem> items) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        List<OrderItemResponse> itemResponses = orderMapper.toItemResponseList(items);
+        if (itemResponses == null || itemResponses.isEmpty()) {
+            return itemResponses != null ? itemResponses : List.of();
+        }
+
+        List<Long> variantIds = items.stream()
+                .filter(i -> i.getVariant() != null)
+                .map(i -> i.getVariant().getId())
+                .distinct().toList();
+        List<Long> productIds = items.stream()
+                .filter(i -> i.getVariant() != null && i.getVariant().getProduct() != null)
+                .map(i -> i.getVariant().getProduct().getId())
+                .distinct().toList();
+
+        Map<Long, com.b2c.flash_sale_b2c_UTC2.image.dto.ImageResponse> variantImageMap =
+                (imageService == null || variantIds.isEmpty()) ? Map.of() :
+                        imageService.getPrimaryImagesByOwnerIds(ImageOwnerType.VARIANT, variantIds);
+        Map<Long, com.b2c.flash_sale_b2c_UTC2.image.dto.ImageResponse> productImageMap =
+                (imageService == null || productIds.isEmpty()) ? Map.of() :
+                        imageService.getPrimaryImagesByOwnerIds(ImageOwnerType.PRODUCT, productIds);
+
+        int count = Math.min(items.size(), itemResponses.size());
+        for (int i = 0; i < count; i++) {
+            OrderItem item = items.get(i);
+            OrderItemResponse dto = itemResponses.get(i);
+            if (dto != null && item.getVariant() != null) {
+                String img = null;
+                if (variantImageMap != null && variantImageMap.containsKey(item.getVariant().getId())) {
+                    var imgResp = variantImageMap.get(item.getVariant().getId());
+                    if (imgResp != null) {
+                        img = imgResp.getUrl();
+                    }
+                }
+                if (img == null && item.getVariant().getProduct() != null && productImageMap != null
+                        && productImageMap.containsKey(item.getVariant().getProduct().getId())) {
+                    var imgResp = productImageMap.get(item.getVariant().getProduct().getId());
+                    if (imgResp != null) {
+                        img = imgResp.getUrl();
+                    }
+                }
+                dto.setImageUrl(img);
+            }
+        }
+
+        return itemResponses;
     }
 }
