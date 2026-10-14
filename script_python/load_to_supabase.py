@@ -21,13 +21,14 @@ Su dung:
 
 import csv
 import os
+import re
 import sys
 import time
+from io import StringIO
 from pathlib import Path
 
 import psycopg
 
-# Doc tu env var de tranh commit secret. Fallback chi de dev local.
 CONN_STR = os.environ.get(
     "SUPABASE_DB_URL",
     "postgresql://USER:PASSWORD@HOST:5432/DB?sslmode=require",
@@ -35,7 +36,6 @@ CONN_STR = os.environ.get(
 
 HERE = Path(__file__).parent
 
-# (filename, table) theo thu tu FK dependency
 LOAD_ORDER = [
     ("roles.csv",              "roles"),
     ("permission_groups.csv",  "permission_groups"),
@@ -49,18 +49,17 @@ LOAD_ORDER = [
     ("addresses.csv",          "addresses"),
     ("products.csv",           "products"),
     ("product_variants.csv",   "product_variants"),
-    ("flash_sale_slots.csv",   "flash_sale_slots"),
+    ("flash_sale_slots.csv",  "flash_sale_slots"),
     ("flash_sale_items.csv",   "flash_sale_items"),
     ("vouchers.csv",           "vouchers"),
     ("carts.csv",              "carts"),
     ("store_followers.csv",    "store_followers"),
-    ("product_reviews.csv",    "product_reviews"),
+    ("product_reviews.csv",     "product_reviews"),
     ("images.csv",             "images"),
 ]
 
 
 def get_db_columns(cur, table: str) -> list[str]:
-    """Lay ten cac cot trong DB theo dung thu tu."""
     cur.execute(
         """
         SELECT column_name
@@ -74,23 +73,12 @@ def get_db_columns(cur, table: str) -> list[str]:
 
 
 def copy_csv_to_table(cur, table: str, csv_path: Path) -> int:
-    """Dung COPY ... FROM STDIN voi header cua CSV de Postgres parse.
-
-    CSV co the co cot thua (vd 'id' voi composite PK) hoac cot khac ten
-    voi DB. Script:
-      1. Doc header CSV
-      2. Query information_schema de lay DB columns
-      3. Intersection (case-insensitive) lam column list
-      4. Filter moi data row chi giu cac cot trong intersection
-      5. COPY voi HEADER false (vi ta da loc o buoc 4)
-    """
     with open(csv_path, "r", encoding="utf-8", newline="") as fh:
         reader = csv.reader(fh)
         header = next(reader)
         db_cols = get_db_columns(cur, table)
         db_cols_lower = {c.lower(): c for c in db_cols}
 
-        # Map CSV header index -> DB col name
         col_indices = []
         skipped = []
         for idx, h in enumerate(header):
@@ -104,8 +92,6 @@ def copy_csv_to_table(cur, table: str, csv_path: Path) -> int:
         if not col_indices:
             raise ValueError(f"{csv_path.name}: khong co cot nao khop DB schema")
 
-        # Filter rows: chi giu cac cot mapped + validate length
-        from io import StringIO
         buf = StringIO()
         writer = csv.writer(buf, lineterminator="\n")
         n_rows = 0
@@ -129,7 +115,6 @@ def copy_csv_to_table(cur, table: str, csv_path: Path) -> int:
             print(f"      WARN: skipped {n_skipped} malformed rows, kept {n_rows}")
         buf.seek(0)
 
-        # Build copy SQL with explicit column list
         cols_str = ", ".join(f'"{c}"' for _, c in col_indices)
         copy_sql = (
             f'COPY "{table}" ({cols_str}) '
@@ -143,16 +128,39 @@ def copy_csv_to_table(cur, table: str, csv_path: Path) -> int:
 
 def sync_sequences(cur, table: str) -> None:
     """Sau COPY, sequence van o gia tri cu. COPY voi explicit ID khong advance sequence.
-    Phai setval ve max_id de INSERT tiep theo tra ID dung."""
+    Phai setval ve max_id de INSERT tiep theo tra ID dung.
+
+    Bug da gap: pg_get_serial_sequence() tra ve sequence name nhung bang
+    co the khong co cot id (vd group_permissions: composite PK group_id + permission_id).
+    Neu khong co cot id -> pg_get_serial_sequence tra ve None, SKIP.
+    Neu co cot id nhung no khong phai serial -> pg_get_serial_sequence tra ve None, SKIP.
+    """
+    # Buoc 1: Kiem tra cot id co ton tai khong
     cur.execute(
-        "SELECT pg_get_serial_sequence(%s, 'id'), "
-        "       (SELECT COALESCE(MAX(id), 0) FROM \"%s\")",
-        (table, table)
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_schema='public' AND table_name=%s AND column_name='id'",
+        (table,),
+    )
+    if not cur.fetchone():
+        return  # bang khong co cot id -> skip
+
+    # Buoc 2: Lay sequence name
+    cur.execute(
+        "SELECT pg_get_serial_sequence(%s, 'id')",
+        (table,),
     )
     result = cur.fetchone()
-    if result and result[0]:
-        seq_name, max_id = result
-        cur.execute("SELECT setval(%s, %s, true)", (seq_name, max_id))
+    if not (result and result[0]):
+        return  # cot id khong phai serial -> skip
+
+    seq_name = result[0]
+
+    # Buoc 3: Lay max_id va setval
+    # Dung subquery de tranh SQL injection (table da duoc validate o buoc 1)
+    cur.execute(
+        "SELECT setval(%s, (SELECT COALESCE(MAX(id), 0) FROM \"" + table + "\"), true)",
+        (seq_name,),
+    )
 
 
 def main() -> int:
@@ -191,8 +199,6 @@ def main() -> int:
                     print(f"   FAIL  {filename:30s} -> {table:20s} ERROR: {e}")
                     raise
 
-            # Sync sequences sau COPY (RESTART IDENTITY chi dat ve 1,
-            # COPY voi explicit ID khong advance sequence -> phai setval thu cong)
             print("\n== Sync sequences ==")
             with conn.cursor() as cur:
                 for _, table in LOAD_ORDER:
