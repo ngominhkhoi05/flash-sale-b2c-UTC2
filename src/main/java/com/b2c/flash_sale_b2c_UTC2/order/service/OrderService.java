@@ -21,4 +21,6 @@ public interface OrderService {
     PageResponse<OrderResponse> getSellerOrders(Long sellerUserId, Pageable pageable);
 
     OrderResponse updateOrderStatusBySeller(Long sellerUserId, Long orderId, UpdateOrderStatusRequest request);
+
+    com.b2c.flash_sale_b2c_UTC2.order.dto.QrOrderDetailResponse getOrderQrDetail(Long buyerId, String orderCode);
 }

@@ -12,10 +12,14 @@ import com.b2c.flash_sale_b2c_UTC2.order.dto.CheckoutStoreOrderRequest;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.CreateOrderRequest;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.OrderItemResponse;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.OrderResponse;
+import com.b2c.flash_sale_b2c_UTC2.order.dto.QrOrderDetailResponse;
+import com.b2c.flash_sale_b2c_UTC2.order.dto.QrShopOrderResponse;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.UpdateOrderStatusRequest;
 import com.b2c.flash_sale_b2c_UTC2.order.entity.Order;
 import com.b2c.flash_sale_b2c_UTC2.order.entity.OrderItem;
 import com.b2c.flash_sale_b2c_UTC2.order.exception.OrderErrorCode;
+import com.b2c.flash_sale_b2c_UTC2.payment.entity.Payment;
+import com.b2c.flash_sale_b2c_UTC2.store.enums.StoreTier;
 import com.b2c.flash_sale_b2c_UTC2.order.mapper.OrderMapper;
 import com.b2c.flash_sale_b2c_UTC2.order.repository.OrderItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.order.repository.OrderRepository;
@@ -44,8 +48,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -360,54 +367,108 @@ public class OrderServiceImpl implements OrderService {
         return response;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public QrOrderDetailResponse getOrderQrDetail(Long buyerId, String orderCode) {
+        if (orderCode == null || orderCode.isBlank()) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);
+        }
+        List<String> orderCodes = Arrays.stream(orderCode.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .distinct()
+                .toList();
+        if (orderCodes.isEmpty()) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);
+        }
+        List<Order> orders = new ArrayList<>();
+        for (String code : orderCodes) {
+            Order order = orderRepository.findByOrderCode(code)
+                    .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
+            if (!order.getBuyer().getId().equals(buyerId)) {
+                throw new BusinessException(OrderErrorCode.ORDER_ACCESS_DENIED);
+            }
+            orders.add(order);
+        }
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        Instant earliestExpiry = null;
+        List<QrShopOrderResponse> shopOrders = new ArrayList<>();
+        for (Order o : orders) {
+            totalAmount = totalAmount.add(o.getTotalAmount());
+            if (o.getExpiresAt() != null) {
+                if (earliestExpiry == null || o.getExpiresAt().isBefore(earliestExpiry)) {
+                    earliestExpiry = o.getExpiresAt();
+                }
+            }
+            List<OrderItem> items = orderItemRepository.findByOrderId(o.getId());
+            String itemSummary = items.stream()
+                    .map(item -> item.getProductName() + " × " + item.getQuantity())
+                    .collect(Collectors.joining(", "));
+            String storeBadge = "";
+            if (o.getStore() != null && o.getStore().getTier() != null) {
+                switch (o.getStore().getTier()) {
+                    case OFFICIAL_MALL -> storeBadge = "OfficialMall";
+                    case PREFERRED -> storeBadge = "Mall";
+                    default -> storeBadge = "";
+                }
+            }
+            shopOrders.add(QrShopOrderResponse.builder()
+                    .orderId(o.getId())
+                    .orderCode(o.getOrderCode())
+                    .storeId(o.getStore() != null ? o.getStore().getId() : null)
+                    .storeName(o.getStore() != null ? o.getStore().getStoreName() : null)
+                    .storeBadge(storeBadge)
+                    .amount(o.getTotalAmount())
+                    .itemSummary(itemSummary)
+                    .build());
+        }
+        String displayOrderCode = String.join(", ", orderCodes);
+        String cleanTransferContent = "PAY " + orderCodes.get(0).replaceAll("[^A-Za-z0-9]", "");
+        String qrCodeUrl = String.format(
+                "https://api.vietqr.io/image/%s-%s-%s.png?amount=%s&addInfo=%s&accountName=%s",
+                DEFAULT_BANK_BIN,
+                DEFAULT_ACCOUNT_NO,
+                DEFAULT_QR_TEMPLATE,
+                totalAmount.toPlainString(),
+                java.net.URLEncoder.encode(cleanTransferContent, java.nio.charset.StandardCharsets.UTF_8),
+                java.net.URLEncoder.encode(DEFAULT_ACCOUNT_NAME, java.nio.charset.StandardCharsets.UTF_8)
+        );
+        return QrOrderDetailResponse.builder()
+                .orderCode(displayOrderCode)
+                .amount(totalAmount)
+                .totalAmount(totalAmount)
+                .expiresAt(earliestExpiry)
+                .paymentExpiry(earliestExpiry)
+                .qrCodeUrl(qrCodeUrl)
+                .bankCode(DEFAULT_BANK_CODE)
+                .bankName(DEFAULT_BANK_NAME)
+                .accountNo(DEFAULT_ACCOUNT_NO)
+                .accountName(DEFAULT_ACCOUNT_NAME)
+                .transferContent(cleanTransferContent)
+                .shopOrders(shopOrders)
+                .build();
+    }
     private List<OrderItemResponse> enrichItemResponses(List<OrderItem> items) {
-        if (items == null || items.isEmpty()) {
-            return List.of();
-        }
         List<OrderItemResponse> itemResponses = orderMapper.toItemResponseList(items);
-        if (itemResponses == null || itemResponses.isEmpty()) {
-            return itemResponses != null ? itemResponses : List.of();
+        if (items.isEmpty()) {
+            return itemResponses;
         }
-
-        List<Long> variantIds = items.stream()
-                .filter(i -> i.getVariant() != null)
-                .map(i -> i.getVariant().getId())
-                .distinct().toList();
         List<Long> productIds = items.stream()
-                .filter(i -> i.getVariant() != null && i.getVariant().getProduct() != null)
-                .map(i -> i.getVariant().getProduct().getId())
-                .distinct().toList();
-
-        Map<Long, com.b2c.flash_sale_b2c_UTC2.image.dto.ImageResponse> variantImageMap =
-                (imageService == null || variantIds.isEmpty()) ? Map.of() :
-                        imageService.getPrimaryImagesByOwnerIds(ImageOwnerType.VARIANT, variantIds);
-        Map<Long, com.b2c.flash_sale_b2c_UTC2.image.dto.ImageResponse> productImageMap =
-                (imageService == null || productIds.isEmpty()) ? Map.of() :
-                        imageService.getPrimaryImagesByOwnerIds(ImageOwnerType.PRODUCT, productIds);
-
-        int count = Math.min(items.size(), itemResponses.size());
-        for (int i = 0; i < count; i++) {
+                .map(item -> item.getVariant() != null && item.getVariant().getProduct() != null
+                        ? item.getVariant().getProduct().getId()
+                        : null)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, String> primaryImageMap = imageService.getPrimaryImagesForEntities(ImageType.PRODUCT_COVER, productIds);
+        for (int i = 0; i < items.size(); i++) {
             OrderItem item = items.get(i);
             OrderItemResponse dto = itemResponses.get(i);
-            if (dto != null && item.getVariant() != null) {
-                String img = null;
-                if (variantImageMap != null && variantImageMap.containsKey(item.getVariant().getId())) {
-                    var imgResp = variantImageMap.get(item.getVariant().getId());
-                    if (imgResp != null) {
-                        img = imgResp.getUrl();
-                    }
-                }
-                if (img == null && item.getVariant().getProduct() != null && productImageMap != null
-                        && productImageMap.containsKey(item.getVariant().getProduct().getId())) {
-                    var imgResp = productImageMap.get(item.getVariant().getProduct().getId());
-                    if (imgResp != null) {
-                        img = imgResp.getUrl();
-                    }
-                }
-                dto.setImageUrl(img);
+            if (item.getVariant() != null && item.getVariant().getProduct() != null) {
+                Long pId = item.getVariant().getProduct().getId();
+                dto.setImageUrl(primaryImageMap.get(pId));
             }
         }
-
         return itemResponses;
     }
 }

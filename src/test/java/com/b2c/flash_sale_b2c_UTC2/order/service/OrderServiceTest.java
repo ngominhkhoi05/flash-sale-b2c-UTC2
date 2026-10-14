@@ -12,6 +12,8 @@ import com.b2c.flash_sale_b2c_UTC2.order.dto.CheckoutStoreOrderRequest;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.CreateOrderRequest;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.OrderItemResponse;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.OrderResponse;
+import com.b2c.flash_sale_b2c_UTC2.order.dto.QrOrderDetailResponse;
+import com.b2c.flash_sale_b2c_UTC2.order.dto.QrShopOrderResponse;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.UpdateOrderStatusRequest;
 import com.b2c.flash_sale_b2c_UTC2.order.entity.Order;
 import com.b2c.flash_sale_b2c_UTC2.order.entity.OrderItem;
@@ -24,6 +26,7 @@ import com.b2c.flash_sale_b2c_UTC2.product.entity.Product;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.ProductVariant;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductVariantRepository;
 import com.b2c.flash_sale_b2c_UTC2.store.entity.Store;
+import com.b2c.flash_sale_b2c_UTC2.store.enums.StoreTier;
 import com.b2c.flash_sale_b2c_UTC2.store.repository.StoreRepository;
 import com.b2c.flash_sale_b2c_UTC2.user.entity.Address;
 import com.b2c.flash_sale_b2c_UTC2.user.entity.User;
@@ -48,6 +51,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -422,6 +426,129 @@ class OrderServiceTest {
     }
 
     @Test
+    @DisplayName("getOrderQrDetail: Single order thành công với store OfficialMall và item summary")
+    void getOrderQrDetail_SingleOrder_Success() {
+        Long buyerId = 1L;
+        String orderCode = "FS-261001-A7K2Q";
+
+        User buyer = User.builder().id(buyerId).build();
+        Store store = Store.builder().id(10L).storeName("Shop ABC").tier(StoreTier.OFFICIAL_MALL).build();
+        Instant now = Instant.now();
+        Instant expiresAt = now.plusSeconds(300);
+
+        Order order = Order.builder()
+                .id(100L)
+                .orderCode(orderCode)
+                .buyer(buyer)
+                .store(store)
+                .totalAmount(new BigDecimal("199000"))
+                .expiresAt(expiresAt)
+                .createdAt(now)
+                .build();
+
+        OrderItem item1 = OrderItem.builder().id(1L).productName("Áo thun nam").quantity(2).build();
+        OrderItem item2 = OrderItem.builder().id(2L).productName("Quần dài").quantity(1).build();
+
+        when(orderRepository.findByOrderCode(orderCode)).thenReturn(Optional.of(order));
+        when(orderItemRepository.findByOrderId(100L)).thenReturn(List.of(item1, item2));
+
+        QrOrderDetailResponse response = orderService.getOrderQrDetail(buyerId, orderCode);
+
+        assertNotNull(response);
+        assertEquals(orderCode, response.getOrderCode());
+        assertEquals(new BigDecimal("199000"), response.getAmount());
+        assertEquals(new BigDecimal("199000"), response.getTotalAmount());
+        assertEquals(expiresAt, response.getExpiresAt());
+        assertEquals(expiresAt, response.getPaymentExpiry());
+        assertTrue(response.getQrCodeUrl().contains("vietqr.io"));
+        assertTrue(response.getQrCodeUrl().contains("199000"));
+        assertEquals(1, response.getShopOrders().size());
+
+        QrShopOrderResponse shopOrder = response.getShopOrders().get(0);
+        assertEquals(10L, shopOrder.getStoreId());
+        assertEquals("Shop ABC", shopOrder.getStoreName());
+        assertEquals("OfficialMall", shopOrder.getStoreBadge());
+        assertEquals("Áo thun nam × 2, Quần dài × 1", shopOrder.getItemSummary());
+    }
+
+    @Test
+    @DisplayName("getOrderQrDetail: Multiple orders (tách giỏ hàng) thành công và tổng hợp số tiền")
+    void getOrderQrDetail_MultipleOrders_Success() {
+        Long buyerId = 1L;
+        String orderCodeParam = "ORD-STORE-A, ORD-STORE-B";
+
+        User buyer = User.builder().id(buyerId).build();
+        Store storeA = Store.builder().id(10L).storeName("Shop A").tier(StoreTier.PREFERRED).build();
+        Store storeB = Store.builder().id(20L).storeName("Shop B").tier(StoreTier.NORMAL).build();
+
+        Instant now = Instant.now();
+        Instant expiresAtA = now.plusSeconds(500);
+        Instant expiresAtB = now.plusSeconds(300);
+
+        Order orderA = Order.builder()
+                .id(101L)
+                .orderCode("ORD-STORE-A")
+                .buyer(buyer)
+                .store(storeA)
+                .totalAmount(new BigDecimal("100000"))
+                .expiresAt(expiresAtA)
+                .createdAt(now)
+                .build();
+
+        Order orderB = Order.builder()
+                .id(102L)
+                .orderCode("ORD-STORE-B")
+                .buyer(buyer)
+                .store(storeB)
+                .totalAmount(new BigDecimal("50000"))
+                .expiresAt(expiresAtB)
+                .createdAt(now)
+                .build();
+
+        when(orderRepository.findByOrderCode("ORD-STORE-A")).thenReturn(Optional.of(orderA));
+        when(orderRepository.findByOrderCode("ORD-STORE-B")).thenReturn(Optional.of(orderB));
+        when(orderItemRepository.findByOrderId(101L)).thenReturn(List.of(
+                OrderItem.builder().productName("Sản phẩm A").quantity(1).build()
+        ));
+        when(orderItemRepository.findByOrderId(102L)).thenReturn(List.of(
+                OrderItem.builder().productName("Sản phẩm B").quantity(2).build()
+        ));
+
+        QrOrderDetailResponse response = orderService.getOrderQrDetail(buyerId, orderCodeParam);
+
+        assertNotNull(response);
+        assertEquals(new BigDecimal("150000"), response.getTotalAmount());
+        assertEquals(expiresAtB, response.getExpiresAt()); // Earlier expiry
+        assertEquals(2, response.getShopOrders().size());
+        assertEquals("Mall", response.getShopOrders().get(0).getStoreBadge());
+        assertEquals("", response.getShopOrders().get(1).getStoreBadge());
+    }
+
+    @Test
+    @DisplayName("getOrderQrDetail: Ném lỗi ORDER_NOT_FOUND khi mã đơn không tồn tại")
+    void getOrderQrDetail_OrderNotFound_ThrowsException() {
+        when(orderRepository.findByOrderCode("NON_EXISTING")).thenReturn(Optional.empty());
+
+        BusinessException ex = assertThrows(BusinessException.class, () ->
+                orderService.getOrderQrDetail(1L, "NON_EXISTING"));
+        assertEquals(OrderErrorCode.ORDER_NOT_FOUND.getCode(), ex.getErrorCode().getCode());
+    }
+
+    @Test
+    @DisplayName("getOrderQrDetail: Ném lỗi ORDER_ACCESS_DENIED khi đơn không thuộc về buyer")
+    void getOrderQrDetail_NotOwner_ThrowsException() {
+        User anotherBuyer = User.builder().id(999L).build();
+        Order order = Order.builder()
+                .id(100L)
+                .orderCode("ORD-OTHER")
+                .buyer(anotherBuyer)
+                .build();
+
+        when(orderRepository.findByOrderCode("ORD-OTHER")).thenReturn(Optional.of(order));
+
+        BusinessException ex = assertThrows(BusinessException.class, () ->
+                orderService.getOrderQrDetail(1L, "ORD-OTHER"));
+        assertEquals(OrderErrorCode.ORDER_ACCESS_DENIED.getCode(), ex.getErrorCode().getCode());
     @DisplayName("getBuyerOrderDetail: Làm giàu imageUrl cho từng order item thành công")
     void getBuyerOrderDetail_EnrichesImageUrl_Success() {
         Long buyerId = 1L;
