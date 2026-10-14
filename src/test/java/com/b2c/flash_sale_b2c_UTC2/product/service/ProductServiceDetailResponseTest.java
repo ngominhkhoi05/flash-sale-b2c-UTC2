@@ -42,12 +42,17 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for ProductServiceImpl.buildProductDetailResponse() new fields.
- * Subplan 2: ratingAvg, ratingCount, soldCount, minPrice, maxPrice, discountPercent, images.
+ * Unit tests for ProductServiceImpl.buildProductDetailResponse():
+ * - Rating fields (ratingAvg, ratingCount, soldCount)
+ * - Price range fields (minPrice, maxPrice)
+ * - Discount percent from FlashSale
+ * - Images list
+ * - Empty-over-null contract: all nullable JSONB fields default to [] / {} / 0 instead of null
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-class ProductDetailResponseNewFieldsTest {
+class ProductServiceDetailResponseTest {
+
 
     @Mock
     private ProductRepository productRepository;
@@ -301,4 +306,49 @@ class ProductDetailResponseNewFieldsTest {
             assertEquals(0, result.getImages().size());
         }
     }
+
+    @Nested
+    @DisplayName("Empty Over Null Contract")
+    class EmptyOverNullContract {
+
+        @Test
+        @DisplayName("Product with null JSONB fields -> returns empty lists, empty map, and 0s, NEVER null")
+        void nullFields_ReturnEmptyOverNull() {
+            Long productId = 300L;
+            Product product = makeProduct(productId, 0);
+            product.setSlug(null);
+            product.setDescriptionRich(null);
+            product.setSpecs(null);
+            product.setFeatures(null);
+            product.setCommitments(null);
+            product.setSizeChart(null);
+            product.setTierVariationConfigs(null);
+
+            when(productRepository.findByIdWithStoreAndCategory(productId))
+                    .thenReturn(java.util.Optional.of(product));
+            when(productVariantRepository.findByProductIdAndStatus(productId, "ACTIVE"))
+                    .thenReturn(List.of());
+            defaultMocks(productId);
+
+            ProductDetailResponse result = productService.getPublicProductDetail(productId);
+
+            assertNotNull(result);
+            assertEquals("", result.getSlug());
+            assertNotNull(result.getDescriptionRich());
+            assertNotNull(result.getSpecs());
+            assertNotNull(result.getFeatures());
+            assertNotNull(result.getCommitments());
+            assertNotNull(result.getSizeChart());
+            assertNotNull(result.getVouchers());
+            assertNotNull(result.getRelatedSameStore());
+            assertNotNull(result.getRelatedBestSellers());
+            assertNotNull(result.getTierVariationConfigs());
+            assertNotNull(result.getRatingDistribution());
+            assertEquals(0, result.getQuestionCount());
+            assertEquals(0.0, result.getRatingAvg());
+            assertEquals(0, result.getRatingCount());
+            assertEquals(0, result.getSoldCount());
+        }
+    }
 }
+

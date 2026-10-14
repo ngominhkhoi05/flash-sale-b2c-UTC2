@@ -120,21 +120,21 @@ public class ReviewServiceImpl implements ReviewService {
                     .repliedAt(review.getSellerReplyAt())
                     .build();
         }
-        List<String> urls = album.isEmpty() ? null : album;
+        List<String> urls = album != null ? album : Collections.emptyList();
 
         String userAvatarUrl = userAvatarMap.get(review.getUser().getId());
 
         return ProductReviewResponse.builder()
                 .mediaUrls(urls)
                 .isVerifiedPurchase(Boolean.TRUE)
-                .userAvatarUrl(userAvatarUrl)
+                .userAvatarUrl(userAvatarUrl != null ? userAvatarUrl : "")
                 .id(review.getId())
                 .rating(review.getRating().intValue())
-                .comment(review.getComment())
-                .userName(userName)
+                .comment(review.getComment() != null ? review.getComment() : "")
+                .userName(userName != null ? userName : "")
                 .variantSku(variantSku)
-                .variantAttributes(variantAttributes)
-                .album(album.isEmpty() ? null : album)
+                .variantAttributes(variantAttributes != null ? variantAttributes : Collections.emptyMap())
+                .album(urls)
                 .sellerReply(sellerReplyDto)
                 .sellerReplyAt(review.getSellerReplyAt())
                 .createdAt(review.getCreatedAt())
