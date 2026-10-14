@@ -22,7 +22,10 @@ public enum ProductErrorCode implements ErrorCode {
     INVALID_PRODUCT_PRICE(HttpStatus.BAD_REQUEST, "PROD_400_INVALID_PRICE", "Giá bán của biến thể phải lớn hơn 0"),
     INVALID_STOCK_QUANTITY(HttpStatus.BAD_REQUEST, "PROD_400_INVALID_STOCK", "Số lượng tồn kho không được nhỏ hơn 0"),
     DUPLICATE_SKU_IN_REQUEST(HttpStatus.BAD_REQUEST, "PROD_400_DUPLICATE_SKU", "Mã SKU không được trùng lặp trong cùng sản phẩm"),
-    VARIANT_IN_ACTIVE_FLASH_SALE(HttpStatus.CONFLICT, "PROD_409_VARIANT_IN_ACTIVE_FLASH_SALE", "Không thể chỉnh sửa giá hoặc tồn kho của biến thể đang tham gia Flash Sale đang hoạt động");
+    VARIANT_IN_ACTIVE_FLASH_SALE(HttpStatus.CONFLICT, "PROD_409_VARIANT_IN_ACTIVE_FLASH_SALE", "Không thể chỉnh sửa giá hoặc tồn kho của biến thể đang tham gia Flash Sale đang hoạt động"),
+    INVALID_SEARCH_PARAMS(HttpStatus.BAD_REQUEST, "PROD_400_SEARCH_PARAMS", "Tham số tìm kiếm không hợp lệ"),
+    PAGE_SIZE_EXCEEDED(HttpStatus.BAD_REQUEST, "PROD_400_PAGE_SIZE", "Kích thước trang không được vượt quá 50"),
+    INVALID_SORT_OPTION(HttpStatus.BAD_REQUEST, "PROD_400_SORT", "Tùy chọn sắp xếp không hợp lệ (hỗ trợ: relevance, price_asc, price_desc, best_selling, newest)");
 
     private final HttpStatus httpStatus;
     private final String code;

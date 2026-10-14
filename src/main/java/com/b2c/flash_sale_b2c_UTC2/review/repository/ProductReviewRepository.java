@@ -20,6 +20,9 @@ public interface ProductReviewRepository extends JpaRepository<ProductReview, Lo
     @Query("SELECT AVG(r.rating) FROM ProductReview r WHERE r.product.id = :productId AND r.status = 'VISIBLE'")
     Double avgRatingByProductId(@Param("productId") Long productId);
 
+    @Query("SELECT r.product.id, AVG(r.rating) FROM ProductReview r WHERE r.product.id IN :productIds AND r.status = 'VISIBLE' GROUP BY r.product.id")
+    List<Object[]> findAvgRatingByProductIdIn(@Param("productIds") List<Long> productIds);
+
     @Query("SELECT count(r) FROM ProductReview r WHERE r.product.id = :productId AND r.status = 'VISIBLE'")
     long countByProductIdAndVisible(@Param("productId") Long productId);
 

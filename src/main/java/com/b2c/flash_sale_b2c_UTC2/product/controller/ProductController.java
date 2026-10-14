@@ -6,6 +6,9 @@ import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductDetailResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductFilterRequest;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductSummaryResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.RecommendedProductsResponse;
+import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductSearchRequest;
+import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductSearchResponse;
+import com.b2c.flash_sale_b2c_UTC2.product.service.ProductSearchService;
 import com.b2c.flash_sale_b2c_UTC2.product.service.ProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -29,6 +32,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class ProductController {
 
     private final ProductService productService;
+    private final ProductSearchService productSearchService;
+
+    @GetMapping("/search")
+    @Operation(summary = "Tìm kiếm & lọc sản phẩm với facets và phân trang (Public)",
+               description = "Tìm kiếm theo từ khóa q, danh mục, khoảng giá, đánh giá sao, sắp xếp relevance/price_asc/price_desc/best_selling/newest")
+    public ResponseEntity<ApiResponse<ProductSearchResponse>> searchProducts(
+            @ModelAttribute ProductSearchRequest request
+    ) {
+        ProductSearchResponse response = productSearchService.searchProducts(request);
+        return ResponseEntity.ok(ApiResponse.success("Tìm kiếm sản phẩm thành công", response));
+    }
 
     @GetMapping("/recommended")
     @Operation(summary = "Lay san pham recommended (for_you, best_seller, hot_deal) - Public",
