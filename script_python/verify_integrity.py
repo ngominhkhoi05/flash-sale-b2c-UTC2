@@ -1,11 +1,15 @@
 """Verify FK integrity + business rule consistency after bulk load."""
+import os
+
 import psycopg
 
-CONN_STR = (
+# Doc tu env var de tranh commit secret.
+CONN_STR = os.environ.get(
+    "SUPABASE_DB_URL",
     "postgresql://postgres.dygnssynjofuaaapnvcg:"
     "%26zyXVX8TNLWYF%21B"
     "@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
-    "?sslmode=require&connect_timeout=10"
+    "?sslmode=require&connect_timeout=10",
 )
 
 QUERIES = [

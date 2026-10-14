@@ -3,14 +3,18 @@
 Khong truy cap mang ngoai, chi read schema. Se khong chen du lieu.
 """
 
-import psycopg
+import os
 import sys
 
-CONN_STR = (
+import psycopg
+
+# Doc tu env var de tranh commit secret.
+CONN_STR = os.environ.get(
+    "SUPABASE_DB_URL",
     "postgresql://postgres.dygnssynjofuaaapnvcg:"
     "%26zyXVX8TNLWYF%21B"  # & -> %26, ! -> %21
     "@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
-    "?sslmode=require&connect_timeout=10"
+    "?sslmode=require&connect_timeout=10",
 )
 
 try:

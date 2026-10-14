@@ -13,17 +13,20 @@ Cai dat:
 """
 
 import csv
+import os
 import sys
 import time
 from pathlib import Path
 
 import psycopg
 
-CONN_STR = (
+CONN_STR = os.environ.get(
+    "SUPABASE_DB_URL",
+    # Fallback chi de dev local. KHONG commit URL that vao repo public.
     "postgresql://postgres.dygnssynjofuaaapnvcg:"
     "%26zyXVX8TNLWYF%21B"
     "@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
-    "?sslmode=require&connect_timeout=10"
+    "?sslmode=require&connect_timeout=10",
 )
 
 HERE = Path(__file__).parent
