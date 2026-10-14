@@ -10,7 +10,10 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -26,47 +29,91 @@ public class ProductDetailResponse {
     private String categoryName;
     private String name;
     private String imageUrl;
-    private String description;
-    private List<TierVariationConfigDto> tierVariationConfigs;
+
+    @Builder.Default
+    private String description = "";
+
+    @Builder.Default
+    private List<TierVariationConfigDto> tierVariationConfigs = new ArrayList<>();
+
     private String status;
     private Instant createdAt;
-    private List<ProductVariantResponse> variants;
+
+    @Builder.Default
+    private List<ProductVariantResponse> variants = new ArrayList<>();
 
     // Subplan 2: new fields for product detail gap
     /** Trung binh rating tu reviews VISIBLE (0.0 neu khong co review). */
-    private Double ratingAvg;
+    @Builder.Default
+    private Double ratingAvg = 0.0;
+
     /** Tong so review VISIBLE. */
-    private Integer ratingCount;
+    @Builder.Default
+    private Integer ratingCount = 0;
+
     /** Tong so da ban (products.total_sold V7). */
-    private Integer soldCount;
+    @Builder.Default
+    private Integer soldCount = 0;
+
     /** Gia thap nhat trong cac variant ACTIVE. */
     private BigDecimal minPrice;
+
     /** Gia cao nhat trong cac variant ACTIVE. */
     private BigDecimal maxPrice;
+
     /**
      * % giam gia Flash Sale (lam tron).
      * null neu san pham khong co Flash SaleItem ACTIVE.
      * Tinh: round((original - flashSale) / original * 100).
      */
     private Integer discountPercent;
+
     /** Danh sach anh san pham (tu bang images, sort theo displayOrder). */
-    private List<ProductImageDto> images;
+    @Builder.Default
+    private List<ProductImageDto> images = new ArrayList<>();
 
     // Part A Subplan 4: active flash sales list for product detail
-    private List<ActiveFlashSaleDto> flashSales;
+    @Builder.Default
+    private List<ActiveFlashSaleDto> flashSales = new ArrayList<>();
 
     // Gap Report 2026-10-13 additions for Frontend UI integration
-    private String slug;
-    private Object descriptionRich;
-    private Object specs;
-    private Object features;
-    private Object commitments;
-    private Object vouchers;
-    private Object storeProfile;
-    private Object shipping;
-    private Object sizeChart;
-    private RatingDistributionDto ratingDistribution;
-    private Integer questionCount;
-    private List<ProductSummaryResponse> relatedSameStore;
-    private List<ProductSummaryResponse> relatedBestSellers;
+    @Builder.Default
+    private String slug = "";
+
+    @Builder.Default
+    private Object descriptionRich = new ArrayList<>();
+
+    @Builder.Default
+    private Object specs = new HashMap<>();
+
+    @Builder.Default
+    private Object features = new ArrayList<>();
+
+    @Builder.Default
+    private Object commitments = new ArrayList<>();
+
+    @Builder.Default
+    private Object vouchers = new ArrayList<>();
+
+    @Builder.Default
+    private Object storeProfile = new HashMap<>();
+
+    @Builder.Default
+    private Object shipping = new HashMap<>();
+
+    @Builder.Default
+    private Object sizeChart = new ArrayList<>();
+
+    @Builder.Default
+    private RatingDistributionDto ratingDistribution = RatingDistributionDto.builder().build();
+
+    @Builder.Default
+    private Integer questionCount = 0;
+
+    @Builder.Default
+    private List<ProductSummaryResponse> relatedSameStore = new ArrayList<>();
+
+    @Builder.Default
+    private List<ProductSummaryResponse> relatedBestSellers = new ArrayList<>();
 }
+
