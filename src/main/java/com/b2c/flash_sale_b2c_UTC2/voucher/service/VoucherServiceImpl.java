@@ -4,13 +4,20 @@ import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
 import com.b2c.flash_sale_b2c_UTC2.store.entity.Store;
 import com.b2c.flash_sale_b2c_UTC2.store.exception.StoreErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.store.repository.StoreRepository;
+import com.b2c.flash_sale_b2c_UTC2.user.entity.User;
+import com.b2c.flash_sale_b2c_UTC2.user.exception.UserErrorCode;
+import com.b2c.flash_sale_b2c_UTC2.user.repository.UserRepository;
 import com.b2c.flash_sale_b2c_UTC2.voucher.dto.ApplyVoucherRequest;
 import com.b2c.flash_sale_b2c_UTC2.voucher.dto.CreateVoucherRequest;
+import com.b2c.flash_sale_b2c_UTC2.voucher.dto.SaveVoucherRequest;
+import com.b2c.flash_sale_b2c_UTC2.voucher.dto.UserVoucherResponse;
 import com.b2c.flash_sale_b2c_UTC2.voucher.dto.VoucherCalculationResponse;
 import com.b2c.flash_sale_b2c_UTC2.voucher.dto.VoucherResponse;
+import com.b2c.flash_sale_b2c_UTC2.voucher.entity.UserVoucher;
 import com.b2c.flash_sale_b2c_UTC2.voucher.entity.Voucher;
 import com.b2c.flash_sale_b2c_UTC2.voucher.exception.VoucherErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.voucher.mapper.VoucherMapper;
+import com.b2c.flash_sale_b2c_UTC2.voucher.repository.UserVoucherRepository;
 import com.b2c.flash_sale_b2c_UTC2.voucher.repository.VoucherRepository;
 import com.b2c.flash_sale_b2c_UTC2.voucher.repository.VoucherUsageRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +28,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -30,6 +39,8 @@ public class VoucherServiceImpl implements VoucherService {
 
     private final VoucherRepository voucherRepository;
     private final VoucherUsageRepository voucherUsageRepository;
+    private final UserVoucherRepository userVoucherRepository;
+    private final UserRepository userRepository;
     private final StoreRepository storeRepository;
     private final VoucherMapper voucherMapper;
 
@@ -206,5 +217,151 @@ public class VoucherServiceImpl implements VoucherService {
             voucherUsageRepository.delete(usage);
             log.info("Đã xóa bản ghi voucher_usages liên kết với orderId={}", orderId);
         });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserVoucherResponse> getMyVouchers(Long userId) {
+        if (userId == null) {
+            return List.of();
+        }
+
+        List<UserVoucher> userVouchers = userVoucherRepository.findAllByUserIdWithVoucherAndStore(userId);
+        if (userVouchers.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> voucherIds = userVouchers.stream()
+                .map(uv -> uv.getVoucher().getId())
+                .distinct()
+                .toList();
+
+        Map<Long, Long> usageMap = new HashMap<>();
+        List<Object[]> rows = voucherUsageRepository.countByUserIdAndVoucherIdIn(userId, voucherIds);
+        for (Object[] r : rows) {
+            if (r[0] != null && r[1] != null) {
+                usageMap.put((Long) r[0], (Long) r[1]);
+            }
+        }
+
+        return userVouchers.stream()
+                .map(uv -> mapToUserVoucherResponse(uv.getVoucher(), usageMap.getOrDefault(uv.getVoucher().getId(), 0L)))
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public UserVoucherResponse saveVoucherToWallet(Long userId, SaveVoucherRequest request) {
+        if (userId == null) {
+            throw new BusinessException(UserErrorCode.USER_NOT_FOUND);
+        }
+        if (request == null || request.getCode() == null || request.getCode().isBlank()) {
+            throw new BusinessException(VoucherErrorCode.VOUCHER_NOT_FOUND);
+        }
+
+        String code = request.getCode().trim();
+        Voucher voucher = voucherRepository.findByCodeIgnoreCase(code)
+                .orElseThrow(() -> new BusinessException(VoucherErrorCode.VOUCHER_NOT_FOUND));
+
+        Instant now = Instant.now();
+        if ("INACTIVE".equalsIgnoreCase(voucher.getStatus())) {
+            throw new BusinessException(VoucherErrorCode.VOUCHER_INACTIVE);
+        }
+        if (voucher.getStartTime() != null && now.isBefore(voucher.getStartTime())) {
+            throw new BusinessException(VoucherErrorCode.VOUCHER_NOT_STARTED);
+        }
+        if (voucher.getEndTime() != null && now.isAfter(voucher.getEndTime())) {
+            throw new BusinessException(VoucherErrorCode.VOUCHER_EXPIRED);
+        }
+        if (voucher.getUsedQuantity() != null && voucher.getTotalQuantity() != null
+                && voucher.getUsedQuantity() >= voucher.getTotalQuantity()) {
+            throw new BusinessException(VoucherErrorCode.VOUCHER_OUT_OF_STOCK);
+        }
+
+        if (userVoucherRepository.existsByUserIdAndVoucherId(userId, voucher.getId())) {
+            throw new BusinessException(VoucherErrorCode.VOUCHER_ALREADY_SAVED);
+        }
+
+        long usedCount = voucherUsageRepository.countByVoucherIdAndUserId(voucher.getId(), userId);
+        if (voucher.getUserUsageLimit() != null && usedCount >= voucher.getUserUsageLimit()) {
+            throw new BusinessException(VoucherErrorCode.VOUCHER_USER_LIMIT_EXCEEDED);
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+
+        UserVoucher userVoucher = UserVoucher.builder()
+                .user(user)
+                .voucher(voucher)
+                .savedAt(now)
+                .build();
+        userVoucherRepository.save(userVoucher);
+        log.info("Người dùng id={} đã lưu voucher code={} vào kho voucher", userId, voucher.getCode());
+
+        return mapToUserVoucherResponse(voucher, usedCount);
+    }
+
+    private UserVoucherResponse mapToUserVoucherResponse(Voucher voucher, long usedByThisUser) {
+        Instant now = Instant.now();
+        String status = "ACTIVE";
+        if (voucher.getUserUsageLimit() != null && usedByThisUser >= voucher.getUserUsageLimit()) {
+            status = "USED";
+        } else if (voucher.getEndTime() != null && now.isAfter(voucher.getEndTime())) {
+            status = "EXPIRED";
+        } else if ("EXPIRED".equalsIgnoreCase(voucher.getStatus()) || "INACTIVE".equalsIgnoreCase(voucher.getStatus())) {
+            status = "EXPIRED";
+        }
+
+        String scope = voucher.getStore() == null ? "PLATFORM" : "SHOP";
+        Long storeId = voucher.getStore() != null ? voucher.getStore().getId() : null;
+        String storeName = voucher.getStore() != null ? voucher.getStore().getStoreName() : null;
+
+        String label = buildVoucherLabel(voucher);
+        String discountType = "PERCENT".equalsIgnoreCase(voucher.getDiscountType()) ? "PERCENT" : "FIXED";
+
+        return UserVoucherResponse.builder()
+                .id(voucher.getId())
+                .code(voucher.getCode())
+                .label(label)
+                .scope(scope)
+                .storeId(storeId)
+                .storeName(storeName)
+                .discountType(discountType)
+                .discountValue(voucher.getDiscountValue())
+                .maxDiscount(voucher.getMaxDiscountAmount())
+                .minOrderAmount(voucher.getMinOrderAmount())
+                .userUsageLimit(voucher.getUserUsageLimit())
+                .usedQuantity(voucher.getUsedQuantity() != null ? voucher.getUsedQuantity() : 0)
+                .totalQuantity(voucher.getTotalQuantity())
+                .startTime(voucher.getStartTime())
+                .endTime(voucher.getEndTime())
+                .status(status)
+                .build();
+    }
+
+    private String buildVoucherLabel(Voucher voucher) {
+        StringBuilder sb = new StringBuilder();
+        if ("PERCENT".equalsIgnoreCase(voucher.getDiscountType())) {
+            sb.append("Giảm ").append(voucher.getDiscountValue().stripTrailingZeros().toPlainString()).append("%");
+            if (voucher.getMaxDiscountAmount() != null && voucher.getMaxDiscountAmount().compareTo(BigDecimal.ZERO) > 0) {
+                sb.append(" tối đa ").append(formatCurrencyVnd(voucher.getMaxDiscountAmount()));
+            }
+        } else {
+            sb.append("Giảm ").append(formatCurrencyVnd(voucher.getDiscountValue()));
+        }
+
+        if (voucher.getMinOrderAmount() != null && voucher.getMinOrderAmount().compareTo(BigDecimal.ZERO) > 0) {
+            sb.append(" đơn từ ").append(formatCurrencyVnd(voucher.getMinOrderAmount()));
+        }
+        return sb.toString();
+    }
+
+    private String formatCurrencyVnd(BigDecimal amount) {
+        if (amount == null) return "0đ";
+        long val = amount.longValue();
+        if (val >= 1000) {
+            return (val / 1000) + "K";
+        }
+        return val + "đ";
     }
 }

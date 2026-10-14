@@ -5,15 +5,21 @@ import com.b2c.flash_sale_b2c_UTC2.cart.repository.CartItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.cart.repository.CartRepository;
 import com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse;
 import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
+import com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType;
+import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.CheckoutItemRequest;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.CheckoutStoreOrderRequest;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.CreateOrderRequest;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.OrderItemResponse;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.OrderResponse;
+import com.b2c.flash_sale_b2c_UTC2.order.dto.QrOrderDetailResponse;
+import com.b2c.flash_sale_b2c_UTC2.order.dto.QrShopOrderResponse;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.UpdateOrderStatusRequest;
 import com.b2c.flash_sale_b2c_UTC2.order.entity.Order;
 import com.b2c.flash_sale_b2c_UTC2.order.entity.OrderItem;
 import com.b2c.flash_sale_b2c_UTC2.order.exception.OrderErrorCode;
+import com.b2c.flash_sale_b2c_UTC2.payment.entity.Payment;
+import com.b2c.flash_sale_b2c_UTC2.store.enums.StoreTier;
 import com.b2c.flash_sale_b2c_UTC2.order.mapper.OrderMapper;
 import com.b2c.flash_sale_b2c_UTC2.order.repository.OrderItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.order.repository.OrderRepository;
@@ -42,10 +48,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -65,6 +76,7 @@ public class OrderServiceImpl implements OrderService {
         private final CartRepository cartRepository;
     private final com.b2c.flash_sale_b2c_UTC2.payment.repository.PaymentRepository paymentRepository;
     private final CartItemRepository cartItemRepository;
+    private final ImageService imageService;
     private final OrderMapper orderMapper;
 
     @Override
@@ -203,7 +215,7 @@ public class OrderServiceImpl implements OrderService {
             }
 
             OrderResponse response = orderMapper.toResponse(order);
-            List<OrderItemResponse> itemResponses = orderMapper.toItemResponseList(orderItemsToSave);
+            List<OrderItemResponse> itemResponses = enrichItemResponses(orderItemsToSave);
             response.setItems(itemResponses);
 
             createdOrders.add(response);
@@ -325,7 +337,7 @@ public class OrderServiceImpl implements OrderService {
     private OrderResponse enrichOrderResponse(Order order) {
         OrderResponse response = orderMapper.toResponse(order);
         List<OrderItem> items = orderItemRepository.findByOrderId(order.getId());
-        response.setItems(orderMapper.toItemResponseList(items));
+        response.setItems(enrichItemResponses(items));
 
         // Enrich payment info from payments table
         List<com.b2c.flash_sale_b2c_UTC2.payment.entity.Payment> payments =
@@ -353,5 +365,154 @@ public class OrderServiceImpl implements OrderService {
         response.setTimeline(timeline);
 
         return response;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public QrOrderDetailResponse getOrderQrDetail(Long buyerId, String orderCode) {
+        if (orderCode == null || orderCode.isBlank()) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);
+        }
+
+        List<String> orderCodes = Arrays.stream(orderCode.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .distinct()
+                .toList();
+
+        if (orderCodes.isEmpty()) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);
+        }
+
+        List<Order> orders = new ArrayList<>();
+        for (String code : orderCodes) {
+            Order order = orderRepository.findByOrderCode(code)
+                    .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
+            if (!order.getBuyer().getId().equals(buyerId)) {
+                throw new BusinessException(OrderErrorCode.ORDER_ACCESS_DENIED);
+            }
+            orders.add(order);
+        }
+
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        Instant earliestExpiry = null;
+        List<QrShopOrderResponse> shopOrders = new ArrayList<>();
+
+        for (Order o : orders) {
+            totalAmount = totalAmount.add(o.getTotalAmount());
+            if (o.getExpiresAt() != null) {
+                if (earliestExpiry == null || o.getExpiresAt().isBefore(earliestExpiry)) {
+                    earliestExpiry = o.getExpiresAt();
+                }
+            }
+
+            List<OrderItem> items = orderItemRepository.findByOrderId(o.getId());
+            String itemSummary = items.stream()
+                    .map(item -> item.getProductName() + " × " + item.getQuantity())
+                    .collect(Collectors.joining(", "));
+
+            String storeBadge = "";
+            if (o.getStore() != null && o.getStore().getTier() != null) {
+                switch (o.getStore().getTier()) {
+                    case OFFICIAL_MALL -> storeBadge = "OfficialMall";
+                    case PREFERRED -> storeBadge = "Mall";
+                    default -> storeBadge = "";
+                }
+            }
+
+            shopOrders.add(QrShopOrderResponse.builder()
+                    .storeId(o.getStore() != null ? o.getStore().getId() : null)
+                    .storeName(o.getStore() != null ? o.getStore().getStoreName() : "")
+                    .storeBadge(storeBadge)
+                    .orderCode(o.getOrderCode())
+                    .amount(o.getTotalAmount())
+                    .itemSummary(itemSummary)
+                    .build());
+        }
+
+        if (earliestExpiry == null) {
+            earliestExpiry = orders.get(0).getCreatedAt() != null ?
+                    orders.get(0).getCreatedAt().plusSeconds(900) : Instant.now().plusSeconds(900);
+        }
+
+        String amountStr = totalAmount.stripTrailingZeros().toPlainString();
+        String safeOrderCode = URLEncoder.encode(orderCode, StandardCharsets.UTF_8);
+        String qrCodeUrl = "https://api.vietqr.io/image/970422-9999999999-compact2.png?amount=" + amountStr + "&addInfo=" + safeOrderCode;
+        String paymentUrl = "https://qc.zalopay.vn/pay?order=" + safeOrderCode + "&amount=" + amountStr;
+
+        if (orders.size() == 1) {
+            List<Payment> payments = paymentRepository.findByOrderId(orders.get(0).getId());
+            if (payments != null && !payments.isEmpty()) {
+                Payment latest = payments.get(payments.size() - 1);
+                if (latest.getQrCodeData() != null && !latest.getQrCodeData().isBlank()) {
+                    qrCodeUrl = latest.getQrCodeData();
+                }
+                if (latest.getPaymentUrl() != null && !latest.getPaymentUrl().isBlank()) {
+                    paymentUrl = latest.getPaymentUrl();
+                }
+            }
+        }
+
+        return QrOrderDetailResponse.builder()
+                .orderCode(orderCode)
+                .qrCodeUrl(qrCodeUrl)
+                .expiresAt(earliestExpiry)
+                .paymentExpiry(earliestExpiry)
+                .amount(totalAmount)
+                .totalAmount(totalAmount)
+                .paymentUrl(paymentUrl)
+                .shopOrders(shopOrders)
+                .build();
+    }
+
+    private List<OrderItemResponse> enrichItemResponses(List<OrderItem> items) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        List<OrderItemResponse> itemResponses = orderMapper.toItemResponseList(items);
+        if (itemResponses == null || itemResponses.isEmpty()) {
+            return itemResponses != null ? itemResponses : List.of();
+        }
+
+        List<Long> variantIds = items.stream()
+                .filter(i -> i.getVariant() != null)
+                .map(i -> i.getVariant().getId())
+                .distinct().toList();
+        List<Long> productIds = items.stream()
+                .filter(i -> i.getVariant() != null && i.getVariant().getProduct() != null)
+                .map(i -> i.getVariant().getProduct().getId())
+                .distinct().toList();
+
+        Map<Long, com.b2c.flash_sale_b2c_UTC2.image.dto.ImageResponse> variantImageMap =
+                (imageService == null || variantIds.isEmpty()) ? Map.of() :
+                        imageService.getPrimaryImagesByOwnerIds(ImageOwnerType.VARIANT, variantIds);
+        Map<Long, com.b2c.flash_sale_b2c_UTC2.image.dto.ImageResponse> productImageMap =
+                (imageService == null || productIds.isEmpty()) ? Map.of() :
+                        imageService.getPrimaryImagesByOwnerIds(ImageOwnerType.PRODUCT, productIds);
+
+        int count = Math.min(items.size(), itemResponses.size());
+        for (int i = 0; i < count; i++) {
+            OrderItem item = items.get(i);
+            OrderItemResponse dto = itemResponses.get(i);
+            if (dto != null && item.getVariant() != null) {
+                String img = null;
+                if (variantImageMap != null && variantImageMap.containsKey(item.getVariant().getId())) {
+                    var imgResp = variantImageMap.get(item.getVariant().getId());
+                    if (imgResp != null) {
+                        img = imgResp.getUrl();
+                    }
+                }
+                if (img == null && item.getVariant().getProduct() != null && productImageMap != null
+                        && productImageMap.containsKey(item.getVariant().getProduct().getId())) {
+                    var imgResp = productImageMap.get(item.getVariant().getProduct().getId());
+                    if (imgResp != null) {
+                        img = imgResp.getUrl();
+                    }
+                }
+                dto.setImageUrl(img);
+            }
+        }
+
+        return itemResponses;
     }
 }

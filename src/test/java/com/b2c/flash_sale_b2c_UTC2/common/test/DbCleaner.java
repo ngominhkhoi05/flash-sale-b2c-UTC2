@@ -30,6 +30,7 @@ public class DbCleaner {
                     orders,
                     cart_items,
                     carts,
+                    user_vouchers,
                     voucher_usages,
                     vouchers,
                     payments,
