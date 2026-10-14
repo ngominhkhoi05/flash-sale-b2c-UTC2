@@ -1,38 +1,46 @@
 """
 Generate bulk seed CSV files for the Flash Sale B2C database.
 
-Produces 16 CSV files covering GROUP A (mandatory) and GROUP B
+Produces 17 CSV files covering GROUP A (mandatory) and GROUP B
 (recommended demo) tables defined in docs/database-seed-data.md.
 
 Tables / row counts:
     roles.csv                        3
     permission_groups.csv            3
-    permissions.csv                 28
-    group_permissions.csv           ~50
-    categories.csv                  10
-    banners.csv                      8
-    users.csv                       30  (1 admin + 4 seller + 25 buyer)
-    user_roles.csv                  30  (1 role per user)
-    stores.csv                      10
-    addresses.csv                   25  (1 buyer address + 10 store warehouses + extra)
-    products.csv                   200
+    permissions.csv                  29
+    group_permissions.csv           ~65
+    categories.csv                   10
+    banners.csv                       8
+    users.csv                        30  (1 admin + 4 seller + 25 buyer)
+    user_roles.csv                   30  (1 role per user)
+    stores.csv                       10
+    addresses.csv                    25  (buyer shipping only)
+    products.csv                    200
     product_variants.csv           ~600  (~3 variants per product)
-    flash_sale_slots.csv            10
-    flash_sale_items.csv            40  (~4 items per slot)
-    vouchers.csv                    12  (6 platform + 6 store)
-    carts.csv                       30  (1 per user)
-    store_followers.csv             30  (random)
-    product_reviews.csv             80  (random)
+    flash_sale_slots.csv             10
+    flash_sale_items.csv             40  (~4 items per slot)
+    vouchers.csv                     12  (6 platform + 6 store)
+    carts.csv                        30  (1 per user)
+    store_followers.csv              30  (random)
+    product_reviews.csv              80  (random)
+    images.csv                     ~800  (1 per owner: USER + STORE +
+                                            PRODUCT + VARIANT + ~50% REVIEW)
 
-Total: ~1,169 rows across 16 files. Files are written to this script's
+Total: ~1,963 rows across 17 files. Files are written to this script's
 directory (script_python/) and are ignored by .gitignore (never committed).
+
+If a target CSV already exists on disk, it is deleted and re-created
+from scratch (see `write_csv` for details).
 
 Usage:
     python generate_all_seeds.py            # use defaults
     python generate_all_seeds.py --out .    # custom output dir
 
 After generation, load the files into PostgreSQL in FK-dependency order
-(see docs/database-seed-data.md section 6 for the exact sequence).
+(see docs/database-seed-data.md section 6 for the exact sequence). When
+loading `images.csv`, it must come AFTER users, stores, products,
+product_variants, and product_reviews (FK to those is logical only, but
+`owner_id` must point to a real record).
 """
 
 import argparse
@@ -66,6 +74,16 @@ N_VOUCHERS = 12
 N_CARTS = N_USERS
 N_STORE_FOLLOWERS = 30
 N_PRODUCT_REVIEWS = 80
+
+# Per-image policy: 1 image per owner (avoids V3 partial-unique-index
+# conflicts on (USER, ACTIVE) and (STORE, ACTIVE), and on
+# (PRODUCT|VARIANT, is_primary=true, ACTIVE)).
+# Total: N_USERS + N_STORES + N_PRODUCTS + variants + ~50% of reviews.
+N_IMAGES_USER = N_USERS
+N_IMAGES_STORE = N_STORES
+N_IMAGES_PRODUCT = N_PRODUCTS
+N_IMAGES_VARIANT = 0  # computed at runtime = len(variant_rows)
+N_IMAGES_REVIEW_PCT = 0.5   # 50% of reviews get 1 image each
 
 # RBAC fixed seed (deterministic; must match docs/database-seed-data.md)
 ROLE_NAMES = ["BUYER", "SELLER", "ADMIN"]
@@ -196,8 +214,18 @@ def parse_args() -> argparse.Namespace:
 
 
 def write_csv(path: Path, header: list, rows: list) -> None:
-    """Write a single CSV file with the given header and rows."""
+    """Write a single CSV file with the given header and rows.
+
+    If `path` already exists, it is deleted first. This guarantees that
+    the file always reflects the current run's output (no leftover rows
+    from a previous run with different parameters). A short "overwriting"
+    log line is printed to stderr so the user can see what happened.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
+    existed = path.exists()
+    if existed:
+        path.unlink()
+        print(f"    (overwriting existing {path.name})", file=sys.stderr)
     with open(path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
         writer.writerow(header)
@@ -640,6 +668,55 @@ def main() -> int:
                "status", "created_at", "updated_at"], review_rows)
     print(f"  product_reviews.csv        {len(review_rows):>4} rows")
 
+    # ---------------------------------------------------------- images
+    # Polymorphic image table (V3 schema). 1 image per owner to keep the
+    # V3 partial-unique-indexes (1 ACTIVE per USER, 1 ACTIVE per STORE,
+    # 1 is_primary=true per PRODUCT|VARIANT) satisfied. Products and
+    # variants are linked back to their image at QUERY TIME via:
+    #   SELECT * FROM images
+    #   WHERE owner_type='PRODUCT' AND owner_id=p.id AND is_primary=true
+    # (no FK column on products/product_variants; the V3 model is purely
+    #  polymorphic).
+    image_rows = []
+    img_id = 1
+
+    def add_image(owner_type: str, owner_id: int, is_primary: bool = False):
+        nonlocal img_id
+        url = f"https://picsum.photos/seed/img{img_id}/600/600"
+        public_id = f"flash-sale-b2c/{owner_type.lower()}/{owner_id}_{img_id}"
+        image_rows.append([
+            img_id, owner_type, owner_id, url, public_id,
+            0,                 # display_order
+            is_primary,        # is_primary
+            False,             # cloudinary_deleted
+            "ACTIVE",          # status
+            now, now,
+        ])
+        img_id += 1
+
+    # 1 avatar per user
+    for u in users:
+        add_image("USER", u["id"], is_primary=False)
+    # 1 logo per store
+    for s in store_rows:
+        add_image("STORE", s[0], is_primary=False)
+    # 1 primary image per product
+    for pid in range(1, N_PRODUCTS + 1):
+        add_image("PRODUCT", pid, is_primary=True)
+    # 1 primary image per variant
+    for v in variant_rows:
+        add_image("VARIANT", v[0], is_primary=True)
+    # ~50% of reviews get 1 image each (others have none)
+    for r in review_rows:
+        if random.random() < N_IMAGES_REVIEW_PCT:
+            add_image("REVIEW", r[0], is_primary=False)
+
+    write_csv(out / "images.csv",
+              ["id", "owner_type", "owner_id", "url", "cloudinary_public_id",
+               "display_order", "is_primary", "cloudinary_deleted", "status",
+               "created_at", "updated_at"], image_rows)
+    print(f"  images.csv                 {len(image_rows):>4} rows")
+
     # ---------------------------------------------------------------- done
     total_rows = (
         len(roles_rows) + len(pg_rows) + len(perm_rows) + len(gp_rows)
@@ -647,11 +724,13 @@ def main() -> int:
         + len(store_rows) + len(address_rows) + len(product_rows)
         + len(variant_rows) + len(slot_rows) + len(fsi_rows)
         + len(voucher_rows) + len(cart_rows) + len(follower_rows)
-        + len(review_rows)
+        + len(review_rows) + len(image_rows)
     )
     print()
-    print(f"Done. {total_rows:,} total rows across 16 CSV files in {out}")
+    print(f"Done. {total_rows:,} total rows across 17 CSV files in {out}")
     print("Load into PostgreSQL in FK order (see docs/database-seed-data.md section 6).")
+    print("`images.csv` must come AFTER users, stores, products,")
+    print("product_variants, and product_reviews so owner_id values resolve.")
     return 0
 
 

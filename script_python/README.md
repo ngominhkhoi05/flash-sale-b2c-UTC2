@@ -137,7 +137,8 @@ Generates 16 seed CSV files for the Flash Sale B2C marketplace backend
 | `carts.csv`              | 30   | C     | 1-1 with `users`                         |
 | `store_followers.csv`    | 30   | C     | random user-store pairs                  |
 | `product_reviews.csv`    | 80   | C     | random user + product                    |
-| **Total**                | **~1,133** | |                                  |
+| `images.csv`             | ~803 | C     | polymorphic: 1 image per owner (USER + STORE + PRODUCT + VARIANT + ~50% REVIEW) |
+| **Total**                | **~1,936** | | 17 files                          |
 
 ### Usage
 
@@ -159,6 +160,12 @@ python generate_all_seeds.py --seed 2026            # deterministic seed
 
 The script writes 16 CSVs into the output directory (default: this script's
 folder). Output files match `*.csv` in `.gitignore` and are NEVER committed.
+
+**If a target CSV already exists, it is deleted first** and re-created
+from scratch. This guarantees the file always reflects the current run
+(no leftover rows from a previous run with different `--seed` or
+parameters). The script prints `(overwriting existing <name>)` to
+stderr for each file it replaces.
 
 ### Loading into PostgreSQL
 
@@ -189,6 +196,7 @@ The 16 CSVs must be loaded in FK-dependency order. See
 \copy carts              FROM 'carts.csv'              WITH (FORMAT csv, HEADER true);
 \copy store_followers    FROM 'store_followers.csv'    WITH (FORMAT csv, HEADER true);
 \copy product_reviews    FROM 'product_reviews.csv'    WITH (FORMAT csv, HEADER true);
+\copy images             FROM 'images.csv'             WITH (FORMAT csv, HEADER true);
 ```
 
 To speed up bulk load significantly:
@@ -198,6 +206,37 @@ SET session_replication_role = replica;
 -- ... run all \copy commands ...
 SET session_replication_role = origin;
 ```
+
+### `images.csv` (V3 polymorphic image table)
+
+`images` is a polymorphic table (one row per image, with `owner_type` and
+`owner_id` columns). The seed emits **exactly 1 ACTIVE image per owner** to
+satisfy the V3 partial-unique-indexes:
+
+- 1 avatar per `users` (30 rows)
+- 1 logo per `stores` (10 rows)
+- 1 primary image per `products` (200 rows, `is_primary = true`)
+- 1 primary image per `product_variants` (~520 rows, `is_primary = true`)
+- ~50% of `product_reviews` get 1 image (~43 rows)
+
+To link a product to its primary image at query time:
+
+```sql
+SELECT p.*, i.url AS primary_image_url
+FROM products p
+LEFT JOIN images i
+  ON i.owner_type = 'PRODUCT' AND i.owner_id = p.id AND i.is_primary = true;
+```
+
+Products and variants do NOT have a foreign-key column to `images`; the
+relationship is resolved by join. The same pattern applies to USER, STORE,
+and REVIEW images.
+
+`images.csv` must be loaded AFTER the tables it references (users, stores,
+products, product_variants, product_reviews) so `owner_id` values resolve.
+The polymorphic FK is logical (V3 has no physical FK), so loading it out
+of order will NOT fail the COPY, but you'll get dangling `owner_id`s
+that produce no image in the app.
 
 ### Important caveats
 
