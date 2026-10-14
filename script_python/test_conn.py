@@ -11,10 +11,7 @@ import psycopg
 # Doc tu env var de tranh commit secret.
 CONN_STR = os.environ.get(
     "SUPABASE_DB_URL",
-    "postgresql://postgres.dygnssynjofuaaapnvcg:"
-    "%26zyXVX8TNLWYF%21B"  # & -> %26, ! -> %21
-    "@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres"
-    "?sslmode=require&connect_timeout=10",
+    "postgresql://USER:PASSWORD@HOST:5432/DB?sslmode=require",
 )
 
 try:
