@@ -55,4 +55,15 @@ public class OrderPaymentController {
         PaymentResponse response = paymentService.confirmCodPayment(userDetails.getUser().getId(), id);
         return ResponseEntity.ok(ApiResponse.success("Xác nhận thanh toán COD thành công", response));
     }
+
+    @Operation(summary = "Query trạng thái giao dịch ZaloPay từ gateway",
+               description = "Helper khi client bị miss callback từ ZaloPay. Gọi /v2/query trên ZaloPay server để đồng bộ trạng thái payment và order.")
+    @PostMapping("/zalopay/query")
+    public ResponseEntity<ApiResponse<PaymentResponse>> queryZaloPayPayment(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("id") Long id
+    ) {
+        PaymentResponse response = paymentService.queryZaloPayPayment(userDetails.getUser().getId(), id);
+        return ResponseEntity.ok(ApiResponse.success("Query trạng thái thanh toán ZaloPay thành công", response));
+    }
 }
