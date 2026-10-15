@@ -426,9 +426,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200\", function () { pm.expect(pm.response.code).to.equal(200); });",
-                  "var j=pm.response.json();",
-                  "if (j.success && j.data && j.data.content && j.data.content.length>0) { pm.environment.set(\"productId\", j.data.content[0].id); if (j.data.content[0].variants && j.data.content[0].variants.length>0) { pm.environment.set(\"variantId\", j.data.content[0].variants[0].id); } }"
+                  "pm.test(\"Status 200\", function () { pm.expect(pm.response.code).to.equal(200); });\nvar j=pm.response.json();\nif (j.success && j.data && j.data.items && j.data.items.length>0) { pm.environment.set(\"productId\", j.data.items[0].id); }"
                 ]
               }
             }
@@ -2624,8 +2622,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200\", function () { pm.expect(pm.response.code).to.equal(200); });",
-                  "var j=pm.response.json(); if (j.success && j.data && j.data.content && j.data.content.length>0) { var first=j.data.content[0]; pm.environment.set(\"sellerOrderId\", first.id); pm.environment.set(\"sellerOrderCode\", first.orderCode); }"
+                  "pm.test(\"Status 200\", function () { pm.expect(pm.response.code).to.equal(200); });\nvar j=pm.response.json();\nif (j.success && j.data && j.data.items && j.data.items.length>0) { var first=j.data.items[0]; pm.environment.set(\"sellerOrderId\", first.id); pm.environment.set(\"sellerOrderCode\", first.orderCode); }"
                 ]
               }
             }

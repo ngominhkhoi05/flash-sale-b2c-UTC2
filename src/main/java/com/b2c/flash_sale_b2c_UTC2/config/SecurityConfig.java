@@ -83,6 +83,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         // Public endpoints: Xem công khai Store, Category, Product
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/stores/{id:[0-9]+}").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/stores/featured").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/categories/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/products/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/flash-sales/**").permitAll()
