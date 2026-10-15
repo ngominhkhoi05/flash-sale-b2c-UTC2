@@ -28,6 +28,30 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ZaloPayClient {
 
+    /**
+     * Static HMAC-SHA256 helper (used by tests and other utility classes
+     * that need to verify a MAC without holding a ZaloPayClient instance).
+     */
+    public static String hmacSHA256Static(String data, String key) {
+        try {
+            javax.crypto.spec.SecretKeySpec secretKey = new javax.crypto.spec.SecretKeySpec(
+                    key.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256");
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(secretKey);
+            byte[] hash = mac.doFinal(data.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to compute HMAC-SHA256", e);
+        }
+    }
+
+
     private final RestTemplate restTemplate;
     private final ZaloPayProperties props;
     private final ObjectMapper objectMapper = new ObjectMapper();
