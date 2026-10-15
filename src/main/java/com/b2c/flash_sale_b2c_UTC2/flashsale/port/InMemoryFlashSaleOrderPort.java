@@ -60,6 +60,7 @@ public class InMemoryFlashSaleOrderPort implements FlashSaleOrderPort {
             if ("PENDING_PAYMENT".equalsIgnoreCase(order.status()) && order.expiresAt().isBefore(now)) {
                 expiredList.add(new ExpiredOrderRef(
                         order.orderId(),
+                        order.orderCode(),
                         order.flashSaleItemId(),
                         order.slotId(),
                         order.userId(),

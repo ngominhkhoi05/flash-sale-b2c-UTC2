@@ -1,6 +1,7 @@
 package com.b2c.flash_sale_b2c_UTC2.payment.service;
 
 import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.realtime.FlashSaleWsBroadcaster;
 import com.b2c.flash_sale_b2c_UTC2.order.entity.Order;
 import com.b2c.flash_sale_b2c_UTC2.order.exception.OrderErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.order.repository.OrderRepository;
@@ -24,6 +25,9 @@ public class PaymentServiceImpl implements PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
+
+    // WebSocket broadcaster — optional, gracefully no-op if null
+    private final FlashSaleWsBroadcaster wsBroadcaster;
 
     @Override
     @Transactional(readOnly = true)
@@ -72,6 +76,16 @@ public class PaymentServiceImpl implements PaymentService {
 
         payment = paymentRepository.save(payment);
         log.info("Created ZaloPay payment intent for orderId={}, transactionCode={}", orderId, transactionCode);
+
+        // Push payment result to buyer via WebSocket
+        try {
+            String buyerUsername = order.getBuyer().getEmail();
+            wsBroadcaster.sendPaymentResultToUser(buyerUsername, order.getOrderCode(),
+                    order.getId(), "ZALOPAY", "PENDING");
+        } catch (Exception e) {
+            log.warn("[WS] Failed to send PAYMENT_STATUS_CHANGED for orderId={}: {}", orderId, e.getMessage());
+        }
+
         return mapToResponse(payment, order);
     }
 
@@ -103,6 +117,16 @@ public class PaymentServiceImpl implements PaymentService {
         orderRepository.save(order);
 
         log.info("Confirmed COD payment for orderId={}, order transitioned to CONFIRMED", orderId);
+
+        // Push payment result to buyer via WebSocket
+        try {
+            String buyerUsername = order.getBuyer().getEmail();
+            wsBroadcaster.sendPaymentResultToUser(buyerUsername, order.getOrderCode(),
+                    order.getId(), "COD", "CONFIRMED");
+        } catch (Exception e) {
+            log.warn("[WS] Failed to send PAYMENT_STATUS_CHANGED for orderId={}: {}", orderId, e.getMessage());
+        }
+
         return mapToResponse(payment, order);
     }
 

@@ -5,10 +5,13 @@ import com.b2c.flash_sale_b2c_UTC2.flashsale.entity.FlashSaleSlot;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.port.ExpiredOrderRef;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.port.FlashSaleOrderPort;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.realtime.FlashSaleWsBroadcaster;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.realtime.FlashSaleWsEvent;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.repository.FlashSaleItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.repository.FlashSaleSlotRepository;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.strategy.StockReservationStrategy;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductVariantRepository;
+import com.b2c.flash_sale_b2c_UTC2.user.entity.User;
+import com.b2c.flash_sale_b2c_UTC2.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +39,9 @@ public class FlashSaleExpirationScheduler {
 
     @Autowired(required = false)
     private StringRedisTemplate redisTemplate;
+
+    @Autowired(required = false)
+    private UserRepository userRepository;
 
     public static final String STOCK_KEY_PREFIX = "flash_sale:stock:";
 
@@ -96,6 +102,25 @@ public class FlashSaleExpirationScheduler {
         } catch (Exception e) {
             log.warn("[WS] Failed to broadcast stock restoration for expired order itemId={}: {}",
                     ref.flashSaleItemId(), e.getMessage());
+        }
+
+        // Send ORDER_CANCELLED_TIMEOUT private event to buyer via WebSocket
+        try {
+            if (userRepository != null) {
+                User buyer = userRepository.findById(ref.userId()).orElse(null);
+                if (buyer != null) {
+                    FlashSaleWsEvent event = FlashSaleWsEvent.builder()
+                            .eventType(FlashSaleWsEvent.EventType.ORDER_CANCELLED_TIMEOUT)
+                            .orderId(ref.orderId())
+                            .orderCode(ref.orderCode())
+                            .occurredAt(Instant.now())
+                            .build();
+                    wsBroadcaster.sendOrderCancelledToUser(buyer.getEmail(), event);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[WS] Failed to send ORDER_CANCELLED_TIMEOUT to user {}: {}",
+                    ref.userId(), e.getMessage());
         }
 
         // 2. Safe rollback of Redis stock and purchase limit (verifying key existence or reconstructing from DB)

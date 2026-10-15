@@ -5,6 +5,7 @@ package com.b2c.flash_sale_b2c_UTC2.flashsale.port;
  */
 public record ExpiredOrderRef(
         Long orderId,
+        String orderCode,
         Long flashSaleItemId,
         Long slotId,
         Long userId,

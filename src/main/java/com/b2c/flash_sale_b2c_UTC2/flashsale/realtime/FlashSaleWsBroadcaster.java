@@ -130,6 +130,57 @@ public class FlashSaleWsBroadcaster {
                 username, event.getOrderCode());
     }
 
+    /**
+     * Gửi trạng thái đơn hàng mới tới buyer.
+     * Khi seller đổi trạng thái (SHIPPED, COMPLETED, CANCELLED, ...) → buyer nhận thông báo.
+     *
+     * @param username  email của buyer (principal username)
+     * @param orderCode mã đơn hàng
+     * @param orderId   id đơn hàng
+     * @param newStatus trạng thái mới (SHIPPED, COMPLETED, CANCELLED, ...)
+     */
+    public void sendOrderStatusUpdateToUser(String username, String orderCode,
+                                            Long orderId, String newStatus) {
+        FlashSaleWsEvent event = FlashSaleWsEvent.builder()
+                .eventType(FlashSaleWsEvent.EventType.ORDER_STATUS_CHANGED)
+                .orderId(orderId)
+                .orderCode(orderCode)
+                .orderStatus(newStatus)
+                .occurredAt(Instant.now())
+                .build();
+        String dest = WsDestinations.orderStatusUpdate(orderCode);
+        sendToUser(username, dest, event);
+        log.debug("[WS] Send ORDER_STATUS_CHANGED to user {}: orderCode={}, status={}",
+                username, orderCode, newStatus);
+    }
+
+    /**
+     * Gửi kết quả thanh toán tới buyer.
+     * Khi buyer tạo ZaloPay payment hoặc xác nhận COD → buyer nhận thông báo kết quả.
+     *
+     * @param username       email của buyer
+     * @param orderCode      mã đơn hàng
+     * @param orderId        id đơn hàng
+     * @param paymentMethod  ZALOPAY / COD
+     * @param paymentStatus  PENDING / CONFIRMED / ...
+     */
+    public void sendPaymentResultToUser(String username, String orderCode,
+                                        Long orderId, String paymentMethod,
+                                        String paymentStatus) {
+        FlashSaleWsEvent event = FlashSaleWsEvent.builder()
+                .eventType(FlashSaleWsEvent.EventType.PAYMENT_STATUS_CHANGED)
+                .orderId(orderId)
+                .orderCode(orderCode)
+                .paymentMethod(paymentMethod)
+                .paymentStatus(paymentStatus)
+                .occurredAt(Instant.now())
+                .build();
+        String dest = WsDestinations.orderStatusUpdate(orderCode);
+        sendToUser(username, dest, event);
+        log.debug("[WS] Send PAYMENT_STATUS_CHANGED to user {}: orderCode={}, method={}, status={}",
+                username, orderCode, paymentMethod, paymentStatus);
+    }
+
     // ── Helpers ────────────────────────────────────────────────
 
     private void sendToTopic(String destination, FlashSaleWsEvent payload) {

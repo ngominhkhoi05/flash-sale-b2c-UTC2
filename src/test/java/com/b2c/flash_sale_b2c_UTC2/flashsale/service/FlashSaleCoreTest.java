@@ -394,7 +394,7 @@ class FlashSaleCoreTest {
         @Test
         @DisplayName("Quét đơn timeout: hoàn trả kho đúng số lượng đã giữ chỗ khi hủy thành công")
         void processExpiredReservations_Success() {
-            ExpiredOrderRef ref = new ExpiredOrderRef(1001L, 500L, 1L, 99L, 3);
+            ExpiredOrderRef ref = new ExpiredOrderRef(1001L, "FS-TEST-001", 500L, 1L, 99L, 3);
             when(orderPort.lockExpiredPendingOrders(any(), eq(100))).thenReturn(List.of(ref));
             when(orderPort.cancelTimeoutIfPending(1001L)).thenReturn(true);
 
@@ -407,7 +407,7 @@ class FlashSaleCoreTest {
         @Test
         @DisplayName("Quét đơn timeout: không hoàn trả kho nếu đơn đã thanh toán hoặc đã hủy trước đó (cancel trả về false)")
         void processExpiredReservations_AlreadyHandled() {
-            ExpiredOrderRef ref = new ExpiredOrderRef(1001L, 500L, 1L, 99L, 3);
+            ExpiredOrderRef ref = new ExpiredOrderRef(1001L, "FS-TEST-001", 500L, 1L, 99L, 3);
             when(orderPort.lockExpiredPendingOrders(any(), eq(100))).thenReturn(List.of(ref));
             when(orderPort.cancelTimeoutIfPending(1001L)).thenReturn(false);
 

@@ -99,7 +99,7 @@ public class JdbcFlashSaleOrderPort implements FlashSaleOrderPort {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public List<ExpiredOrderRef> lockExpiredPendingOrders(Instant now, int batchSize) {
         String query = """
-            SELECT o.id AS order_id, oi.flash_sale_item_id, o.slot_id, o.buyer_id AS user_id, oi.quantity
+            SELECT o.id AS order_id, o.order_code, oi.flash_sale_item_id, o.slot_id, o.buyer_id AS user_id, oi.quantity
             FROM orders o
             JOIN order_items oi ON o.id = oi.order_id
             WHERE o.status = 'PENDING_PAYMENT'
@@ -112,6 +112,7 @@ public class JdbcFlashSaleOrderPort implements FlashSaleOrderPort {
                 query,
                 (rs, rowNum) -> new ExpiredOrderRef(
                         rs.getLong("order_id"),
+                        rs.getString("order_code"),
                         rs.getLong("flash_sale_item_id"),
                         rs.getLong("slot_id"),
                         rs.getLong("user_id"),
