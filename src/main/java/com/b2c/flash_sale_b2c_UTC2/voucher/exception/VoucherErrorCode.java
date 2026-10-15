@@ -18,7 +18,8 @@ public enum VoucherErrorCode implements ErrorCode {
     VOUCHER_STORE_MISMATCH("VOUCHER_403", "Mã giảm giá của gian hàng không áp dụng cho đơn hàng gian hàng khác", HttpStatus.FORBIDDEN),
     VOUCHER_INACTIVE("VOUCHER_400_6", "Mã giảm giá đang bị tạm khóa", HttpStatus.BAD_REQUEST),
     INVALID_VOUCHER_DATES("VOUCHER_400_7", "Thời gian kết thúc phải sau thời gian bắt đầu", HttpStatus.BAD_REQUEST),
-    INVALID_DISCOUNT_PERCENT("VOUCHER_400_8", "Tỷ lệ giảm giá theo % không được vượt quá 100%", HttpStatus.BAD_REQUEST);
+    INVALID_DISCOUNT_PERCENT("VOUCHER_400_8", "Tỷ lệ giảm giá theo % không được vượt quá 100%", HttpStatus.BAD_REQUEST),
+    VOUCHER_ALREADY_SAVED("VOUCHER_409_SAVED", "Mã giảm giá đã có trong kho voucher của bạn", HttpStatus.CONFLICT);
 
     private final String code;
     private final String message;

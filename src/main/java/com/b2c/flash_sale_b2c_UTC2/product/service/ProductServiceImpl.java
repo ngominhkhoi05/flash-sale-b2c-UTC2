@@ -567,6 +567,36 @@ public class ProductServiceImpl implements ProductService {
         // Part A Subplan 4: populate active flash sales list
         List<ActiveFlashSaleDto> flashSales = buildActiveFlashSales(activeItems);
 
+        // Empty over null guarantees for Frontend integration contract
+        String safeSlug = product.getSlug() != null ? product.getSlug() : "";
+        Object safeDescRich = product.getDescriptionRich() != null ? product.getDescriptionRich() : List.of();
+        Object safeSpecs = product.getSpecs() != null ? product.getSpecs() : Map.of();
+        Object safeFeatures = product.getFeatures() != null ? product.getFeatures() : List.of();
+        Object safeCommitments = product.getCommitments() != null ? product.getCommitments() : List.of();
+        Object safeSizeChart = product.getSizeChart() != null ? product.getSizeChart() : List.of();
+        List<TierVariationConfigDto> safeConfigs = product.getTierVariationConfigs() != null
+                ? product.getTierVariationConfigs() : List.of();
+
+        Map<String, Object> storeProfileMap = new java.util.HashMap<>();
+        storeProfileMap.put("id", product.getStore().getId());
+        storeProfileMap.put("name", product.getStore().getStoreName());
+        storeProfileMap.put("initials", product.getStore().getStoreName() != null && !product.getStore().getStoreName().isBlank()
+                ? product.getStore().getStoreName().substring(0, 1).toUpperCase() : "S");
+        storeProfileMap.put("isOfficial", "OFFICIAL_MALL".equalsIgnoreCase(String.valueOf(product.getStore().getTier())));
+        storeProfileMap.put("ratingAvg", 0.0);
+        storeProfileMap.put("ratingCount", 0);
+        storeProfileMap.put("productCount", 0);
+        storeProfileMap.put("responseRate", 100);
+        storeProfileMap.put("responseTimeLabel", "Vài phút");
+        storeProfileMap.put("lastActiveLabel", "Online vừa xong");
+
+        Map<String, Object> shippingMap = Map.of(
+                "freeshipBadge", "FREESHIP XTRA",
+                "freeshipText", "Miễn phí vận chuyển",
+                "shipTo", "Toàn quốc",
+                "estimatedDays", "1 - 2 ngày"
+        );
+
         return ProductDetailResponse.builder()
                 .id(productId)
                 .storeId(product.getStore().getId())
@@ -574,37 +604,34 @@ public class ProductServiceImpl implements ProductService {
                 .categoryId(product.getCategory().getId())
                 .categoryName(product.getCategory().getName())
                 .name(product.getName())
-                .imageUrl(productImageUrl)
-                .description(product.getDescription())
-                .tierVariationConfigs(product.getTierVariationConfigs())
+                .imageUrl(productImageUrl != null ? productImageUrl : "")
+                .description(product.getDescription() != null ? product.getDescription() : "")
+                .tierVariationConfigs(safeConfigs)
                 .status(product.getStatus())
                 .createdAt(product.getCreatedAt())
-                .variants(variantResponses)
+                .variants(variantResponses != null ? variantResponses : List.of())
                 // new fields
                 .ratingAvg(avgRating != null ? avgRating : 0.0)
                 .ratingCount((int) ratingCount)
-                .soldCount(soldCount)
+                .soldCount(soldCount != null ? soldCount : 0)
                 .minPrice(minPrice)
                 .maxPrice(maxPrice)
                 .discountPercent(discountPercent)
-                .images(images)
-                                .flashSales(flashSales)
-                .slug(product.getSlug())
-                .descriptionRich(product.getDescriptionRich())
-                .specs(product.getSpecs())
-                .features(product.getFeatures())
-                .commitments(product.getCommitments())
-                .sizeChart(product.getSizeChart())
-                .storeProfile(java.util.Map.of(
-                        "id", product.getStore().getId(),
-                        "name", product.getStore().getStoreName(),
-                        "isOfficial", "OFFICIAL_MALL".equalsIgnoreCase(String.valueOf(product.getStore().getTier()))
-                ))
-                .shipping(java.util.Map.of(
-                        "freeshipBadge", "FREESHIP XTRA",
-                        "freeshipText", "Mien phi van chuyen",
-                        "estimatedDays", "1 - 2 ngay"
-                ))
+                .images(images != null ? images : List.of())
+                .flashSales(flashSales != null ? flashSales : List.of())
+                .slug(safeSlug)
+                .descriptionRich(safeDescRich)
+                .specs(safeSpecs)
+                .features(safeFeatures)
+                .commitments(safeCommitments)
+                .sizeChart(safeSizeChart)
+                .vouchers(List.of())
+                .storeProfile(storeProfileMap)
+                .shipping(shippingMap)
+                .ratingDistribution(com.b2c.flash_sale_b2c_UTC2.review.dto.RatingDistributionDto.builder().build())
+                .questionCount(0)
+                .relatedSameStore(List.of())
+                .relatedBestSellers(List.of())
                 .build();
     }
 

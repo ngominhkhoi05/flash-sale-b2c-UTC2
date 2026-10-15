@@ -17,6 +17,7 @@ public class OrderItemResponse {
     private Long flashSaleItemId;
     private String productName;
     private String variantName;
+    private String imageUrl;
     private BigDecimal priceAtPurchase;
     private Integer quantity;
     private BigDecimal itemSubtotal;

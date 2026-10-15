@@ -17,5 +17,8 @@ public class CartResponse {
     private Long userId;
     private List<CartStoreGroupResponse> storeGroups;
     private Integer totalItems;
+    private BigDecimal subtotal;
+    private BigDecimal totalShippingFee;
+    private BigDecimal totalAmount;
     private BigDecimal grandTotal;
 }

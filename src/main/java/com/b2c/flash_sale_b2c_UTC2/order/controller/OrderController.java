@@ -5,6 +5,7 @@ import com.b2c.flash_sale_b2c_UTC2.common.api.ApiResponse;
 import com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.CreateOrderRequest;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.OrderResponse;
+import com.b2c.flash_sale_b2c_UTC2.order.dto.QrOrderDetailResponse;
 import com.b2c.flash_sale_b2c_UTC2.order.service.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -76,5 +77,15 @@ public class OrderController {
     ) {
         OrderResponse response = orderService.cancelOrder(userDetails.getUser().getId(), id);
         return ResponseEntity.ok(ApiResponse.success("Hủy đơn hàng thành công", response));
+    }
+
+    @Operation(summary = "Lấy mã QR thanh toán đơn hàng", description = "Lấy QR thanh toán và chi tiết thanh toán cho 1 hoặc nhiều mã đơn hàng (cách nhau bởi dấu phẩy)")
+    @GetMapping("/{orderCode}/qr")
+    public ResponseEntity<ApiResponse<QrOrderDetailResponse>> getOrderQrDetail(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("orderCode") String orderCode
+    ) {
+        QrOrderDetailResponse response = orderService.getOrderQrDetail(userDetails.getUser().getId(), orderCode);
+        return ResponseEntity.ok(ApiResponse.success("Lấy thông tin QR thanh toán thành công", response));
     }
 }

@@ -48,6 +48,12 @@ class VoucherServiceTest {
     @Mock
     private VoucherMapper voucherMapper;
 
+    @Mock
+    private com.b2c.flash_sale_b2c_UTC2.voucher.repository.UserVoucherRepository userVoucherRepository;
+
+    @Mock
+    private com.b2c.flash_sale_b2c_UTC2.user.repository.UserRepository userRepository;
+
     @InjectMocks
     private VoucherServiceImpl voucherService;
 
@@ -335,6 +341,74 @@ class VoucherServiceTest {
 
         assertNotNull(responses);
         assertEquals(1, responses.size());
+    }
+
+    @Test
+    @DisplayName("Lưu voucher vào ví thành công")
+    void saveVoucherToWallet_Success() {
+        when(voucherRepository.findByCodeIgnoreCase("UTC2DISCOUNT")).thenReturn(Optional.of(sampleVoucher));
+        when(userVoucherRepository.existsByUserIdAndVoucherId(1L, sampleVoucher.getId())).thenReturn(false);
+        when(voucherUsageRepository.countByVoucherIdAndUserId(sampleVoucher.getId(), 1L)).thenReturn(0L);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(sampleUser));
+
+        com.b2c.flash_sale_b2c_UTC2.voucher.dto.SaveVoucherRequest request =
+                com.b2c.flash_sale_b2c_UTC2.voucher.dto.SaveVoucherRequest.builder().code("UTC2DISCOUNT").build();
+
+        com.b2c.flash_sale_b2c_UTC2.voucher.dto.UserVoucherResponse response = voucherService.saveVoucherToWallet(1L, request);
+
+        assertNotNull(response);
+        assertEquals("UTC2DISCOUNT", response.getCode());
+        assertEquals("ACTIVE", response.getStatus());
+        verify(userVoucherRepository, times(1)).save(any());
+    }
+
+    @Test
+    @DisplayName("Lưu voucher thất bại khi voucher đã được lưu trước đó")
+    void saveVoucherToWallet_AlreadySaved_ThrowsConflict() {
+        when(voucherRepository.findByCodeIgnoreCase("UTC2DISCOUNT")).thenReturn(Optional.of(sampleVoucher));
+        when(userVoucherRepository.existsByUserIdAndVoucherId(1L, sampleVoucher.getId())).thenReturn(true);
+
+        com.b2c.flash_sale_b2c_UTC2.voucher.dto.SaveVoucherRequest request =
+                com.b2c.flash_sale_b2c_UTC2.voucher.dto.SaveVoucherRequest.builder().code("UTC2DISCOUNT").build();
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> voucherService.saveVoucherToWallet(1L, request));
+        assertEquals(VoucherErrorCode.VOUCHER_ALREADY_SAVED, ex.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("Lưu voucher thất bại khi đã hết lượt dùng của user")
+    void saveVoucherToWallet_UserLimitExceeded_ThrowsBadRequest() {
+        when(voucherRepository.findByCodeIgnoreCase("UTC2DISCOUNT")).thenReturn(Optional.of(sampleVoucher));
+        when(userVoucherRepository.existsByUserIdAndVoucherId(1L, sampleVoucher.getId())).thenReturn(false);
+        when(voucherUsageRepository.countByVoucherIdAndUserId(sampleVoucher.getId(), 1L)).thenReturn(1L);
+
+        com.b2c.flash_sale_b2c_UTC2.voucher.dto.SaveVoucherRequest request =
+                com.b2c.flash_sale_b2c_UTC2.voucher.dto.SaveVoucherRequest.builder().code("UTC2DISCOUNT").build();
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> voucherService.saveVoucherToWallet(1L, request));
+        assertEquals(VoucherErrorCode.VOUCHER_USER_LIMIT_EXCEEDED, ex.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("Lấy danh sách voucher trong ví thành công")
+    void getMyVouchers_Success() {
+        com.b2c.flash_sale_b2c_UTC2.voucher.entity.UserVoucher uv =
+                com.b2c.flash_sale_b2c_UTC2.voucher.entity.UserVoucher.builder()
+                        .id(1L)
+                        .user(sampleUser)
+                        .voucher(sampleVoucher)
+                        .savedAt(Instant.now())
+                        .build();
+
+        when(userVoucherRepository.findAllByUserIdWithVoucherAndStore(1L)).thenReturn(List.of(uv));
+        when(voucherUsageRepository.countByUserIdAndVoucherIdIn(eq(1L), anyList())).thenReturn(List.<Object[]>of(new Object[]{sampleVoucher.getId(), 0L}));
+
+        List<com.b2c.flash_sale_b2c_UTC2.voucher.dto.UserVoucherResponse> responses = voucherService.getMyVouchers(1L);
+
+        assertNotNull(responses);
+        assertEquals(1, responses.size());
+        assertEquals("UTC2DISCOUNT", responses.get(0).getCode());
+        assertEquals("ACTIVE", responses.get(0).getStatus());
     }
 }
 

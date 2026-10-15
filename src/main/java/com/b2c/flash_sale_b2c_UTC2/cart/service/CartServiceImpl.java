@@ -22,10 +22,13 @@ import com.b2c.flash_sale_b2c_UTC2.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import com.b2c.flash_sale_b2c_UTC2.store.enums.StoreTier;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -188,6 +191,7 @@ public class CartServiceImpl implements CartService {
 
             CartItemResponse itemDto = CartItemResponse.builder()
                     .id(item.getId())
+                    .productId(variant.getProduct().getId())
                     .variantId(variant.getId())
                     .sku(variant.getSku())
                     .productName(variant.getProduct().getName())
@@ -204,22 +208,53 @@ public class CartServiceImpl implements CartService {
             totalItems += item.getQuantity();
             grandTotal = grandTotal.add(itemSubtotal);
 
-            CartStoreGroupResponse group = storeGroupMap.computeIfAbsent(store.getId(), k -> CartStoreGroupResponse.builder()
-                    .storeId(store.getId())
-                    .storeName(store.getStoreName())
-                    .items(new ArrayList<>())
-                    .storeSubtotal(BigDecimal.ZERO)
-                    .build());
+            CartStoreGroupResponse group = storeGroupMap.computeIfAbsent(store.getId(), k -> {
+                String storeBadge = "";
+                if (store.getTier() != null) {
+                    switch (store.getTier()) {
+                        case OFFICIAL_MALL -> storeBadge = "OfficialMall";
+                        case PREFERRED -> storeBadge = "Mall";
+                        default -> storeBadge = "";
+                    }
+                }
+                LocalDate today = LocalDate.now();
+                LocalDate fromDate = today.plusDays(2);
+                LocalDate toDate = today.plusDays(4);
+                DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd 'Th'M");
+                String estimatedDeliveryLabel = "Giao vào " + fromDate.format(fmt) + " - " + toDate.format(fmt);
+
+                return CartStoreGroupResponse.builder()
+                        .storeId(store.getId())
+                        .storeName(store.getStoreName())
+                        .storeBadge(storeBadge)
+                        .estimatedDeliveryLabel(estimatedDeliveryLabel)
+                        .shippingMethodLabel("Tiêu chuẩn")
+                        .shippingFee(BigDecimal.ZERO)
+                        .items(new ArrayList<>())
+                        .storeSubtotal(BigDecimal.ZERO)
+                        .build();
+            });
 
             group.getItems().add(itemDto);
             group.setStoreSubtotal(group.getStoreSubtotal().add(itemSubtotal));
         }
+
+        BigDecimal totalShippingFee = BigDecimal.ZERO;
+        for (CartStoreGroupResponse g : storeGroupMap.values()) {
+            if (g.getShippingFee() != null) {
+                totalShippingFee = totalShippingFee.add(g.getShippingFee());
+            }
+        }
+        BigDecimal totalAmount = grandTotal.add(totalShippingFee);
 
         return CartResponse.builder()
                 .id(cart.getId())
                 .userId(cart.getUser().getId())
                 .storeGroups(new ArrayList<>(storeGroupMap.values()))
                 .totalItems(totalItems)
+                .subtotal(grandTotal)
+                .totalShippingFee(totalShippingFee)
+                .totalAmount(totalAmount)
                 .grandTotal(grandTotal)
                 .build();
     }

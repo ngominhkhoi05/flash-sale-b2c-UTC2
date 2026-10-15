@@ -31,4 +31,21 @@ public interface VoucherService {
      * @param orderId ID đơn hàng bị hủy
      */
     void rollbackVoucherUsage(Long orderId);
+
+    /**
+     * Lấy danh sách voucher đã lưu trong kho ví cá nhân của người dùng.
+     *
+     * @param userId ID người dùng
+     * @return Danh sách voucher đã lưu
+     */
+    List<com.b2c.flash_sale_b2c_UTC2.voucher.dto.UserVoucherResponse> getMyVouchers(Long userId);
+
+    /**
+     * Lưu mã voucher vào kho ví cá nhân của người dùng.
+     *
+     * @param userId ID người dùng
+     * @param request Yêu cầu chứa mã voucher
+     * @return Thông tin voucher sau khi lưu
+     */
+    com.b2c.flash_sale_b2c_UTC2.voucher.dto.UserVoucherResponse saveVoucherToWallet(Long userId, com.b2c.flash_sale_b2c_UTC2.voucher.dto.SaveVoucherRequest request);
 }
