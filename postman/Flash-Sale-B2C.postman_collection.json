@@ -33,7 +33,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"fullName\": \"{{testFullName}}\",\n  \"phone\": \"{{testPhone}}\",\n  \"role\": \"BUYER\"\n}"
+              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"fullName\": \"{{testFullName}}\",\n  \"phone\": \"{{testPhone}}\",\n  \"role\": \"BUYER\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -74,7 +79,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{sellerEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"fullName\": \"{{sellerFullName}}\",\n  \"phone\": \"{{sellerPhone}}\",\n  \"role\": \"SELLER\"\n}"
+              "raw": "{\n  \"email\": \"{{sellerEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"fullName\": \"{{sellerFullName}}\",\n  \"phone\": \"{{sellerPhone}}\",\n  \"role\": \"SELLER\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -115,7 +125,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"usernameOrEmail\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}"
+              "raw": "{\n  \"usernameOrEmail\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -157,7 +172,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"usernameOrEmail\": \"{{sellerEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}"
+              "raw": "{\n  \"usernameOrEmail\": \"{{sellerEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -199,7 +219,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"usernameOrEmail\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+              "raw": "{\n  \"usernameOrEmail\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -241,7 +266,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -293,7 +323,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -717,7 +752,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"fullName\": \"Test Buyer Updated\",\n  \"phone\": \"0900000099\"\n}"
+              "raw": "{\n  \"fullName\": \"Test Buyer Updated\",\n  \"phone\": \"0900000099\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []
@@ -757,7 +797,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"oldPassword\": \"{{testPassword}}\",\n  \"newPassword\": \"NewPass@123\"\n}"
+              "raw": "{\n  \"oldPassword\": \"{{testPassword}}\",\n  \"newPassword\": \"NewPass@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []
@@ -873,7 +918,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"contactName\": \"{{testFullName}}\",\n  \"phone\": \"{{testPhone}}\",\n  \"province\": \"{{testProvince}}\",\n  \"district\": \"{{testDistrict}}\",\n  \"ward\": \"{{testWard}}\",\n  \"detailAddress\": \"{{testDetailAddress}}\",\n  \"isDefault\": true\n}"
+              "raw": "{\n  \"contactName\": \"{{testFullName}}\",\n  \"phone\": \"{{testPhone}}\",\n  \"province\": \"{{testProvince}}\",\n  \"district\": \"{{testDistrict}}\",\n  \"ward\": \"{{testWard}}\",\n  \"detailAddress\": \"{{testDetailAddress}}\",\n  \"isDefault\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -957,7 +1007,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"contactName\": \"Updated\",\n  \"phone\": \"{{testPhone}}\",\n  \"province\": \"{{testProvince}}\",\n  \"district\": \"{{testDistrict}}\",\n  \"ward\": \"{{testWard}}\",\n  \"detailAddress\": \"Updated detail\"\n}"
+              "raw": "{\n  \"contactName\": \"Updated\",\n  \"phone\": \"{{testPhone}}\",\n  \"province\": \"{{testProvince}}\",\n  \"district\": \"{{testDistrict}}\",\n  \"ward\": \"{{testWard}}\",\n  \"detailAddress\": \"Updated detail\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []
@@ -1109,7 +1164,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"variantId\": \"{{variantId}}\",\n  \"quantity\": 2\n}"
+              "raw": "{\n  \"variantId\": \"{{variantId}}\",\n  \"quantity\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []
@@ -1149,7 +1209,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"quantity\": 3\n}"
+              "raw": "{\n  \"quantity\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []
@@ -1264,7 +1329,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"shippingAddressId\": \"{{addressId}}\",\n  \"storeOrders\": [\n    {\n      \"storeId\": \"{{storeId}}\",\n      \"items\": [\n        {\n          \"variantId\": \"{{variantId}}\",\n          \"quantity\": 1\n        }\n      ],\n      \"voucherCode\": null\n    }\n  ]\n}"
+              "raw": "{\n  \"shippingAddressId\": \"{{addressId}}\",\n  \"storeOrders\": [\n    {\n      \"storeId\": \"{{storeId}}\",\n      \"items\": [\n        {\n          \"variantId\": \"{{variantId}}\",\n          \"quantity\": 1\n        }\n      ],\n      \"voucherCode\": null\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -1660,7 +1730,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"code\": \"{{voucherCode}}\"\n}"
+              "raw": "{\n  \"code\": \"{{voucherCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -1712,7 +1787,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"code\": \"{{voucherCode}}\",\n  \"storeId\": \"{{storeId}}\",\n  \"subtotalAmount\": 500000\n}"
+              "raw": "{\n  \"code\": \"{{voucherCode}}\",\n  \"storeId\": \"{{storeId}}\",\n  \"subtotalAmount\": 500000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []
@@ -1761,7 +1841,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"flashSaleItemId\": \"{{flashSaleItemId}}\",\n  \"addressId\": \"{{addressId}}\",\n  \"quantity\": 1\n}"
+              "raw": "{\n  \"flashSaleItemId\": \"{{flashSaleItemId}}\",\n  \"addressId\": \"{{addressId}}\",\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -1848,7 +1933,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"flashSaleItemId\": \"{{flashSaleItemId}}\",\n  \"addressId\": \"{{addressId}}\",\n  \"quantity\": 1\n}"
+              "raw": "{\n  \"flashSaleItemId\": \"{{flashSaleItemId}}\",\n  \"addressId\": \"{{addressId}}\",\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -1915,7 +2005,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"storeName\": \"{{sellerStoreName}}\",\n  \"description\": \"Test store\"\n}"
+              "raw": "{\n  \"storeName\": \"{{sellerStoreName}}\",\n  \"description\": \"Test store\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -1997,7 +2092,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"storeName\": \"{{sellerStoreName}} Updated\",\n  \"description\": \"Updated\"\n}"
+              "raw": "{\n  \"storeName\": \"{{sellerStoreName}} Updated\",\n  \"description\": \"Updated\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []
@@ -2130,7 +2230,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"contactName\": \"Kho Manager\",\n  \"phone\": \"{{sellerPhone}}\",\n  \"province\": \"{{testProvince}}\",\n  \"district\": \"{{testDistrict}}\",\n  \"ward\": \"{{testWard}}\",\n  \"detailAddress\": \"Kho so 1\",\n  \"isDefault\": true\n}"
+              "raw": "{\n  \"contactName\": \"Kho Manager\",\n  \"phone\": \"{{sellerPhone}}\",\n  \"province\": \"{{testProvince}}\",\n  \"district\": \"{{testDistrict}}\",\n  \"ward\": \"{{testWard}}\",\n  \"detailAddress\": \"Kho so 1\",\n  \"isDefault\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []
@@ -2171,7 +2276,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"contactName\": \"Kho Manager\",\n  \"phone\": \"{{sellerPhone}}\",\n  \"province\": \"{{testProvince}}\",\n  \"district\": \"{{testDistrict}}\",\n  \"ward\": \"{{testWard}}\",\n  \"detailAddress\": \"Kho updated\"\n}"
+              "raw": "{\n  \"contactName\": \"Kho Manager\",\n  \"phone\": \"{{sellerPhone}}\",\n  \"province\": \"{{testProvince}}\",\n  \"district\": \"{{testDistrict}}\",\n  \"ward\": \"{{testWard}}\",\n  \"detailAddress\": \"Kho updated\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []
@@ -2296,7 +2406,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"categoryId\": 1,\n  \"name\": \"Test Product {{$randomInt}}\",\n  \"description\": \"Test\",\n  \"tierVariationConfigs\": [\n    {\n      \"name\": \"Mau sac\",\n      \"options\": [\n        \"Den\",\n        \"Trang\"\n      ]\n    }\n  ],\n  \"variants\": [\n    {\n      \"sku\": \"TEST-SKU-{{$randomInt}}\",\n      \"variantName\": \"Den, Size M\",\n      \"attributes\": {\n        \"Mau sac\": \"Den\",\n        \"Kich co\": \"M\"\n      },\n      \"originalPrice\": 500000,\n      \"stockQuantity\": 100\n    }\n  ]\n}"
+              "raw": "{\n  \"categoryId\": 1,\n  \"name\": \"Test Product {{$randomInt}}\",\n  \"description\": \"Test\",\n  \"tierVariationConfigs\": [\n    {\n      \"name\": \"Mau sac\",\n      \"options\": [\n        \"Den\",\n        \"Trang\"\n      ]\n    }\n  ],\n  \"variants\": [\n    {\n      \"sku\": \"TEST-SKU-{{$randomInt}}\",\n      \"variantName\": \"Den, Size M\",\n      \"attributes\": {\n        \"Mau sac\": \"Den\",\n        \"Kich co\": \"M\"\n      },\n      \"originalPrice\": 500000,\n      \"stockQuantity\": 100\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -2416,7 +2531,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"categoryId\": 1,\n  \"name\": \"Updated\",\n  \"description\": \"Updated\",\n  \"tierVariationConfigs\": [\n    {\n      \"name\": \"Mau sac\",\n      \"options\": [\n        \"Den\",\n        \"Trang\"\n      ]\n    }\n  ],\n  \"variants\": [\n    {\n      \"id\": \"{{variantId}}\",\n      \"sku\": \"UPDATED\",\n      \"variantName\": \"Den, M\",\n      \"attributes\": {\n        \"Mau sac\": \"Den\"\n      },\n      \"originalPrice\": 450000,\n      \"stockQuantity\": 100\n    }\n  ]\n}"
+              "raw": "{\n  \"categoryId\": 1,\n  \"name\": \"Updated\",\n  \"description\": \"Updated\",\n  \"tierVariationConfigs\": [\n    {\n      \"name\": \"Mau sac\",\n      \"options\": [\n        \"Den\",\n        \"Trang\"\n      ]\n    }\n  ],\n  \"variants\": [\n    {\n      \"id\": \"{{variantId}}\",\n      \"sku\": \"UPDATED\",\n      \"variantName\": \"Den, M\",\n      \"attributes\": {\n        \"Mau sac\": \"Den\"\n      },\n      \"originalPrice\": 450000,\n      \"stockQuantity\": 100\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []
@@ -2654,7 +2774,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"status\": \"SHIPPED\"\n}"
+              "raw": "{\n  \"status\": \"SHIPPED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "auth": {
               "type": "bearer",
@@ -2721,7 +2846,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"slotId\": \"{{flashSaleSlotId}}\",\n  \"variantId\": \"{{variantId}}\",\n  \"flashSalePrice\": 299000,\n  \"allocatedStock\": 50,\n  \"userPurchaseLimit\": 2\n}"
+              "raw": "{\n  \"slotId\": \"{{flashSaleSlotId}}\",\n  \"variantId\": \"{{variantId}}\",\n  \"flashSalePrice\": 299000,\n  \"allocatedStock\": 50,\n  \"userPurchaseLimit\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -2908,7 +3038,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"displayOrder\": 1\n}"
+              "raw": "{\n  \"displayOrder\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []
@@ -3024,7 +3159,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"code\": \"STORE{{$randomInt}}\",\n  \"storeId\": \"{{storeId}}\",\n  \"discountType\": \"PERCENT\",\n  \"discountValue\": 10,\n  \"minOrderAmount\": 200000,\n  \"maxDiscountAmount\": 50000,\n  \"totalQuantity\": 100,\n  \"userUsageLimit\": 1,\n  \"startTime\": \"2026-10-15T00:00:00Z\",\n  \"endTime\": \"2026-12-31T23:59:59Z\"\n}"
+              "raw": "{\n  \"code\": \"STORE{{$randomInt}}\",\n  \"storeId\": \"{{storeId}}\",\n  \"discountType\": \"PERCENT\",\n  \"discountValue\": 10,\n  \"minOrderAmount\": 200000,\n  \"maxDiscountAmount\": 50000,\n  \"totalQuantity\": 100,\n  \"userUsageLimit\": 1,\n  \"startTime\": \"2026-10-15T00:00:00Z\",\n  \"endTime\": \"2026-12-31T23:59:59Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -3122,7 +3262,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Test Cat {{$randomInt}}\",\n  \"slug\": \"test-cat-{{$randomInt}}\",\n  \"commissionRate\": 0.05,\n  \"description\": \"Test\"\n}"
+              "raw": "{\n  \"name\": \"Test Cat {{$randomInt}}\",\n  \"slug\": \"test-cat-{{$randomInt}}\",\n  \"commissionRate\": 0.05,\n  \"description\": \"Test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -3175,7 +3320,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Updated\",\n  \"slug\": \"updated-cat\",\n  \"commissionRate\": 0.08\n}"
+              "raw": "{\n  \"name\": \"Updated\",\n  \"slug\": \"updated-cat\",\n  \"commissionRate\": 0.08\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []
@@ -3263,7 +3413,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"status\": \"APPROVED\"\n}"
+              "raw": "{\n  \"status\": \"APPROVED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -3332,7 +3487,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Test Slot {{$randomInt}}\",\n  \"startTime\": \"2026-12-01T10:00:00Z\",\n  \"endTime\": \"2026-12-01T12:00:00Z\",\n  \"reservationTtlSeconds\": 300\n}"
+              "raw": "{\n  \"title\": \"Test Slot {{$randomInt}}\",\n  \"startTime\": \"2026-12-01T10:00:00Z\",\n  \"endTime\": \"2026-12-01T12:00:00Z\",\n  \"reservationTtlSeconds\": 300\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -3386,7 +3546,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Updated\",\n  \"startTime\": \"2026-12-01T10:00:00Z\",\n  \"endTime\": \"2026-12-01T13:00:00Z\",\n  \"reservationTtlSeconds\": 300,\n  \"status\": \"PENDING\"\n}"
+              "raw": "{\n  \"title\": \"Updated\",\n  \"startTime\": \"2026-12-01T10:00:00Z\",\n  \"endTime\": \"2026-12-01T13:00:00Z\",\n  \"reservationTtlSeconds\": 300,\n  \"status\": \"PENDING\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []
@@ -3580,7 +3745,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"code\": \"PLATFORM{{$randomInt}}\",\n  \"discountType\": \"PERCENT\",\n  \"discountValue\": 5,\n  \"minOrderAmount\": 100000,\n  \"maxDiscountAmount\": 30000,\n  \"totalQuantity\": 1000,\n  \"userUsageLimit\": 1,\n  \"startTime\": \"2026-10-15T00:00:00Z\",\n  \"endTime\": \"2026-12-31T23:59:59Z\"\n}"
+              "raw": "{\n  \"code\": \"PLATFORM{{$randomInt}}\",\n  \"discountType\": \"PERCENT\",\n  \"discountValue\": 5,\n  \"minOrderAmount\": 100000,\n  \"maxDiscountAmount\": 30000,\n  \"totalQuantity\": 1000,\n  \"userUsageLimit\": 1,\n  \"startTime\": \"2026-10-15T00:00:00Z\",\n  \"endTime\": \"2026-12-31T23:59:59Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -3688,7 +3858,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"type\": \"HERO\",\n  \"position\": 0,\n  \"imageUrl\": \"https://res.cloudinary.com/demo/image/upload/v1/banner.jpg\",\n  \"imageAlt\": \"Banner\",\n  \"ctaHref\": \"/products\",\n  \"ctaText\": \"Shop now\",\n  \"isActive\": true,\n  \"startDate\": \"2026-10-15T00:00:00Z\",\n  \"endDate\": \"2026-12-31T23:59:59Z\"\n}"
+              "raw": "{\n  \"type\": \"HERO\",\n  \"position\": 0,\n  \"imageUrl\": \"https://res.cloudinary.com/demo/image/upload/v1/banner.jpg\",\n  \"imageAlt\": \"Banner\",\n  \"ctaHref\": \"/products\",\n  \"ctaText\": \"Shop now\",\n  \"isActive\": true,\n  \"startDate\": \"2026-10-15T00:00:00Z\",\n  \"endDate\": \"2026-12-31T23:59:59Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -3741,7 +3916,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"type\": \"HERO\",\n  \"position\": 1,\n  \"imageUrl\": \"https://res.cloudinary.com/demo/image/upload/v1/banner2.jpg\",\n  \"ctaText\": \"Updated\",\n  \"isActive\": true\n}"
+              "raw": "{\n  \"type\": \"HERO\",\n  \"position\": 1,\n  \"imageUrl\": \"https://res.cloudinary.com/demo/image/upload/v1/banner2.jpg\",\n  \"ctaText\": \"Updated\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": []
@@ -3967,7 +4147,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"fullName\": \"Dup\",\n  \"phone\": \"0900000099\",\n  \"role\": \"BUYER\"\n}"
+              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"fullName\": \"Dup\",\n  \"phone\": \"0900000099\",\n  \"role\": \"BUYER\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
@@ -4008,7 +4193,12 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"\",\n  \"password\": \"123\",\n  \"fullName\": \"\",\n  \"phone\": \"\",\n  \"role\": \"BUYER\"\n}"
+              "raw": "{\n  \"email\": \"\",\n  \"password\": \"123\",\n  \"fullName\": \"\",\n  \"phone\": \"\",\n  \"role\": \"BUYER\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "response": [],
