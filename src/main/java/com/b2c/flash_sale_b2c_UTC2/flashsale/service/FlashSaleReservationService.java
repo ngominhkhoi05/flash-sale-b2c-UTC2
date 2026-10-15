@@ -11,6 +11,7 @@ import com.b2c.flash_sale_b2c_UTC2.flashsale.port.CreateFlashSaleOrderCommand;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.port.FlashSaleOrderPort;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.port.OrderRef;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.realtime.FlashSaleWsBroadcaster;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.realtime.FlashSaleWsEvent;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.repository.FlashSaleItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.strategy.StockReservationStrategy;
 import com.b2c.flash_sale_b2c_UTC2.order.entity.Order;
@@ -18,7 +19,9 @@ import com.b2c.flash_sale_b2c_UTC2.order.entity.OrderItem;
 import com.b2c.flash_sale_b2c_UTC2.order.repository.OrderItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.order.repository.OrderRepository;
 import com.b2c.flash_sale_b2c_UTC2.user.entity.Address;
+import com.b2c.flash_sale_b2c_UTC2.user.entity.User;
 import com.b2c.flash_sale_b2c_UTC2.user.repository.AddressRepository;
+import com.b2c.flash_sale_b2c_UTC2.user.repository.UserRepository;
 import com.b2c.flash_sale_b2c_UTC2.voucher.service.VoucherService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,6 +56,9 @@ public class FlashSaleReservationService {
 
     @Autowired(required = false)
     private OrderItemRepository orderItemRepository;
+
+    @Autowired(required = false)
+    private UserRepository userRepository;
 
     @Autowired(required = false)
     private VoucherService voucherService;
@@ -219,6 +225,28 @@ public class FlashSaleReservationService {
                 if (idemKey != null) {
                     redisTemplate.opsForValue().set(idemKey, orderRef.orderCode(), Duration.ofMinutes(10));
                 }
+            }
+
+            // Gửi ORDER_RESERVED riêng tới buyer qua WebSocket
+            try {
+                User buyer = (userRepository != null)
+                        ? userRepository.findById(userId).orElse(null) : null;
+                if (buyer != null) {
+                    FlashSaleWsEvent event = FlashSaleWsEvent.builder()
+                            .eventType(FlashSaleWsEvent.EventType.ORDER_RESERVED)
+                            .slotId(slot.getId())
+                            .flashSaleItemId(item.getId())
+                            .orderId(orderRef.orderId())
+                            .orderCode(orderRef.orderCode())
+                            .quantity(request.getQuantity())
+                            .totalAmount(totalAmount.longValue())
+                            .expiresAt(expiresAt)
+                            .occurredAt(Instant.now())
+                            .build();
+                    wsBroadcaster.sendReservationResultToUser(buyer.getEmail(), event);
+                }
+            } catch (Exception wsEx) {
+                log.warn("[WS] Failed to send ORDER_RESERVED to user {}: {}", userId, wsEx.getMessage());
             }
 
             return ReservationResponse.builder()
