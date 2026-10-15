@@ -69,7 +69,10 @@ class AuthSecurityIntegrationTest {
     private JwtService jwtService;
 
     @MockitoBean
-    private UserDetailsService userDetailsService;
+    private com.b2c.flash_sale_b2c_UTC2.auth.security.CustomUserDetailsService userDetailsService;
+
+    @MockitoBean
+    private com.b2c.flash_sale_b2c_UTC2.auth.service.GoogleOAuth2Service googleOAuth2Service;
 
     @Test
     @DisplayName("Truy cập endpoint được bảo vệ (/api/v1/users/me) khi không có token -> 401 Unauthorized")

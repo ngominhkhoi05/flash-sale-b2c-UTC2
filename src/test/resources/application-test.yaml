@@ -55,6 +55,19 @@ cloudinary:
 cors:
   allowed-origins: "*"
 
+# --- Google OAuth2 (Authorization Code flow - test stub) ---
+# Integration test thuong MOCK GoogleOAuth2Service nen cac gia tri ben duoi
+# chi dung khi test gọi Google HTTP that. Neu mock, gia tri khong quan trong.
+google:
+  oauth2:
+    client-id: "test-google-client-id.apps.googleusercontent.com"
+    client-secret: "test-google-client-secret"
+    redirect-uri: "http://localhost:3000/oauth2/redirect"
+    token-endpoint: "https://oauth2.googleapis.com/token"
+    user-info-endpoint: "https://www.googleapis.com/oauth2/v3/userinfo"
+    jwks-uri: "https://www.googleapis.com/oauth2/v3/certs"
+    issuer: "https://accounts.google.com"
+
 # --- Logging: reduce noise ---
 logging:
   level:

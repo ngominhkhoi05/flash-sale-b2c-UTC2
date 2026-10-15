@@ -76,3 +76,18 @@ zalopay:
   endpoint: https://sb-openapi.zalopay.vn/v2/create
   callback-url: https://YOUR_NGROK_HOST.ngrok-free.dev/api/v1/payments/zalopay/callback
   app-user: FlashSaleB2C
+
+# --- Google OAuth2 (Authorization Code flow cho /api/v1/auth/google/*) ---
+# TODO: Dang ky OAuth client tai https://console.cloud.google.com/apis/credentials
+# roi dien 3 bien sau. Authorized redirect URI o Google Console phai khop voi
+# redirect-uri ben duoi. Hoac dat env var GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+# OAUTH2_REDIRECT_URI khi run app.
+google:
+  oauth2:
+    client-id: YOUR_GOOGLE_CLIENT_ID
+    client-secret: YOUR_GOOGLE_CLIENT_SECRET
+    redirect-uri: http://localhost:3000/oauth2/redirect
+    token-endpoint: https://oauth2.googleapis.com/token
+    user-info-endpoint: https://www.googleapis.com/oauth2/v3/userinfo
+    jwks-uri: https://www.googleapis.com/oauth2/v3/certs
+    issuer: https://accounts.google.com
