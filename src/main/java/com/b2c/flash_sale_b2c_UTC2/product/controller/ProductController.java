@@ -6,9 +6,11 @@ import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductDetailResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductFilterRequest;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductSummaryResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.RecommendedProductsResponse;
+import com.b2c.flash_sale_b2c_UTC2.product.enums.ProductSortOption;
 import com.b2c.flash_sale_b2c_UTC2.product.service.ProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -16,11 +18,12 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.math.BigDecimal;
 
 @RestController
 @RequestMapping("/api/v1/products")
@@ -58,9 +61,48 @@ public class ProductController {
                description = "Hỗ trợ lọc theo categoryId, từ khoá keyword, khoang giá minPrice-maxPrice, phân trang PageResponse. " +
                              "Để xem chi tiết sản phẩm theo ID dùng GET /api/v1/products/{id}, theo slug dùng GET /api/v1/products/slug/{slug}.")
     public ResponseEntity<ApiResponse<PageResponse<ProductSummaryResponse>>> getPublicProducts(
-            @ModelAttribute ProductFilterRequest filter,
+            @Parameter(description = "Lọc theo category ID")
+            @RequestParam(value = "categoryId", required = false) Integer categoryId,
+
+            @Parameter(description = "Từ khoá tìm kiếm theo tên sản phẩm")
+            @RequestParam(value = "keyword", required = false) String keyword,
+
+            @Parameter(description = "Giá tối thiểu (VND)")
+            @RequestParam(value = "minPrice", required = false) BigDecimal minPrice,
+
+            @Parameter(description = "Giá tối đa (VND)")
+            @RequestParam(value = "maxPrice", required = false) BigDecimal maxPrice,
+
+            @Parameter(description = "Rating tối thiểu (0-5). Lọc sản phẩm có ratingAvg >= value.")
+            @RequestParam(value = "rating", required = false) Integer rating,
+
+            @Parameter(description = "Chỉ sản phẩm đang Flash Sale (true) hoặc tất cả (false/null)")
+            @RequestParam(value = "flashSaleOnly", required = false) Boolean flashSaleOnly,
+
+            @Parameter(description = "Chỉ sản phẩm đang giảm giá (true) hoặc tất cả (false/null)")
+            @RequestParam(value = "hasDiscount", required = false) Boolean hasDiscount,
+
+            @Parameter(description = "Đã bán tối thiểu (lọc sản phẩm có totalSold >= value)")
+            @RequestParam(value = "minSold", required = false) Integer minSold,
+
+            @Parameter(description = "Tuỳ chọn sắp xếp: createdAt_desc | createdAt_asc | price_asc | price_desc | sold_desc | rating_desc",
+                    schema = @Schema(implementation = ProductSortOption.class))
+            @RequestParam(value = "sortOption", required = false) ProductSortOption sortOption,
+
+            @Parameter(description = "Phân trang (page=0, size=20, sort=createdAt,DESC mặc định)")
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
+        ProductFilterRequest filter = ProductFilterRequest.builder()
+                .categoryId(categoryId)
+                .keyword(keyword)
+                .minPrice(minPrice)
+                .maxPrice(maxPrice)
+                .rating(rating)
+                .flashSaleOnly(flashSaleOnly)
+                .hasDiscount(hasDiscount)
+                .minSold(minSold)
+                .sortOption(sortOption)
+                .build();
         PageResponse<ProductSummaryResponse> response = productService.getPublicProducts(filter, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm thành công", response));
     }
