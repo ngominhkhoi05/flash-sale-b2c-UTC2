@@ -417,28 +417,7 @@ class FlashSaleCoreTest {
             verify(itemRepository, never()).replenishAvailableStockConditionally(anyLong(), anyInt());
         }
 
-        @Test
-        @DisplayName("Đóng slot hết hạn: tự động hoàn tồn kho ế (available_stock) về kho gốc variant")
-        void closeSlotAndReturnStock_Success() {
-            ProductVariant variant = ProductVariant.builder().id(200L).stockQuantity(30).build();
-            FlashSaleSlot slot = FlashSaleSlot.builder().id(1L).status("ACTIVE").build();
-            FlashSaleItem item = FlashSaleItem.builder()
-                    .id(500L)
-                    .slot(slot)
-                    .variant(variant)
-                    .allocatedStock(20)
-                    .availableStock(15) // còn 15 cái chưa bán được
-                    .status("APPROVED")
-                    .build();
-
-            when(orderPort.countPendingBySlot(1L)).thenReturn(0L);
-            when(itemRepository.findBySlotId(1L)).thenReturn(List.of(item));
-
-            scheduler.closeSlotAndReturnStock(slot);
-
-            verify(variantRepository).replenishStockQuantityConditionally(200L, 15);
-            assertEquals("ENDED", item.getStatus());
-            assertEquals("ENDED", slot.getStatus());
-        }
+        // closeSlotAndReturnStock was extracted to FlashSaleSlotCloseService
+        // to honor the @Transactional boundary (see FlashSaleSlotCloseServiceTest).
     }
 }
