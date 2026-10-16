@@ -37,8 +37,11 @@
 22. [Voucher Module](#22-voucher-module--apivouchers)
 23. [Seller Voucher Module](#23-seller-voucher-module--apisellervouchers)
 24. [Admin Voucher Module](#24-admin-voucher-module--apiadminvouchers)
+24b. [Wallet Module (Seller Draft)](#24b-wallet-module-seller-draft)
 25. [WebSocket Realtime](#25-websocket-realtime)
 26. [Bảng Mã Lỗi Tổng Hợp](#26-bảng-mã-lỗi-tổng-hợp)
+    - [26.11 Image Errors](#2611-image-errors)
+    - [26.12 Wallet Errors](#2612-wallet-errors-draft)
 27. [Phân Quyền Truy Cập Theo Role](#27-phân-quyền-truy-cập-theo-role)
 28. [Image Management Module (Polymorphic Storage - Cloudinary)](#28-image-management-module-polymorphic-storage---cloudinary)
 29. [Banner Module](#29-banner-module--apibanners-apibanners-admin-apibanners) (Public + Admin CRUD)
@@ -621,18 +624,28 @@ Hoàn tất Google OAuth2 flow: FE gửi `code` (authorization code) + `redirect
 ---
 ## 7. User Profile Module `/api/v1/users`
 
-> Yêu cầu: **Authentication** · **Tag Swagger**: `User Profile`
+> Yêu cầu: **Authentication (Bearer JWT)** · Mọi endpoint dưới đây đều yêu cầu `Authorization: Bearer <access_token>`.  
+> **Tag Swagger**: `User Profile`
 
 | Method | Endpoint | Access | Mô tả |
 |---|---|---|---|
-| `GET` | `/api/v1/users/me` | Authenticated | Lấy hồ sơ cá nhân |
-| `PUT` | `/api/v1/users/me` | Authenticated | Cập nhật hồ sơ |
-| `PUT` | `/api/v1/users/me/change-password` | Authenticated | Đổi mật khẩu |
-| `POST` | `/api/v1/users/me/avatar` | Authenticated | Upload avatar (multipart, soft-delete avatar cũ) |
+| `GET` | `/api/v1/users/me` | Authenticated (mọi role) | Lấy hồ sơ cá nhân (gồm `avatarUrl` + danh sách `roles`) |
+| `PUT` | `/api/v1/users/me` | Authenticated (mọi role) | Cập nhật họ tên, số điện thoại |
+| `PUT` | `/api/v1/users/me/change-password` | Authenticated (mọi role) | Đổi mật khẩu (đồng thời thu hồi toàn bộ refresh token trong Redis) |
+| `POST` | `/api/v1/users/me/avatar` | Authenticated (mọi role) | Upload avatar (multipart, soft-delete avatar cũ qua partial unique index) |
 
-### 7.1 `GET /api/v1/users/me`
+### 7.1 `GET /api/v1/users/me` — Xem hồ sơ cá nhân
 
-**Response:**
+| Mục | Giá trị |
+|---|---|
+| Method | `GET` |
+| Path | `/api/v1/users/me` |
+| Auth | **BẮT BUỘC** `Authorization: Bearer <access_token>` |
+| Role | Bất kỳ (BUYER, SELLER, ADMIN) |
+| Request body | Không |
+| Request query | Không |
+
+**Response `200 OK`** (`UserResponse`):
 
 ```json
 {
@@ -644,52 +657,75 @@ Hoàn tất Google OAuth2 flow: FE gửi `code` (authorization code) + `redirect
     "email": "buyer@example.com",
     "fullName": "Nguyễn Văn A",
     "phone": "0987654321",
-    "avatarUrl": null,
+    "avatarUrl": "https://res.cloudinary.com/.../avatar.jpg",
     "status": "ACTIVE",
-    "createdAt": "2026-10-01T..."
+    "createdAt": "2026-10-01T10:00:00Z",
+    "roles": ["ROLE_BUYER"]
   }
 }
 ```
 
-### 7.2 `PUT /api/v1/users/me`
+**Lỗi**:
 
-**Request Body (`UpdateProfileRequest`):**
-
-| Field | Type | Required | Validation |
-|---|---|---|---|
-| `fullName` | `string` | Có | max 100, không blank |
-| `phone` | `string` | Không | max 15 |
-
-> **Lưu ý**: `UpdateProfileRequest` không bao gồm `avatarUrl`. Avatar được upload riêng qua endpoint `POST /api/v1/users/me/avatar` (mục 7.4) sau khi cập nhật profile.
-
-### 7.3 `PUT /api/v1/users/me/change-password`
-
-**Request Body:**
-
-| Field | Type | Required | Validation |
-|---|---|---|---|
-| `oldPassword` | `string` | Có | không blank |
-| `newPassword` | `string` | Có | min 6, không blank |
-
-**Lỗi:**
-
-| Code | ErrorCode | Message |
+| HTTP | Code | Message |
 |---|---|---|
-| 400 | `USER_400_OLD_PASSWORD` | Mật khẩu hiện tại không chính xác |
+| 401 | `COMMON_401` (`UNAUTHORIZED`) | Thiếu/không hợp lệ token |
+| 404 | `USER_404_NOT_FOUND` | User không tồn tại (token hợp lệ nhưng user bị xóa) |
 
-### 7.4 `POST /api/v1/users/me/avatar`
+### 7.2 `PUT /api/v1/users/me` — Cập nhật hồ sơ
 
-Upload ảnh đại diện (multipart/form-data). Tự động soft-delete avatar cũ thông qua partial unique index `(owner_type, owner_id)` WHERE `is_primary = true`.
+**Request Body** (`UpdateProfileRequest` — `application/json`):
 
-**Request Body (`multipart/form-data`):**
+| Field | Type | Required | Validation | Ghi chú |
+|---|---|---|---|---|
+| `fullName` | `string` | **Có** | `@NotBlank`, `@Size(max=100)`, trim | Họ và tên hiển thị |
+| `phone` | `string` | Không | `@Size(max=15)`, trim; nếu trống → giữ nguyên | Nếu đổi sang số đã tồn tại của user khác → lỗi `AUTH_409_PHONE` |
 
-| Field | Type | Required | Mô tả |
+> `email`, `password`, `status`, `roles` KHÔNG cho phép cập nhật qua endpoint này.
+
+**Response `200 OK`** trả về `UserResponse` (giống mục 7.1).
+
+**Lỗi**:
+
+| HTTP | Code | Message |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | Thiếu `fullName` hoặc vượt quá max length |
+| 401 | `COMMON_401` (`UNAUTHORIZED`) | Thiếu/không hợp lệ token |
+| 404 | `USER_404_NOT_FOUND` | User không tồn tại |
+| 409 | `AUTH_409_PHONE` (`PHONE_ALREADY_EXISTS`) | Số điện thoại đã thuộc về user khác |
+
+### 7.3 `PUT /api/v1/users/me/change-password` — Đổi mật khẩu
+
+**Request Body** (`ChangePasswordRequest` — `application/json`):
+
+| Field | Type | Required | Validation |
 |---|---|---|---|
-| `file` | `binary` | Có | File ảnh (jpg/png/webp), max 10MB |
+| `oldPassword` | `string` | **Có** | `@NotBlank` |
+| `newPassword` | `string` | **Có** | `@NotBlank`, `@Size(min=6)` |
 
-**HTTP Status:** 201 Created
+**Response `200 OK`** với `data = null`, message `"Đổi mật khẩu thành công"`.  
+**Side effect**: BE tự động **xóa toàn bộ refresh token** của user trong Redis (`auth:user_tokens:{userId}` + `auth:refresh:{userId}:*`) → mọi phiên đăng nhập khác phải đăng nhập lại.
 
-**Response (`ImageResponse`):**
+**Lỗi**:
+
+| HTTP | Code | Message |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | `oldPassword` hoặc `newPassword` rỗng / dưới 6 ký tự |
+| 400 | `USER_400_OLD_PASSWORD` | Mật khẩu hiện tại không chính xác |
+| 401 | `COMMON_401` (`UNAUTHORIZED`) | Thiếu token |
+| 404 | `USER_404_NOT_FOUND` | User không tồn tại |
+
+### 7.4 `POST /api/v1/users/me/avatar` — Upload avatar
+
+**Request** (`multipart/form-data`):
+
+| Field | Type | Required | Validation |
+|---|---|---|---|
+| `file` | `binary` | **Có** | `@RequestPart("file") MultipartFile`; chỉ nhận jpg/jpeg/png/webp; max 10MB |
+
+**HTTP Status**: `201 Created`
+
+**Response** (`ImageResponse` — tham chiếu `image/dto/ImageResponse.java`):
 
 ```json
 {
@@ -701,90 +737,243 @@ Upload ảnh đại diện (multipart/form-data). Tự động soft-delete avata
   "isPrimary": true,
   "displayOrder": 0,
   "status": "ACTIVE",
-  "createdAt": "2026-10-12T..."
+  "createdAt": "2026-10-12T12:00:00Z"
 }
 ```
 
-**Lỗi:**
+> **Side effect**: avatar cũ (nếu có) bị soft-delete tự động nhờ partial unique index `(owner_type, owner_id) WHERE is_primary = true` ở DB (xem `image/polymorphic` rule).
 
-| Code | ErrorCode | Message |
+**Lỗi**:
+
+| HTTP | Code | Message |
 |---|---|---|
-| 400 | `IMAGE_400` (`FILE_TOO_LARGE` / `INVALID_FORMAT`) | File không hợp lệ (>10MB hoặc không phải jpg/png/webp) |
-| 502 | `IMAGE_502` (`CLOUDINARY_FAILED`) | Cloudinary upload thất bại |
+| 400 | `IMAGE_400_INVALID_INPUT` | Thiếu `file` hoặc `file` rỗng |
+| 400 | `IMAGE_400_FILE_TOO_LARGE` | File > 10MB |
+| 400 | `IMAGE_400_UNSUPPORTED_MEDIA` | Không phải jpg/jpeg/png/webp |
+| 401 | `COMMON_401` (`UNAUTHORIZED`) | Thiếu token |
+| 409 | `IMAGE_409_UPLOAD_FAILED` | Cloudinary upload thất bại |
+| 500 | `IMAGE_500_INTERNAL` | Lỗi nội bộ xử lý ảnh |
+
+### 7.5 Postman Test Cases — `03_User_Profile`
+
+| # | Test | Endpoint | Setup | Expect |
+|---|---|---|---|---|
+| 1 | Lấy hồ sơ thành công | `GET /me` | Token BUYER/SELLER/ADMIN hợp lệ | `200` + `data.id`, `data.email`, `data.fullName`, `data.roles` (mảng string) |
+| 2 | Thiếu token | `GET /me` | Không gửi Authorization | `401` + `code = COMMON_401` |
+| 3 | Token không hợp lệ | `GET /me` | `Bearer <token-sai>` | `401` + `code = AUTH_401_INVALID_TOKEN` |
+| 4 | Cập nhật fullName hợp lệ | `PUT /me` | Body `{fullName, phone}` hợp lệ | `200` + `data.fullName` phản ánh giá trị mới |
+| 5 | Thiếu fullName | `PUT /me` | Body `{}` hoặc `{phone}` | `400` + `code = VALIDATION_ERROR` |
+| 6 | Phone trùng user khác | `PUT /me` | Phone thuộc về 1 user khác trong DB | `409` + `code = AUTH_409_PHONE` |
+| 7 | Đổi mật khẩu thành công | `PUT /me/change-password` | Đúng `oldPassword` + `newPassword >= 6 ký tự` | `200` + `data = null` |
+| 8 | Sai mật khẩu cũ | `PUT /me/change-password` | `oldPassword` sai | `400` + `code = USER_400_OLD_PASSWORD` |
+| 9 | New password quá ngắn | `PUT /me/change-password` | `newPassword = "abc"` (< 6) | `400` + `code = VALIDATION_ERROR` |
+| 10 | Upload avatar hợp lệ | `POST /me/avatar` | Form-data với `file` JPG/PNG | `201` + `data.url` |
+| 11 | Upload file > 10MB | `POST /me/avatar` | File 11MB | `400` + `code = IMAGE_400_FILE_TOO_LARGE` |
+| 12 | Upload sai định dạng | `POST /me/avatar` | File `.gif` | `400` + `code = IMAGE_400_UNSUPPORTED_MEDIA` |
+| 13 | Upload không kèm file | `POST /me/avatar` | Form-data rỗng | `400` + `code = IMAGE_400_INVALID_INPUT` |
 
 ---
+
 
 ## 8. Address Book Module `/api/v1/users/addresses`
 
-> Yêu cầu: **Authentication** · **Tag Swagger**: `Address Book`
+> Yêu cầu: **Authentication (Bearer JWT)** · Chỉ chủ sở hữu mới thấy / sửa / xóa được địa chỉ của mình.  
+> **Tag Swagger**: `Address Book`
 
 | Method | Endpoint | Access | Mô tả |
 |---|---|---|---|
-| `GET` | `/api/v1/users/addresses` | Authenticated | Danh sách địa chỉ của user |
-| `POST` | `/api/v1/users/addresses` | Authenticated | Thêm địa chỉ mới |
-| `GET` | `/api/v1/users/addresses/{id}` | Owner | Xem chi tiết một địa chỉ |
-| `PUT` | `/api/v1/users/addresses/{id}` | Owner | Cập nhật địa chỉ |
-| `DELETE` | `/api/v1/users/addresses/{id}` | Owner | Xóa địa chỉ |
-| `PATCH` | `/api/v1/users/addresses/{id}/default` | Owner | Đặt làm địa chỉ mặc định |
+| `GET` | `/api/v1/users/addresses` | Authenticated | Danh sách địa chỉ của user (mặc định xếp đầu) |
+| `POST` | `/api/v1/users/addresses` | Authenticated | Tạo địa chỉ mới (địa chỉ đầu tiên → tự động làm mặc định) |
+| `GET` | `/api/v1/users/addresses/{id}` | Authenticated | Xem chi tiết 1 địa chỉ |
+| `PUT` | `/api/v1/users/addresses/{id}` | Authenticated | Cập nhật địa chỉ |
+| `DELETE` | `/api/v1/users/addresses/{id}` | Authenticated | Xóa địa chỉ (nếu xóa địa chỉ mặc định → tự động set 1 địa chỉ còn lại làm mặc định) |
+| `PATCH` | `/api/v1/users/addresses/{id}/default` | Authenticated | Đặt địa chỉ này làm mặc định (1 user chỉ có 1 địa chỉ mặc định) |
 
-### 8.1 `GET /api/v1/users/addresses`
+> **Ràng buộc XOR (DB-level CHECK)**: `user_id XOR store_id` (1 trong 2 phải NOT NULL, 1 cái còn lại NULL). Với user address → `store_id = null`.
 
-Trả về mảng `AddressResponse` (địa chỉ mặc định ưu tiên xếp đầu).
+### 8.1 `GET /api/v1/users/addresses` — Danh sách địa chỉ
 
-**Response item:**
+| Mục | Giá trị |
+|---|---|
+| Method | `GET` |
+| Path | `/api/v1/users/addresses` |
+| Auth | **BẮT BUỘC** `Authorization: Bearer <access_token>` |
+| Role | Bất kỳ (BUYER, SELLER, ADMIN) |
+| Request body / query | Không |
+
+**Response `200 OK`** — `List<AddressResponse>`:
 
 ```json
 {
-  "id": 1,
-  "contactName": "Nguyễn Văn A",
-  "phone": "0987654321",
-  "province": "TP. Hồ Chí Minh",
-  "district": "Quận 1",
-  "ward": "Phường Bến Nghé",
-  "detailAddress": "12 Nguyễn Huệ",
-  "latitude": 10.7769,
-  "longitude": 106.7009,
-  "isDefault": true,
-  "createdAt": "2026-10-01T...",
-  "updatedAt": "2026-10-01T..."
+  "success": true,
+  "code": 200,
+  "message": "OK",
+  "data": [
+    {
+      "id": 12,
+      "contactName": "Nguyễn Văn A",
+      "phone": "0987654321",
+      "province": "Hồ Chí Minh",
+      "district": "Quận 1",
+      "ward": "Phường Bến Nghé",
+      "detailAddress": "12 Đường Lê Lợi",
+      "latitude": 10.77200000,
+      "longitude": 106.70000000,
+      "isDefault": true,
+      "createdAt": "2026-10-01T10:00:00Z",
+      "updatedAt": "2026-10-12T12:00:00Z"
+    }
+  ]
 }
 ```
 
-### 8.2 `POST /api/v1/users/addresses`
+> Sort: `isDefault DESC, id DESC` (mặc định trước, mới nhất sau).
 
-**Request Body:**
+**Lỗi**:
 
-| Field | Type | Required | Validation | Mô tả |
-|---|---|---|---|---|
-| `contactName` | `string` | Có | max 100 | Tên người nhận |
-| `phone` | `string` | Có | max 15 | SĐT người nhận |
-| `province` | `string` | Có | max 100 | Tỉnh/TP |
-| `district` | `string` | Có | max 100 | Quận/Huyện |
-| `ward` | `string` | Có | max 100 | Phường/Xã |
-| `detailAddress` | `string` | Có | max 255 | Số nhà, đường |
-| `latitude` | `decimal` | Không | – | Toạ độ (optional) |
-| `longitude` | `decimal` | Không | – | Toạ độ (optional) |
-| `isDefault` | `boolean` | Không | default `false` | Mặc định cho user |
-
-**HTTP Status:** 201 Created
-
-**Lỗi:** 403 `USER_403_ADDRESS_DENIED` khi cố truy cập địa chỉ của người khác.
-
-### 8.5 `DELETE /api/v1/users/addresses/{id}`
-
-**Lỗi:**
-
-| Code | ErrorCode | Message |
+| HTTP | Code | Message |
 |---|---|---|
-| 400 | `USER_400_DELETE_DEFAULT` | Không thể xóa địa chỉ mặc định khi còn địa chỉ khác. Vui lòng đặt địa chỉ khác làm mặc định trước khi xóa |
+| 401 | `COMMON_401` | Thiếu/không hợp lệ token |
 
-### 8.6 `PATCH /api/v1/users/addresses/{id}/default`
+### 8.2 `POST /api/v1/users/addresses` — Tạo địa chỉ mới
 
-Khi set một địa chỉ làm mặc định, tất cả các địa chỉ khác của user sẽ tự động chuyển về `isDefault=false`.
+**Request Body** (`CreateAddressRequest` — `application/json`):
 
-> **Quan trọng**: User và Store có constraint XOR – địa chỉ user phải có `store=null` và ngược lại.
+| Field | Type | Required | Validation | Ghi chú |
+|---|---|---|---|---|
+| `contactName` | `string` | **Có** | `@NotBlank`, `@Size(max=100)`, trim | Tên người nhận |
+| `phone` | `string` | **Có** | `@NotBlank`, `@Size(max=15)`, trim | SĐT người nhận |
+| `province` | `string` | **Có** | `@NotBlank`, `@Size(max=100)`, trim | Tỉnh/TP |
+| `district` | `string` | **Có** | `@NotBlank`, `@Size(max=100)`, trim | Quận/Huyện |
+| `ward` | `string` | **Có** | `@NotBlank`, `@Size(max=100)`, trim | Phường/Xã |
+| `detailAddress` | `string` | **Có** | `@NotBlank`, `@Size(max=255)`, trim | Số nhà, đường |
+| `latitude` | `BigDecimal` | Không | decimal(10,8) | GPS lat (optional) |
+| `longitude` | `BigDecimal` | Không | decimal(11,8) | GPS lng (optional) |
+| `isDefault` | `boolean` | Không | default `false` | Nếu `true` và đã có địa chỉ mặc định → BE sẽ unset cái cũ, set cái này |
+
+**HTTP Status**: `201 Created`
+
+**Response** trả về `AddressResponse` (giống mục 8.1).
+
+**Lỗi**:
+
+| HTTP | Code | Message |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | Thiếu field bắt buộc hoặc vượt max length |
+| 401 | `COMMON_401` | Thiếu token |
+
+### 8.3 `GET /api/v1/users/addresses/{id}` — Xem chi tiết 1 địa chỉ
+
+| Mục | Giá trị |
+|---|---|
+| Method | `GET` |
+| Path | `/api/v1/users/addresses/{id}` |
+| Auth | **BẮT BUỘC** `Authorization: Bearer <access_token>` |
+| Path param | `id` (Long, required) |
+
+**Response `200 OK`** — `AddressResponse`.
+
+**Lỗi**:
+
+| HTTP | Code | Message |
+|---|---|---|
+| 401 | `COMMON_401` | Thiếu token |
+| 403 | `USER_403_ADDRESS_DENIED` (`ADDRESS_ACCESS_DENIED`) | Địa chỉ này thuộc user khác |
+| 404 | `USER_404_ADDRESS` (`ADDRESS_NOT_FOUND`) | Không tìm thấy address với `id` này |
+
+### 8.4 `PUT /api/v1/users/addresses/{id}` — Cập nhật địa chỉ
+
+**Request Body** (`UpdateAddressRequest` — `application/json`):  
+Tất cả field đều **optional** (partial update). Field nào gửi sẽ được cập nhật.
+
+| Field | Type | Required | Validation |
+|---|---|---|---|
+| `contactName` | `string` | Không | `@Size(max=100)`, nếu blank thì bỏ qua |
+| `phone` | `string` | Không | `@Size(max=15)`, nếu blank thì bỏ qua |
+| `province` | `string` | Không | `@Size(max=100)`, nếu blank thì bỏ qua |
+| `district` | `string` | Không | `@Size(max=100)`, nếu blank thì bỏ qua |
+| `ward` | `string` | Không | `@Size(max=100)`, nếu blank thì bỏ qua |
+| `detailAddress` | `string` | Không | `@Size(max=255)`, nếu blank thì bỏ qua |
+| `latitude` | `BigDecimal` | Không | decimal(10,8) |
+| `longitude` | `BigDecimal` | Không | decimal(11,8) |
+| `isDefault` | `boolean` | Không | Nếu `true` và địa chỉ này chưa phải mặc định → BE tự unset cái cũ |
+
+**Response `200 OK`** — `AddressResponse` (giá trị mới nhất).
+
+**Lỗi**:
+
+| HTTP | Code | Message |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | Field nào đó vượt max length |
+| 401 | `COMMON_401` | Thiếu token |
+| 403 | `USER_403_ADDRESS_DENIED` | Không phải chủ sở hữu |
+| 404 | `USER_404_ADDRESS` | Không tìm thấy |
+
+### 8.5 `DELETE /api/v1/users/addresses/{id}` — Xóa địa chỉ
+
+| Mục | Giá trị |
+|---|---|
+| Method | `DELETE` |
+| Path | `/api/v1/users/addresses/{id}` |
+| Auth | **BẮT BUỘC** `Authorization: Bearer <access_token>` |
+| Path param | `id` (Long, required) |
+
+**Response `200 OK`** với `data = null`, message `"Xóa địa chỉ thành công"`.
+
+> **Side effect**: Nếu xóa địa chỉ mặc định và còn ≥ 1 địa chỉ khác → BE tự động set địa chỉ còn lại **đầu tiên** (theo `id ASC`) làm mặc định. Nếu đó là địa chỉ cuối cùng → sau xóa user không còn địa chỉ nào, địa chỉ mới tạo tiếp theo sẽ tự động làm mặc định.
+
+**Lỗi**:
+
+| HTTP | Code | Message |
+|---|---|---|
+| 401 | `COMMON_401` | Thiếu token |
+| 403 | `USER_403_ADDRESS_DENIED` | Không phải chủ sở hữu |
+| 404 | `USER_404_ADDRESS` | Không tìm thấy |
+
+### 8.6 `PATCH /api/v1/users/addresses/{id}/default` — Đặt làm mặc định
+
+| Mục | Giá trị |
+|---|---|
+| Method | `PATCH` |
+| Path | `/api/v1/users/addresses/{id}/default` |
+| Auth | **BẮT BUỘC** `Authorization: Bearer <access_token>` |
+| Path param | `id` (Long, required) |
+
+**Response `200 OK`** — `AddressResponse` (với `isDefault = true`).
+
+> **Side effect**: BE tự động unset địa chỉ mặc định cũ (set `isDefault=false` cho địa chỉ trước đó), rồi set địa chỉ này thành `isDefault=true`.
+
+**Lỗi**:
+
+| HTTP | Code | Message |
+|---|---|---|
+| 401 | `COMMON_401` | Thiếu token |
+| 403 | `USER_403_ADDRESS_DENIED` | Không phải chủ sở hữu |
+| 404 | `USER_404_ADDRESS` | Không tìm thấy |
+
+### 8.7 Postman Test Cases — `04_Address_Book`
+
+| # | Test | Endpoint | Setup | Expect |
+|---|---|---|---|---|
+| 1 | List địa chỉ của tôi | `GET /addresses` | Token BUYER | `200` + `data[]` (mảng), item đầu có `isDefault=true` |
+| 2 | List rỗng | `GET /addresses` | User mới chưa có address | `200` + `data = []` |
+| 3 | Tạo địa chỉ hợp lệ (đầu tiên) | `POST /addresses` | Body đầy đủ 6 field + 2 GPS | `201` + `isDefault=true` (vì là địa chỉ đầu tiên) |
+| 4 | Tạo địa chỉ thứ 2 với `isDefault=true` | `POST /addresses` | Body có `isDefault=true` | `201` + địa chỉ cũ sẽ bị unset, địa chỉ mới `isDefault=true` |
+| 5 | Tạo địa chỉ thiếu `contactName` | `POST /addresses` | Body thiếu `contactName` | `400` + `code = VALIDATION_ERROR` |
+| 6 | Tạo địa chỉ phone > 15 ký tự | `POST /addresses` | `phone = "0".repeat(20)` | `400` + `code = VALIDATION_ERROR` |
+| 7 | Xem chi tiết 1 địa chỉ của mình | `GET /addresses/{id}` | id thuộc về user | `200` + `data.id = id` |
+| 8 | Xem địa chỉ của user khác | `GET /addresses/{id}` | id không thuộc về user | `403` + `code = USER_403_ADDRESS_DENIED` |
+| 9 | Xem địa chỉ không tồn tại | `GET /addresses/999999` | id không có trong DB | `404` + `code = USER_404_ADDRESS` |
+| 10 | Update 1 phần (chỉ `phone`) | `PUT /addresses/{id}` | Body `{phone: "0999999999"}` | `200` + `data.phone` mới, các field khác giữ nguyên |
+| 11 | Update với field rỗng | `PUT /addresses/{id}` | `{contactName: ""}` | `200` + `contactName` giữ nguyên (bỏ qua, không lỗi) |
+| 12 | Set default | `PATCH /addresses/{id}/default` | id là địa chỉ phụ | `200` + `isDefault=true` |
+| 13 | Set default cho id không thuộc về mình | `PATCH /addresses/{id}/default` | id của user khác | `403` |
+| 14 | Xóa địa chỉ thường | `DELETE /addresses/{id}` | id là địa chỉ phụ | `200` + message thành công |
+| 15 | Xóa địa chỉ mặc định (còn địa chỉ khác) | `DELETE /addresses/{id}` | id là default, còn ≥ 1 địa chỉ khác | `200` + BE tự động set 1 địa chỉ còn lại làm default |
+| 16 | Xóa địa chỉ cuối cùng | `DELETE /addresses/{id}` | chỉ còn 1 địa chỉ | `200` + `data` rỗng; lần tạo sau sẽ tự default |
 
 ---
+
 
 ## 9. Store Module `/api/v1/stores`
 
@@ -2196,120 +2385,439 @@ Xác nhận thanh toán COD (tiền mặt khi nhận hàng) và cập nhật đ�
 ---
 ## 22. Voucher Module `/api/v1/vouchers`
 
-> **Tag Swagger**: `Vouchers Public` · Một số endpoint cần auth khi apply
+> Module quản lý mã giảm giá ở phía người dùng (Buyer). Bao gồm: xem danh sách voucher Platform/Shop, lưu voucher vào ví cá nhân, kiểm tra áp dụng mã trước khi checkout.  
+> **Tag Swagger**: `Vouchers Public`
 
 | Method | Endpoint | Access | Mô tả |
 |---|---|---|---|
-| `GET` | `/api/v1/vouchers/platform` | Public | DS voucher toàn sàn |
-| `GET` | `/api/v1/vouchers/store/{storeId}` | Public | DS voucher của store |
-| `POST` | `/api/v1/vouchers/apply` | Authenticated | Kiểm tra & áp dụng thử voucher |
+| `GET` | `/api/v1/vouchers/platform` | **Public** | Danh sách voucher toàn sàn (storeId = null) |
+| `GET` | `/api/v1/vouchers/store/{storeId}` | **Public** | Danh sách voucher của 1 gian hàng |
+| `GET` | `/api/v1/vouchers/mine` | Authenticated | Voucher trong ví cá nhân |
+| `POST` | `/api/v1/vouchers/mine` | Authenticated | Lưu voucher vào ví cá nhân |
+| `POST` | `/api/v1/vouchers/apply` | Optional auth | Tính toán số tiền giảm khi áp mã (preview) |
 
-### 22.1 `GET /api/v1/vouchers/platform`
+### 22.1 `GET /api/v1/vouchers/platform` — Danh sách voucher toàn sàn
 
-**Response item (`VoucherResponse`):**
+| Mục | Giá trị |
+|---|---|
+| Method | `GET` |
+| Path | `/api/v1/vouchers/platform` |
+| Auth | **Không bắt buộc** (Public) |
+| Role | Public — ai cũng xem được |
+| Request body / query | Không |
 
-```json
-{
-  "id": 1,
-  "code": "SALE10",
-  "storeId": null,
-  "discountType": "PERCENT",
-  "discountValue": 0.10,
-  "minOrderAmount": 100000,
-  "maxDiscountAmount": 50000,
-  "totalQuantity": 1000,
-  "usedQuantity": 12,
-  "userUsageLimit": 1,
-  "startTime": "2026-10-01T...",
-  "endTime": "2026-11-01T...",
-  "status": "ACTIVE",
-  "createdAt": "2026-10-01T..."
-}
-```
-
-### 22.3 `POST /api/v1/vouchers/apply`
-
-**Request Body (`ApplyVoucherRequest`):**
-
-| Field | Type | Required | Mô tả |
-|---|---|---|---|
-| `code` | `string` | Có | Mã voucher |
-| `storeId` | `long` | Không | ID store (nếu áp mã shop, để trống nếu áp platform) |
-| `subtotalAmount` | `decimal` | Có | Giá trị đơn hàng |
-
-**Response (`VoucherCalculationResponse`):**
+**Response `200 OK`** — `List<VoucherResponse>`:
 
 ```json
 {
-  "voucherId": 1,
-  "code": "SALE10",
-  "discountAmount": 18800,
-  "finalAmount": 179200
+  "success": true,
+  "code": 200,
+  "message": "Lấy danh sách voucher sàn thành công",
+  "data": [
+    {
+      "id": 1,
+      "code": "PLATFORM10",
+      "storeId": null,
+      "discountType": "PERCENT",
+      "discountValue": 10.00,
+      "minOrderAmount": 200000.00,
+      "maxDiscountAmount": 50000.00,
+      "totalQuantity": 1000,
+      "usedQuantity": 0,
+      "userUsageLimit": 1,
+      "startTime": "2026-10-01T00:00:00Z",
+      "endTime": "2026-12-31T23:59:59Z",
+      "status": "ACTIVE",
+      "createdAt": "2026-10-01T00:00:00Z"
+    }
+  ]
 }
 ```
 
-**Lỗi:**
+> BE lọc `vouchers WHERE store_id IS NULL`. Trả về tất cả (kể cả `INACTIVE` / quá hạn — FE tự lọc theo `status` + `endTime`).
 
-| Code | ErrorCode | Message |
+### 22.2 `GET /api/v1/vouchers/store/{storeId}` — Danh sách voucher của 1 shop
+
+| Mục | Giá trị |
+|---|---|
+| Method | `GET` |
+| Path | `/api/v1/vouchers/store/{storeId}` |
+| Path param | `storeId` (Long, required) |
+| Auth | **Không bắt buộc** (Public) |
+
+**Response `200 OK`** — `List<VoucherResponse>` (cấu trúc giống 22.1 nhưng `storeId` khác `null`).
+
+### 22.3 `GET /api/v1/vouchers/mine` — Voucher trong ví của tôi
+
+| Mục | Giá trị |
+|---|---|
+| Method | `GET` |
+| Path | `/api/v1/vouchers/mine` |
+| Auth | **BẮT BUỘC** `Authorization: Bearer <access_token>` |
+| Role | Bất kỳ (BUYER, SELLER, ADMIN) |
+| Request body / query | Không |
+
+**Response `200 OK`** — `List<UserVoucherResponse>`:
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Lấy danh sách kho voucher thành công",
+  "data": [
+    {
+      "id": 1,
+      "code": "PLATFORM10",
+      "label": "Giảm 10% tối đa 50K đơn từ 200K",
+      "scope": "PLATFORM",
+      "storeId": null,
+      "storeName": null,
+      "discountType": "PERCENT",
+      "discountValue": 10.00,
+      "maxDiscount": 50000.00,
+      "minOrderAmount": 200000.00,
+      "userUsageLimit": 1,
+      "usedQuantity": 0,
+      "totalQuantity": 1000,
+      "startTime": "2026-10-01T00:00:00Z",
+      "endTime": "2026-12-31T23:59:59Z",
+      "status": "ACTIVE"
+    }
+  ]
+}
+```
+
+> `status` = `ACTIVE` | `USED` | `EXPIRED` (BE tự tính từ `endTime` + `usedQuantity` của user này).
+
+**Lỗi**:
+
+| HTTP | Code | Message |
 |---|---|---|
-| 404 | `VOUCHER_404` | Không tìm thấy mã giảm giá |
-| 400 | `VOUCHER_400_1` (`EXPIRED`) | Mã giảm giá đã hết hạn sử dụng |
-| 400 | `VOUCHER_400_2` (`NOT_STARTED`) | Mã giảm giá chưa đến thời gian hiệu lực |
-| 400 | `VOUCHER_400_3` (`OUT_OF_STOCK`) | Mã giảm giá đã hết lượt sử dụng |
-| 400 | `VOUCHER_400_4` (`USER_LIMIT_EXCEEDED`) | Bạn đã dùng hết lượt cho phép |
-| 400 | `VOUCHER_400_5` (`MIN_AMOUNT_NOT_MET`) | Giá trị đơn hàng chưa đạt mức tối thiểu |
-| 400 | `VOUCHER_400_6` (`INACTIVE`) | Mã giảm giá đang bị tạm khóa |
-| 403 | `VOUCHER_403` (`STORE_MISMATCH`) | Mã giảm giá của gian hàng không áp dụng cho đơn hàng gian hàng khác |
+| 401 | `COMMON_401` | Thiếu token |
 
----
+### 22.4 `POST /api/v1/vouchers/mine` — Lưu voucher vào ví
 
-## 23. Seller Voucher Module `/api/v1/seller/vouchers`
-
-> Yêu cầu: **Role SELLER** · **Tag Swagger**: `Seller Vouchers`
-
-| Method | Endpoint | Access | Mô tả |
-|---|---|---|---|
-| `POST` | `/api/v1/seller/vouchers` | Seller | Tạo voucher của shop |
-| `GET` | `/api/v1/seller/vouchers` | Seller | DS voucher của tôi |
-
-### 23.1 `POST /api/v1/seller/vouchers`
-
-**Request Body (`CreateVoucherRequest`):**
+**Request Body** (`SaveVoucherRequest` — `application/json`):
 
 | Field | Type | Required | Validation |
 |---|---|---|---|
-| `code` | `string` | Có | max 30, unique |
-| `storeId` | `long` | Không | null = platform (Admin only) |
-| `discountType` | `string` | Có | `FIXED_AMOUNT` hoặc `PERCENT` |
-| `discountValue` | `decimal` | Có | > 0 (PERCENT ≤ 100) |
-| `minOrderAmount` | `decimal` | Không | >= 0 |
-| `maxDiscountAmount` | `decimal` | Không | > 0 |
-| `totalQuantity` | `integer` | Có | > 0 |
-| `userUsageLimit` | `integer` | Không | > 0 |
-| `startTime` | `instant` | Có | – |
-| `endTime` | `instant` | Có | `> startTime`, future |
+| `code` | `string` | **Có** | `@NotBlank`, `@Size(max=30)`; BE `trim()` + lookup `findByCodeIgnoreCase` |
 
-**Lỗi:**
+**Response `200 OK`** — `UserVoucherResponse`.
 
-| Code | ErrorCode | Message |
+**Lỗi**:
+
+| HTTP | Code | Message |
 |---|---|---|
-| 409 | `VOUCHER_409` | Mã giảm giá đã tồn tại trên hệ thống |
-| 400 | `VOUCHER_400_7` (`INVALID_DATES`) | Thời gian kết thúc phải sau thời gian bắt đầu |
-| 400 | `VOUCHER_400_8` (`INVALID_DISCOUNT_PERCENT`) | Tỷ lệ giảm giá theo % không được vượt quá 100% |
+| 400 | `VALIDATION_ERROR` | `code` rỗng hoặc > 30 ký tự |
+| 400 | `VOUCHER_400_1` (`VOUCHER_EXPIRED`) | Voucher đã hết hạn |
+| 400 | `VOUCHER_400_2` (`VOUCHER_NOT_STARTED`) | Chưa tới `startTime` |
+| 400 | `VOUCHER_400_3` (`VOUCHER_OUT_OF_STOCK`) | Hết lượt (`usedQuantity >= totalQuantity`) |
+| 400 | `VOUCHER_400_4` (`VOUCHER_USER_LIMIT_EXCEEDED`) | User đã dùng đủ `userUsageLimit` |
+| 400 | `VOUCHER_400_6` (`VOUCHER_INACTIVE`) | Voucher đang tạm khóa |
+| 401 | `COMMON_401` | Thiếu token |
+| 404 | `VOUCHER_404` (`VOUCHER_NOT_FOUND`) | Không tìm thấy voucher theo `code` |
+| 409 | `VOUCHER_409_SAVED` (`VOUCHER_ALREADY_SAVED`) | Mã đã có trong ví của user này rồi |
+
+### 22.5 `POST /api/v1/vouchers/apply` — Preview áp dụng voucher
+
+**Request Body** (`ApplyVoucherRequest` — `application/json`):
+
+| Field | Type | Required | Validation | Ghi chú |
+|---|---|---|---|---|
+| `code` | `string` | **Có** | `@NotBlank` | Mã voucher |
+| `storeId` | `Long` | Không | — | ID store của đơn hàng (bắt buộc nếu áp mã shop; bỏ trống nếu áp mã platform) |
+| `subtotalAmount` | `BigDecimal` | **Có** | `@NotNull`, `@Positive` | Tổng tiền hàng (chưa gồm phí ship, chưa giảm) |
+
+**Response `200 OK`** — `VoucherCalculationResponse`:
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Áp dụng mã giảm giá thành công",
+  "data": {
+    "voucherId": 1,
+    "code": "PLATFORM10",
+    "discountAmount": 50.00,
+    "finalAmount": 450.00
+  }
+}
+```
+
+> Tính toán:
+> - `FIXED_AMOUNT`: `discount = discountValue`
+> - `PERCENT`: `discount = subtotal * discountValue / 100`, sau đó cap bởi `maxDiscountAmount` (nếu có)
+> - `finalAmount = max(0, subtotal - discount)` (làm tròn HALF_UP, 2 chữ số thập phân)
+
+**Lỗi**:
+
+| HTTP | Code | Message |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | Thiếu `code` / `subtotalAmount` |
+| 400 | `VOUCHER_400_1` (`VOUCHER_EXPIRED`) | Hết hạn |
+| 400 | `VOUCHER_400_2` (`VOUCHER_NOT_STARTED`) | Chưa bắt đầu |
+| 400 | `VOUCHER_400_3` (`VOUCHER_OUT_OF_STOCK`) | Hết lượt |
+| 400 | `VOUCHER_400_4` (`VOUCHER_USER_LIMIT_EXCEEDED`) | User dùng đủ lần |
+| 400 | `VOUCHER_400_5` (`VOUCHER_MIN_AMOUNT_NOT_MET`) | `subtotalAmount < minOrderAmount` |
+| 400 | `VOUCHER_400_6` (`VOUCHER_INACTIVE`) | Tạm khóa |
+| 403 | `VOUCHER_403` (`VOUCHER_STORE_MISMATCH`) | Mã shop nhưng `storeId` đơn hàng khác store của voucher |
+| 404 | `VOUCHER_404` (`VOUCHER_NOT_FOUND`) | Không tìm thấy mã |
+
+### 22.6 Postman Test Cases — `08_Voucher_Buyer`
+
+| # | Test | Endpoint | Setup | Expect |
+|---|---|---|---|---|
+| 1 | List voucher platform | `GET /vouchers/platform` | Public | `200` + `data[]` (mỗi item có `storeId = null`) |
+| 2 | List voucher của 1 shop | `GET /vouchers/store/{storeId}` | `storeId` tồn tại | `200` + `data[].storeId = storeId` |
+| 3 | List voucher shop không tồn tại | `GET /vouchers/store/999999` | — | `200` + `data = []` (BE không check storeId có tồn tại) |
+| 4 | List kho voucher của tôi | `GET /vouchers/mine` | Token BUYER đã lưu vài voucher | `200` + `data[]` |
+| 5 | Lưu voucher hợp lệ | `POST /vouchers/mine` | Body `{code: "PLATFORM10"}` (ACTIVE) | `200` + `data.code = "PLATFORM10"`, `scope = "PLATFORM"` |
+| 6 | Lưu voucher không tồn tại | `POST /vouchers/mine` | Body `{code: "FAKECODE"}` | `404` + `code = VOUCHER_404` |
+| 7 | Lưu voucher đã hết hạn | `POST /vouchers/mine` | `code` của voucher quá `endTime` | `400` + `code = VOUCHER_400_1` |
+| 8 | Lưu trùng voucher | `POST /vouchers/mine` | `code` đã có trong ví | `409` + `code = VOUCHER_409_SAVED` |
+| 9 | Apply mã percent hợp lệ | `POST /vouchers/apply` | Body `{code, storeId=null, subtotalAmount: 500000}` | `200` + `data.discountAmount = 50000` (10% cap 50K) |
+| 10 | Apply mã fixed | `POST /vouchers/apply` | Body `{code, subtotalAmount}` | `200` + `data.discountAmount = discountValue` |
+| 11 | Apply mã shop sai store | `POST /vouchers/apply` | `code` là voucher shop, `storeId` ≠ store voucher | `403` + `code = VOUCHER_403` |
+| 12 | Apply không đủ minOrderAmount | `POST /vouchers/apply` | `subtotalAmount < minOrderAmount` | `400` + `code = VOUCHER_400_5` |
+| 13 | Apply thiếu code | `POST /vouchers/apply` | Body `{}` | `400` + `code = VALIDATION_ERROR` |
+| 14 | Apply với subtotalAmount âm | `POST /vouchers/apply` | `subtotalAmount: -1` | `400` + `code = VALIDATION_ERROR` |
 
 ---
 
-## 24. Admin Voucher Module `/api/v1/admin/vouchers`
 
-> Yêu cầu: **Role ADMIN** · **Tag Swagger**: `Admin Vouchers`
+## 23. Seller Voucher Module `/api/v1/seller/vouchers`
+
+> Quản lý voucher cho gian hàng của seller. **BẮT BUỘC** `@PreAuthorize("hasRole('SELLER')")`.  
+> **Tag Swagger**: `Seller Vouchers`
 
 | Method | Endpoint | Access | Mô tả |
 |---|---|---|---|
-| `POST` | `/api/v1/admin/vouchers` | Admin | Tạo platform voucher (storeId=null) |
+| `POST` | `/api/v1/seller/vouchers` | **Role `SELLER`** | Tạo voucher mới cho gian hàng mình sở hữu |
+| `GET` | `/api/v1/seller/vouchers` | **Role `SELLER`** | Danh sách voucher do gian hàng mình phát hành |
 
-### 24.1 `POST /api/v1/admin/vouchers`
+### 23.1 `POST /api/v1/seller/vouchers` — Tạo voucher cho shop
 
-Giống `CreateVoucherRequest` nhưng server **ép `storeId=null`** (bỏ qua giá trị client gửi).
+**Auth**: **BẮT BUỘC** `Authorization: Bearer <access_token>` + **Role `SELLER`**.
+
+**Request Body** (`CreateVoucherRequest` — `application/json`):
+
+| Field | Type | Required | Validation | Ghi chú |
+|---|---|---|---|---|
+| `code` | `string` | **Có** | `@NotBlank`, `@Size(max=30)` | BE tự `trim().toUpperCase()`; phải unique trong toàn bảng `vouchers` |
+| `storeId` | `Long` | Không | — | Nếu gửi → BE check seller phải sở hữu store này. **Khuyến nghị bỏ trống** (BE tự lấy store của seller qua `findByUserId`) |
+| `discountType` | `string` | **Có** | `@NotBlank` | `FIXED_AMOUNT` hoặc `PERCENT` (case-insensitive, BE tự uppercase) |
+| `discountValue` | `BigDecimal` | **Có** | `@NotNull`, `@Positive` | Nếu `PERCENT` → phải ≤ 100 |
+| `minOrderAmount` | `BigDecimal` | Không | `@PositiveOrZero`, default `0` | Đơn hàng tối thiểu để áp mã |
+| `maxDiscountAmount` | `BigDecimal` | Không | `@Positive` | Cap giảm tối đa (chỉ áp dụng cho `PERCENT`) |
+| `totalQuantity` | `Integer` | **Có** | `@NotNull`, `@Positive` | Tổng số lượng phát hành |
+| `userUsageLimit` | `Integer` | Không | `@Positive`, default `1` | Mỗi user được dùng tối đa mấy lần |
+| `startTime` | `Instant` | **Có** | `@NotNull` (ISO-8601) | Bắt đầu hiệu lực |
+| `endTime` | `Instant` | **Có** | `@NotNull`, `@Future` | Kết thúc (phải ở tương lai + sau `startTime`) |
+
+**HTTP Status**: `201 Created`
+
+**Response** — `VoucherResponse` (giống mục 22.1).
+
+**Lỗi**:
+
+| HTTP | Code | Message |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | Field required bị thiếu, sai validation, `endTime <= startTime` |
+| 400 | `VOUCHER_400_7` (`INVALID_VOUCHER_DATES`) | `endTime <= startTime` |
+| 400 | `VOUCHER_400_8` (`INVALID_DISCOUNT_PERCENT`) | `discountType=PERCENT` nhưng `discountValue > 100` |
+| 401 | `COMMON_401` | Thiếu token |
+| 403 | `AUTH_403_FORBIDDEN_ROLE` | Token không có role SELLER |
+| 403 | `STORE_403_FORBIDDEN` (`STORE_ACCESS_DENIED`) | Gửi `storeId` không thuộc về seller này |
+| 404 | `STORE_404_NOT_FOUND` | `storeId` không tồn tại |
+| 409 | `VOUCHER_409` (`VOUCHER_CODE_EXISTS`) | Mã code đã tồn tại |
+
+### 23.2 `GET /api/v1/seller/vouchers` — Voucher do shop tôi phát hành
+
+**Auth**: **BẮT BUỘC** `Authorization: Bearer <access_token>` + **Role `SELLER`**.
+
+**Response `200 OK`** — `List<VoucherResponse>` (lọc theo store của seller hiện tại).
+
+**Lỗi**:
+
+| HTTP | Code | Message |
+|---|---|---|
+| 401 | `COMMON_401` | Thiếu token |
+| 403 | `AUTH_403_FORBIDDEN_ROLE` | Không phải SELLER |
+| 404 | `STORE_404_NOT_FOUND` | Seller chưa tạo store |
+
+### 23.3 Postman Test Cases — `14_Voucher_Seller`
+
+| # | Test | Endpoint | Setup | Expect |
+|---|---|---|---|---|
+| 1 | Tạo voucher shop thành công | `POST /seller/vouchers` | Token SELLER, body đầy đủ hợp lệ, `code` unique, `endTime` tương lai | `201` + `data.code` uppercase, `data.storeId = id shop của seller` |
+| 2 | Tạo với code đã tồn tại | `POST /seller/vouchers` | `code` đã có trong bảng | `409` + `code = VOUCHER_409` |
+| 3 | Tạo với `endTime <= startTime` | `POST /seller/vouchers` | `endTime = startTime` hoặc trước | `400` + `code = VOUCHER_400_7` |
+| 4 | Tạo với `discountValue=150%` | `POST /seller/vouchers` | `discountType=PERCENT`, `discountValue=150` | `400` + `code = VOUCHER_400_8` |
+| 5 | Tạo với `endTime` trong quá khứ | `POST /seller/vouchers` | `endTime` = hôm qua | `400` + `code = VALIDATION_ERROR` (`@Future`) |
+| 6 | Tạo thiếu `discountType` | `POST /seller/vouchers` | Body không có `discountType` | `400` + `code = VALIDATION_ERROR` |
+| 7 | Tạo với `storeId` của seller khác | `POST /seller/vouchers` | `storeId` không thuộc seller hiện tại | `403` + `code = STORE_403_FORBIDDEN` |
+| 8 | Tạo bằng token BUYER | `POST /seller/vouchers` | Token BUYER | `403` + `code = AUTH_403_FORBIDDEN_ROLE` |
+| 9 | List voucher shop tôi | `GET /seller/vouchers` | Token SELLER có store | `200` + `data[].storeId = store của seller` |
+| 10 | List bằng token BUYER | `GET /seller/vouchers` | Token BUYER | `403` + `code = AUTH_403_FORBIDDEN_ROLE` |
+
+---
+
+
+## 24. Admin Voucher Module `/api/v1/admin/vouchers`
+
+> Quản lý voucher toàn sàn (Platform Voucher, `storeId = null`). **BẮT BUỘC** `@PreAuthorize("hasRole('ADMIN')")`.  
+> **Tag Swagger**: `Admin Vouchers`
+
+| Method | Endpoint | Access | Mô tả |
+|---|---|---|---|
+| `POST` | `/api/v1/admin/vouchers` | **Role `ADMIN`** | Tạo platform voucher (`storeId` bị bỏ qua, ép về `null`) |
+
+### 24.1 `POST /api/v1/admin/vouchers` — Tạo platform voucher
+
+**Auth**: **BẮT BUỘC** `Authorization: Bearer <access_token>` + **Role `ADMIN`**.
+
+**Request Body** (`CreateVoucherRequest` — `application/json`):  
+**Cấu trúc giống mục 23.1** nhưng `storeId` bị **ép về `null`** (BE gọi `request.setStoreId(null)` trước khi tạo).
+
+| Field | Type | Required | Validation |
+|---|---|---|---|
+| `code` | `string` | **Có** | `@NotBlank`, `@Size(max=30)`, uppercase |
+| `storeId` | `Long` | — | **BỎ QUA** — BE ép `null` |
+| `discountType` | `string` | **Có** | `FIXED_AMOUNT` hoặc `PERCENT` |
+| `discountValue` | `BigDecimal` | **Có** | `@NotNull`, `@Positive` (nếu `PERCENT` → ≤ 100) |
+| `minOrderAmount` | `BigDecimal` | Không | `@PositiveOrZero` |
+| `maxDiscountAmount` | `BigDecimal` | Không | `@Positive` |
+| `totalQuantity` | `Integer` | **Có** | `@NotNull`, `@Positive` |
+| `userUsageLimit` | `Integer` | Không | `@Positive`, default `1` |
+| `startTime` | `Instant` | **Có** | `@NotNull` |
+| `endTime` | `Instant` | **Có** | `@NotNull`, `@Future` |
+
+**HTTP Status**: `201 Created`
+
+**Response** — `VoucherResponse` (với `storeId = null`).
+
+**Lỗi**:
+
+| HTTP | Code | Message |
+|---|---|---|
+| 400 | `VALIDATION_ERROR` | Thiếu field, sai validation |
+| 400 | `VOUCHER_400_7` (`INVALID_VOUCHER_DATES`) | `endTime <= startTime` |
+| 400 | `VOUCHER_400_8` (`INVALID_DISCOUNT_PERCENT`) | `discountType=PERCENT` nhưng `discountValue > 100` |
+| 401 | `COMMON_401` | Thiếu token |
+| 403 | `AUTH_403_FORBIDDEN_ROLE` | Không phải ADMIN |
+| 409 | `VOUCHER_409` (`VOUCHER_CODE_EXISTS`) | `code` đã tồn tại |
+
+### 24.2 Postman Test Cases — `18_Admin_Voucher`
+
+| # | Test | Endpoint | Setup | Expect |
+|---|---|---|---|---|
+| 1 | Tạo platform voucher thành công | `POST /admin/vouchers` | Token ADMIN, body hợp lệ, `code` unique | `201` + `data.storeId = null` |
+| 2 | Tạo với `storeId` được gửi (bị bỏ) | `POST /admin/vouchers` | Body có `storeId = 5` | `201` + `data.storeId = null` (BE ép null) |
+| 3 | Tạo với `code` đã tồn tại | `POST /admin/vouchers` | `code` đã tồn tại (cả shop hay platform) | `409` + `code = VOUCHER_409` |
+| 4 | Tạo với `endTime <= startTime` | `POST /admin/vouchers` | `endTime = startTime - 1h` | `400` + `code = VOUCHER_400_7` |
+| 5 | Tạo với `discountType=PERCENT, value=200` | `POST /admin/vouchers` | `value > 100` | `400` + `code = VOUCHER_400_8` |
+| 6 | Tạo bằng token BUYER | `POST /admin/vouchers` | Token BUYER | `403` + `code = AUTH_403_FORBIDDEN_ROLE` |
+| 7 | Tạo thiếu `code` | `POST /admin/vouchers` | Body không có `code` | `400` + `code = VALIDATION_ERROR` |
+
+---
+
+
+## 24b. Wallet Module (Seller Draft) `/api/v1/wallets` & `/api/v1/seller/wallets`
+
+> **Trạng thái: DRAFT (chưa có Controller/Service/DTO/ErrorCode)**  
+> Hiện chỉ có 2 entity `Wallet` + `WalletTransaction` và 2 repository. Tài liệu này mô tả **thiết kế dự kiến** dựa trên entity + các rule nghiệp vụ trong `.cursor/rules/36-wallet.mdc`.
+
+### 24b.1 Tổng quan & Thiết kế
+
+| Mục | Chi tiết |
+|---|---|
+| Mục đích | Lưu số dư + lịch sử biến động số dư cho SELLER (sau này có thể mở rộng cho BUYER) |
+| Entity chính | `Wallet` (1-1 với `Store`), `WalletTransaction` (ledger) |
+| Endpoint dự kiến | `GET /api/v1/seller/wallets/me` (balance), `GET /api/v1/seller/wallets/me/transactions` (lịch sử) |
+| Role truy cập | `ROLE_SELLER` (chỉ seller của store đó xem được ví của mình) |
+| Đơn vị tiền | `BigDecimal` VND (lưu DB); FE format qua `formatVND` |
+| Trạng thái ví | `ACTIVE`, `FROZEN` (admin đóng băng), `CLOSED` |
+
+### 24b.2 Entity `Wallet` (tham khảo)
+
+| Field | Type | Null | Mô tả |
+|---|---|---|---|
+| `id` | `BIGINT PK AUTO_INCREMENT` | NO | Khóa chính |
+| `store_id` | `BIGINT FK -> stores.id UNIQUE` | NO | 1 store chỉ có 1 ví |
+| `balance` | `DECIMAL(18,2) NOT NULL DEFAULT 0` | NO | Số dư hiện tại (VND) |
+| `currency` | `VARCHAR(8) NOT NULL DEFAULT 'VND'` | NO | Đơn vị tiền (cố định VND) |
+| `status` | `ENUM('ACTIVE','FROZEN','CLOSED') NOT NULL DEFAULT 'ACTIVE'` | NO | Trạng thái ví |
+| `version` | `BIGINT` (Optimistic Lock `@Version`) | NO | Chống race condition khi cộng/trừ |
+| `created_at` | `DATETIME NOT NULL` | NO | Ngày tạo |
+| `updated_at` | `DATETIME NOT NULL` | NO | Ngày cập nhật |
+
+### 24b.3 Entity `WalletTransaction` (ledger – chỉ append)
+
+| Field | Type | Null | Mô tả |
+|---|---|---|---|
+| `id` | `BIGINT PK AUTO_INCREMENT` | NO | Khóa chính |
+| `wallet_id` | `BIGINT FK -> wallets.id` | NO | Ví bị ảnh hưởng |
+| `type` | `ENUM('CREDIT','DEBIT','HOLD','RELEASE','REFUND','WITHDRAW')` | NO | Loại biến động |
+| `amount` | `DECIMAL(18,2) NOT NULL` | NO | Số tiền (luôn dương) |
+| `balance_after` | `DECIMAL(18,2) NOT NULL` | NO | Số dư sau giao dịch (snapshot) |
+| `reference_type` | `VARCHAR(32)` (vd: `ORDER`, `PAYOUT`, `ADJUSTMENT`) | YES | Loại tham chiếu |
+| `reference_id` | `VARCHAR(64)` | YES | ID tham chiếu (vd: orderId) |
+| `note` | `VARCHAR(255)` | YES | Ghi chú nội bộ |
+| `created_at` | `DATETIME NOT NULL` | NO | Thời điểm ghi |
+| `created_by` | `BIGINT FK -> users.id` | NO | Người/actor tạo giao dịch |
+
+> **Quy tắc cứng**: bảng `wallet_transactions` chỉ INSERT, không UPDATE/DELETE. Cân bằng kế toán: `SUM(amount WHERE type='CREDIT') - SUM(amount WHERE type='DEBIT') == balance` tại mọi thời điểm.
+
+### 24b.4 Endpoint dự kiến
+
+#### 24b.4.1 `GET /api/v1/seller/wallets/me` — Lấy thông tin ví của seller đang đăng nhập
+
+| Mục | Giá trị |
+|---|---|
+| Method | `GET` |
+| Path | `/api/v1/seller/wallets/me` |
+| Auth | **BẮT BUỘC** `Authorization: Bearer <access_token>` |
+| Role | `ROLE_SELLER` |
+| Request body | Không có |
+| Request query | Không có |
+| Response `200 OK` (ví dụ) | `{"code":"SUCCESS","message":"OK","data":{"id":1,"storeId":12,"balance":"1500000.00","currency":"VND","status":"ACTIVE","createdAt":"2026-10-16T10:00:00Z","updatedAt":"2026-10-16T12:30:00Z"}}` |
+| Lỗi dự kiến | `401` (`AUTH_401_INVALID_TOKEN`), `403` (`AUTH_403_FORBIDDEN_ROLE`), `404` (`WALLET_404_NOT_FOUND` nếu seller chưa được cấp ví) |
+
+#### 24b.4.2 `GET /api/v1/seller/wallets/me/transactions` — Lịch sử biến động số dư
+
+| Mục | Giá trị |
+|---|---|
+| Method | `GET` |
+| Path | `/api/v1/seller/wallets/me/transactions` |
+| Auth | **BẮT BUỘC** `Authorization: Bearer <access_token>` |
+| Role | `ROLE_SELLER` |
+| Request query | `type` (optional, enum), `fromDate` (ISO, optional), `toDate` (ISO, optional), `page` (default 0), `size` (default 20, max 100), `sort` (default `createdAt,desc`) |
+| Response `200 OK` | `{"code":"SUCCESS","message":"OK","data":{"content":[{"id":501,"type":"CREDIT","amount":"250000.00","balanceAfter":"1500000.00","referenceType":"ORDER","referenceId":"ORD-20261016-0001","note":"Thanh toán đơn hàng","createdAt":"2026-10-16T12:30:00Z","createdBy":7}], "page":0,"size":20,"totalElements":1,"totalPages":1}}` |
+| Lỗi dự kiến | `400` (`VALIDATION_ERROR`), `401`, `403` |
+
+### 24b.5 Quy tắc nghiệp vụ (dự kiến áp dụng khi implement)
+
+- Ví `FROZEN` → endpoint trả về ví nhưng **từ chối** mọi giao dịch ghi (CREDIT/DEBIT) — tạm thời chỉ cho xem.
+- Ví `CLOSED` → không truy cập được (coi như không tồn tại, trả 404).
+- `WITHDRAW` (rút tiền) chỉ áp dụng khi `status='ACTIVE'` và `balance >= amount`.
+- Mọi thay đổi `balance` **BẮT BUỘC** tạo `WalletTransaction` tương ứng trong cùng transaction DB.
+- Dùng `@Version` (Optimistic Lock) cho `Wallet` để chống race condition khi 2 luồng cùng cộng/trừ.
+- Cân bằng kế toán được verify bằng batch job định kỳ (xem `.cursor/rules/36-wallet.mdc` mục 5).
+
+### 24b.6 Test cases dự kiến cho Postman
+
+| # | Tình huống | Endpoint | Kỳ vọng |
+|---|---|---|---|
+| 1 | Seller đã có ví → xem ví của mình | `GET /api/v1/seller/wallets/me` | `200` + `data.balance` là chuỗi số thập phân |
+| 2 | Buyer gọi endpoint seller | `GET /api/v1/seller/wallets/me` (token BUYER) | `403 AUTH_403_FORBIDDEN_ROLE` |
+| 3 | Không có token | `GET /api/v1/seller/wallets/me` | `401 AUTH_401_MISSING_TOKEN` |
+| 4 | Seller chưa được cấp ví | `GET /api/v1/seller/wallets/me` (seller mới) | `404 WALLET_404_NOT_FOUND` |
+| 5 | Xem lịch sử giao dịch | `GET /api/v1/seller/wallets/me/transactions` | `200` + `data.content[]` có field `type`, `amount`, `balanceAfter`, `createdAt` |
+| 6 | Phân trang lịch sử | `?page=0&size=10&sort=createdAt,desc` | `200` + `data.page=0`, `data.size=10` |
+| 7 | Lọc theo loại giao dịch | `?type=CREDIT` | `200` + chỉ trả giao dịch `CREDIT` |
+
+> **Lưu ý**: Khi chưa implement controller, Postman sẽ trả `404 NOT_FOUND` cho các URL trên. Hãy đánh dấu request là "skipped / pending implementation".
 
 ---
 ## 25. WebSocket Realtime
@@ -2465,13 +2973,15 @@ stompClient.subscribe(
 
 ### 26.3 User Errors
 
-| HTTP | Code | Message |
-|---|---|---|
-| 400 | `USER_400_OLD_PASSWORD` | Mật khẩu hiện tại không chính xác |
-| 400 | `USER_400_DELETE_DEFAULT` | Không thể xóa địa chỉ mặc định khi còn địa chỉ khác. Vui lòng đặt địa chỉ khác làm mặc định trước khi xóa |
-| 403 | `USER_403_ADDRESS_DENIED` | Bạn không có quyền truy cập hoặc chỉnh sửa địa chỉ này |
-| 404 | `USER_404_NOT_FOUND` | Không tìm thấy thông tin người dùng |
-| 404 | `USER_404_ADDRESS` | Không tìm thấy địa chỉ yêu cầu |
+> Module `user` đã được implement (xem Section 7 + 8). Mã lỗi dưới đây khai báo trong `UserErrorCode.java`.
+
+| HTTP | Code | Message | Ngữ cảnh |
+|---|---|---|---|
+| 400 | `USER_400_OLD_PASSWORD` (`OLD_PASSWORD_INCORRECT`) | Mật khẩu hiện tại không chính xác | `PUT /me/change-password` |
+| 400 | `USER_400_DELETE_DEFAULT` (`CANNOT_DELETE_DEFAULT_ADDRESS`) | Không thể xóa địa chỉ mặc định khi còn địa chỉ khác. Vui lòng đặt địa chỉ khác làm mặc định trước khi xóa | `DELETE /addresses/{id}` |
+| 403 | `USER_403_ADDRESS_DENIED` (`ADDRESS_ACCESS_DENIED`) | Bạn không có quyền truy cập hoặc chỉnh sửa địa chỉ này | `GET/PUT/DELETE/PATCH /addresses/{id}` |
+| 404 | `USER_404_NOT_FOUND` (`USER_NOT_FOUND`) | Không tìm thấy thông tin người dùng | `GET/PUT /me`, khi token hợp lệ nhưng user bị xóa |
+| 404 | `USER_404_ADDRESS` (`ADDRESS_NOT_FOUND`) | Không tìm thấy địa chỉ yêu cầu | `GET/PUT/DELETE/PATCH /addresses/{id}` với id không tồn tại |
 
 ### 26.4 Store Errors
 
@@ -2553,19 +3063,22 @@ stompClient.subscribe(
 
 ### 26.9 Voucher Errors
 
-| HTTP | Code | Message |
-|---|---|---|
-| 400 | `VOUCHER_400_1` (`EXPIRED`) | Mã giảm giá đã hết hạn sử dụng |
-| 400 | `VOUCHER_400_2` (`NOT_STARTED`) | Mã giảm giá chưa đến thời gian hiệu lực |
-| 400 | `VOUCHER_400_3` (`OUT_OF_STOCK`) | Mã giảm giá đã hết lượt sử dụng |
-| 400 | `VOUCHER_400_4` (`USER_LIMIT_EXCEEDED`) | Bạn đã dùng hết lượt cho phép đối với mã giảm giá này |
-| 400 | `VOUCHER_400_5` (`MIN_AMOUNT_NOT_MET`) | Giá trị đơn hàng chưa đạt mức tối thiểu áp dụng mã |
-| 400 | `VOUCHER_400_6` (`INACTIVE`) | Mã giảm giá đang bị tạm khóa |
-| 400 | `VOUCHER_400_7` (`INVALID_DATES`) | Thời gian kết thúc phải sau thời gian bắt đầu |
-| 400 | `VOUCHER_400_8` (`INVALID_DISCOUNT_PERCENT`) | Tỷ lệ giảm giá theo % không được vượt quá 100% |
-| 403 | `VOUCHER_403` (`STORE_MISMATCH`) | Mã giảm giá của gian hàng không áp dụng cho đơn hàng gian hàng khác |
-| 404 | `VOUCHER_404` (`VOUCHER_NOT_FOUND`) | Không tìm thấy mã giảm giá |
-| 409 | `VOUCHER_409` (`VOUCHER_CODE_EXISTS`) | Mã giảm giá đã tồn tại trên hệ thống |
+> Module `voucher` đã được implement đầy đủ (Buyer + Seller + Admin). Mã lỗi khai báo trong `VoucherErrorCode.java`.
+
+| HTTP | Code | Message | Ngữ cảnh |
+|---|---|---|---|
+| 400 | `VOUCHER_400_1` (`VOUCHER_EXPIRED`) | Mã giảm giá đã hết hạn sử dụng | `apply`, `save` |
+| 400 | `VOUCHER_400_2` (`VOUCHER_NOT_STARTED`) | Mã giảm giá chưa đến thời gian hiệu lực | `apply`, `save` |
+| 400 | `VOUCHER_400_3` (`VOUCHER_OUT_OF_STOCK`) | Mã giảm giá đã hết lượt sử dụng | `apply`, `save` |
+| 400 | `VOUCHER_400_4` (`VOUCHER_USER_LIMIT_EXCEEDED`) | Bạn đã dùng hết lượt cho phép đối với mã giảm giá này | `apply`, `save` |
+| 400 | `VOUCHER_400_5` (`VOUCHER_MIN_AMOUNT_NOT_MET`) | Giá trị đơn hàng chưa đạt mức tối thiểu áp dụng mã | `apply` |
+| 400 | `VOUCHER_400_6` (`VOUCHER_INACTIVE`) | Mã giảm giá đang bị tạm khóa | `apply`, `save` |
+| 400 | `VOUCHER_400_7` (`INVALID_VOUCHER_DATES`) | Thời gian kết thúc phải sau thời gian bắt đầu | Tạo voucher (Seller/Admin) |
+| 400 | `VOUCHER_400_8` (`INVALID_DISCOUNT_PERCENT`) | Tỷ lệ giảm giá theo % không được vượt quá 100% | Tạo voucher `PERCENT` > 100 |
+| 403 | `VOUCHER_403` (`VOUCHER_STORE_MISMATCH`) | Mã giảm giá của gian hàng không áp dụng cho đơn hàng gian hàng khác | `apply` mã shop với sai `storeId` |
+| 404 | `VOUCHER_404` (`VOUCHER_NOT_FOUND`) | Không tìm thấy mã giảm giá | `apply` / `save` với mã không tồn tại |
+| 409 | `VOUCHER_409` (`VOUCHER_CODE_EXISTS`) | Mã giảm giá đã tồn tại trên hệ thống | Tạo voucher trùng `code` |
+| 409 | `VOUCHER_409_SAVED` (`VOUCHER_ALREADY_SAVED`) | Mã giảm giá đã có trong kho voucher của bạn | `POST /vouchers/mine` lưu trùng |
 
 ### 26.10 Review Errors
 
@@ -2579,6 +3092,38 @@ stompClient.subscribe(
 | 404 | `REVIEW_404_NOT_FOUND` | Không tìm thấy đánh giá |
 | 404 | `REVIEW_404_PRODUCT_NOT_FOUND` | Không tìm thấy sản phẩm để xem đánh giá (cũng dùng cho trường hợp product không ACTIVE) |
 | 409 | `REVIEW_409_ALREADY_EXISTS` | Bạn đã đánh giá sản phẩm này rồi (1 orderItem chỉ review 1 lần) |
+
+### 26.11 Image Errors
+
+> Module `image` đã được implement (xem Section 28). Mã lỗi dưới đây được khai báo trong `ImageErrorCode.java`.
+
+| HTTP | Code | Message |
+|---|---|---|
+| 400 | `IMAGE_400_INVALID_INPUT` | Tham số upload không hợp lệ (thiếu file, sai content-type, owner type/id rỗng) |
+| 400 | `IMAGE_400_FILE_TOO_LARGE` | Dung lượng file vượt quá giới hạn cho phép |
+| 400 | `IMAGE_400_UNSUPPORTED_MEDIA` | Định dạng ảnh không được hỗ trợ (chỉ chấp nhận jpg/jpeg/png/webp) |
+| 403 | `IMAGE_403_FORBIDDEN` | Bạn không có quyền thao tác ảnh của owner này |
+| 404 | `IMAGE_404_NOT_FOUND` | Không tìm thấy ảnh |
+| 409 | `IMAGE_409_UPLOAD_FAILED` | Upload lên Cloudinary thất bại |
+| 500 | `IMAGE_500_INTERNAL` | Lỗi nội bộ khi xử lý ảnh |
+
+### 26.12 Wallet Errors (DRAFT)
+
+> Module `wallet` hiện **chưa có Controller/Service/DTO/ErrorCode**. Mã lỗi dưới đây là **dự kiến** dựa trên rule nghiệp vụ trong `.cursor/rules/36-wallet.mdc`. Khi implement cần tạo `WalletErrorCode` tương ứng.
+
+| HTTP | Code | Message | Ngữ cảnh |
+|---|---|---|---|
+| 400 | `WALLET_400_INVALID_AMOUNT` | Số tiền không hợp lệ (phải > 0) | WITHDRAW / ADJUSTMENT |
+| 400 | `WALLET_400_INVALID_TYPE` | Loại giao dịch không hợp lệ | Lệch enum |
+| 400 | `WALLET_400_INVALID_DATE_RANGE` | `fromDate` phải trước `toDate` | Filter lịch sử |
+| 401 | `WALLET_401_NOT_AUTHENTICATED` | Cần đăng nhập | Mất token |
+| 403 | `WALLET_403_FORBIDDEN_ROLE` | Endpoint chỉ dành cho SELLER | Role khác gọi |
+| 403 | `WALLET_403_WALLET_FROZEN` | Ví đang bị đóng băng, không thể ghi giao dịch | status=FROZEN |
+| 404 | `WALLET_404_NOT_FOUND` | Không tìm thấy ví cho store này | Seller chưa cấp ví |
+| 409 | `WALLET_409_INSUFFICIENT_BALANCE` | Số dư không đủ để thực hiện giao dịch | WITHDRAW > balance |
+| 409 | `WALLET_409_VERSION_CONFLICT` | Xung đột optimistic lock, vui lòng thử lại | 2 transaction cùng ghi |
+| 422 | `WALLET_422_LEDGER_MISMATCH` | Sai lệch kế toán (SUM != balance) | Bù trừ sai |
+| 500 | `WALLET_500_INTERNAL` | Lỗi nội bộ khi xử lý ví | Lỗi hệ thống |
 
 ---
 ## 27. Phân Quyền Truy Cập Theo Role
