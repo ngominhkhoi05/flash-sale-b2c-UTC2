@@ -1,5 +1,5 @@
 ---
-description: Quy trình làm việc với Git - Mô hình phân nhánh, quy ước commit message, cấm tự ý push, giải quyết xung đột.
+description: Quy trình làm việc với Git - Mô hình phân nhánh, cấm agent tự ý add, commit và push, quy ước commit message gợi ý cho user.
 globs: always
 ---
 
@@ -26,14 +26,21 @@ globs: always
 1. `git checkout dev`
 2. `git pull origin dev`
 3. `git checkout -b type/mo-ta-ngan`
-4. Thực hiện công việc của task
-5. `git add .`
-6. `git commit -m "type: mô tả ngắn gọn"` (sử dụng cấu hình Git cục bộ của user)
-7. **DỪNG LẠI - TUYỆT ĐỐI KHÔNG CHẠY LỆNH PUSH.**
+4. Thực hiện công việc của task (chỉnh sửa mã nguồn, viết test, kiểm tra biên dịch).
+5. **DỪNG LẠI - TUYỆT ĐỐI KHÔNG CHẠY `git add`, `git commit` HAY `git push`.** Báo cáo kết quả công việc và gợi ý mẫu commit message để user tự kiểm tra và commit.
 
-## Quy ước Đặt tên Commit Message
+## Điều cấm: TUYỆT ĐỐI KHÔNG TỰ Ý ADD, COMMIT VÀ PUSH
 
-Ngắn gọn, phản ánh chính xác thay đổi, tuân theo chuẩn Conventional Commits (viết bằng tiếng Anh):
+- Agent **TUYỆT ĐỐI KHÔNG** được phép tự ý chạy các lệnh:
+  - `git add` (bao gồm `git add .`, `git add -A`, hoặc add từng file riêng lẻ).
+  - `git commit` (dưới bất kỳ hình thức hoặc cờ tham số nào).
+  - `git push` (dưới bất kỳ hình thức nào).
+- Toàn bộ quyền đưa file vào staging (`git add`), tạo commit và đẩy mã nguồn (`git push`) hoàn toàn thuộc về người dùng (user).
+- Sau khi hoàn thành công việc và kiểm thử, Agent chỉ rà soát diff (`git status`, `git diff`), tóm tắt thay đổi và gợi ý commit message chuẩn Conventional Commits để user tham khảo khi tự commit.
+
+## Quy ước Đặt tên Commit Message (Gợi ý cho User)
+
+Khi gợi ý trong báo cáo hoặc khi user thực hiện commit, commit message cần ngắn gọn, phản ánh chính xác thay đổi, tuân theo chuẩn Conventional Commits (viết bằng tiếng Anh):
 
 - `feat: implement flash sale reservation`
 - `fix: restore exact reserved stock on timeout`
@@ -45,28 +52,13 @@ Ngắn gọn, phản ánh chính xác thay đổi, tuân theo chuẩn Convention
 - 1 commit chỉ phục vụ đúng 1 mục tiêu (single concern).
 - Phần nội dung (body) giải thích rõ lý do tại sao thay đổi, không diễn giải lại những gì đã hiển thị trong diff.
 
-## Quy tắc thêm file và commit
-
-- Dùng lệnh `git add .` để đưa toàn bộ các file thay đổi vào staging, sau đó commit.
-- KHÔNG cần thiết (và không khuyến khích) chạy lệnh `git add` lẻ từng file thủ công.
-- Chỉ commit ĐÚNG những nội dung thực sự thay đổi trong phạm vi task hiện tại.
-- **Bắt buộc sử dụng cấu hình Git cục bộ của máy (Local Git configuration)**:
-  - Khi add commit bắt buộc phải sử dụng cấu hình Git cục bộ của máy (Local Git configuration) với thông tin `user.name` và `user.email` của chính user để thực hiện commit.
-  - TUYỆT ĐỐI KHÔNG được dùng tài khoản của `cursor-agent` (ví dụ: cấm dùng cờ `--author`, `--trailer "Co-authored-by: Cursor <cursoragent@cursor.com>"`, hoặc gán bất kỳ thông tin nào của cursor-agent vào commit).
-
-## Điều cấm: TUYỆT ĐỐI KHÔNG PUSH
-
-- Agent TUYỆT ĐỐI KHÔNG được phép tự ý chạy lệnh `git push` dưới bất kỳ hình thức nào.
-- Quyền đẩy mã nguồn lên GitHub hoàn toàn thuộc về người dùng.
-- Sau khi commit thành công, agent báo cáo kết quả cho user, user sẽ tự quyết định thời điểm push.
-
 ## Xử lý Xung đột Mã nguồn (Conflict Resolution)
 
 1. Agent chạy lệnh `git status` để liệt kê danh sách các file đang bị xung đột.
 2. Agent TUYỆT ĐỐI KHÔNG tự ý giải quyết xung đột bằng các lệnh như `git checkout --theirs/--ours` hoặc tự sửa mà chưa hỏi ý kiến.
 3. Agent đọc kỹ từng file bị conflict, tóm tắt bản chất xung đột cho user.
 4. Agent sử dụng công cụ hỏi đáp tương tác để user quyết định phương án xử lý.
-5. Sau khi nhận được sự phê duyệt của user, agent mới tiến hành giải quyết, thực hiện `git add .` và commit hoàn tất.
+5. Sau khi nhận được sự phê duyệt của user, agent hỗ trợ xử lý conflict trong mã nguồn, sau đó dừng lại để user tự kiểm tra, tự thực hiện `git add` và `git commit`.
 
 ## Pull Request (PR)
 
@@ -74,3 +66,4 @@ Ngắn gọn, phản ánh chính xác thay đổi, tuân theo chuẩn Convention
 - Mô tả PR súc tích: thay đổi những gì, lý do thực hiện, ảnh hưởng tới hệ thống ra sao.
 - Nếu có migration cơ sở dữ liệu: ghi rõ phiên bản và phương án rollback dự phòng.
 - Nếu có breaking change ở API: bắt buộc phải nêu bật rõ ràng trong phần mô tả của PR.
+
