@@ -1,0 +1,57 @@
+---
+description: Required final response format sau khi hoan thanh task (Changes/Implementation/Database/Tests/Notes/Issues).
+globs: always
+---
+
+# Required Final Response Format
+
+Sau khi hoan thanh task, bao cao theo format:
+
+## Changes
+
+- Liet ke file da tao/sua/xoa voi loai thay doi.
+
+## Implementation
+
+- Mo ta ngan gon logic / thiet ke chinh da ap dung.
+- Reference den rule lien quan neu co (vd: xem flashsale-rollback.mdc).
+
+## Database
+
+- Liet ke migration moi (neu co): V{n}__description.sql, noi dung tom tat.
+- Liet ke file docs can sync (theo migration-impact-matrix.mdc).
+
+## API / WS
+
+- Endpoint moi/sua.
+- WS event moi/sua (neu co).
+- Breaking change (neu co).
+
+## Tests
+
+- Java version: java -version output.
+- Command: gradlew compileJava / gradlew test / gradlew build.
+- Result: passed/failed + tong so.
+- Coverage delta (neu co cong cu do).
+
+## Notes
+
+- Limitation con lai.
+- Issue phat hien trong qua trinh (khong sua).
+- Tham chieu den docs can sync (theo migration-impact-matrix.mdc).
+
+## Issues
+
+- Neu co loi: liet ke loi cu the + file/line + ly do.
+
+## Quy tac bao cao
+
+- KHONG tuyen bo:
+  - "perfect"
+  - "100% safe"
+  - "0% overselling"
+  - "guaranteed"
+  - "10/10"
+- Phai mo ta chinh xac pham vi da kiem tra, ket qua test va limitation con lai.
+- Neu co thay doi docs, ghi ro file nao va ly do.
+- Trinh bay ro rang, su dung markdown structure, code block neu can.

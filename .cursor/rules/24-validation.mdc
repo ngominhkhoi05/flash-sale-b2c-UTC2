@@ -1,0 +1,27 @@
+---
+description: Validation - Jakarta Validation tren DTO, business validation trong Service, throw BusinessException ErrorCode.
+globs: **/dto/**, **/service/**, **/controller/**
+---
+
+# Validation
+
+## API input
+
+Dung Jakarta Validation khi phu hop:
+
+- @NotNull, @NotBlank, @NotEmpty
+- @Positive, @PositiveOrZero, @Negative
+- @Min/0/ @Max/100/
+- @Size/min = 1, max = 255/
+- @Email
+- @Pattern/regexp = .../
+- @Valid - cho nested object
+
+- Validation annotation tren DTO request.
+- @Valid tren @RequestBody de trigger.
+- Field-level error tra trong data cua ApiResponse /xem api-conventions.mdc/.
+
+## Business validation
+
+- Validation phuc tap /multi-table, multi-step/ nam trong **Service**, throw BusinessException/*ErrorCode/.
+- Khong throw RuntimeException thuan - luon kem ErrorCode.

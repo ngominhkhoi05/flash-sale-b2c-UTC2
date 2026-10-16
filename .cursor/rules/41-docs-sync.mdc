@@ -1,0 +1,117 @@
+---
+description: Documentation & code sync checklist - khi nao can sync docs va quy trinh sync.
+globs: always
+---
+
+# Documentation & Code Sync Checklist
+
+## Nguyen tac
+
+Code, migration, docs **PHAI dong bo**. Moi thay doi schema hoac API contract phai keo theo cap nhat docs **TRONG CUNG PR** (khong tach rieng, khong de sau).
+
+Quy tac nay ton tai vi 3 ly do:
+
+1. Docs loi thoi khien FE team implement sai contract -> mat cong sua.
+2. Moi migration thuong keo theo 3-5 file docs can sync.
+3. Neu khong co checklist, agent se quen, de docs drift dan.
+
+## Khi nao phai sync
+
+| Trigger | Phai sync |
+|---|---|
+| Them/sua db/migration/V{n}__*.sql | Bat buoc (xem migration-impact-matrix.mdc) |
+| Them/sua field trong Entity | OpenAPI annotation + DTO + api-document.md |
+| Them/sua endpoint moi | api-document.md + AGENTS.md muc tuong ung |
+| Doi status enum / error code | api-document.md + error-codes.mdc |
+| Them module moi | AGENTS.md + docs/03_system_design.md |
+| Thay doi Redis key/TTL | flashsale-*.mdc + docs/03_system_design.md |
+| Thay doi Lua script | docs/03_system_design.md + concurrency.mdc |
+| Thay doi WS event/destination | api-document.md muc 25 + websocket.mdc |
+| Thay doi contract FlashSaleOrderPort | flashsale_order_contract.md + flashsale-architecture.mdc |
+
+## Quy tac ra so sau khi tao migration moi
+
+Moi lan tao src/main/resources/db/migration/V{n}__*.sql, agent **PHAI**:
+
+1. **Mo bang matrix migration-impact-matrix.mdc** de xac dinh file docs bi anh huong.
+2. **Doc lai** cac file do de biet vi tri can sua.
+3. **Bao cao cho user** danh sach file can sync **TRUOC** khi sua (vi source-of-truth.mdc cam tu y sua docs/).
+4. Sau khi user duyet -> sua theo thu tu:
+   - ERD / bang column (docs/03_system_design.md).
+   - Quy uoc chung (docs/api/api-document.md muc 1).
+   - Endpoint list (docs/api/api-document.md muc tuong ung).
+   - Error code table (docs/api/api-document.md muc 26).
+   - AGENTS.md muc lien quan (hoac cac rule tuong ung trong .cursor/rules/).
+5. Neu thay doi anh huong user frontend -> ghi ro trong PR body, ping team FE.
+
+## Quy tac cho moi loai file
+
+### docs/01_project_planning.md
+
+- Cap nhat khi: thay doi milestone (M1/M2/M3), pham vi do an, ke hoach tuan.
+- KHONG them chi tiet ky thuat vao day (chi tiet o 02, 03).
+- Lenh kiem tra nhanh: grep "M[123]\|Tuan" docs/01_project_planning.md.
+
+### docs/02_requirement_analysis.md
+
+- Cap nhat khi: them/sua user story, use case, business rule.
+- Moi rule thay doi phai co ID (US-001, BR-014) de reference.
+
+### docs/03_system_design.md
+
+- Cap nhat khi: thay doi schema, ERD, sequence diagram, Redis key, Lua script.
+- Muc "Bang X" phai sync voi migration 1:1 (ten cot, type, constraint, FK).
+- ERD Mermaid phai render duoc (mo preview trong Cursor).
+- Lenh kiem tra nhanh: grep "CREATE TABLE\|flash_sale:\|reserve_stock" docs/03_system_design.md.
+
+### docs/04_architecture_analysis.md
+
+- Cap nhat khi: thay doi kien truc lon (them pattern moi, doi persistence).
+- KHONG trung lap voi 03 (03 chi tiet hon).
+
+### docs/api/api-document.md
+
+- Cap nhat khi: them/sua endpoint, request/response shape, error code.
+- Moi endpoint co: Method, URL, Access, Request schema, Response schema, Error codes.
+- Muc 26 (Error Code) phai day du, sort theo alphabet.
+- Lenh kiem tra nhanh: grep "/api/v1/\|status.*[0-9]{3}" docs/api/api-document.md.
+
+### docs/flashsale_order_contract.md
+
+- Cap nhat khi: thay doi contract giua flashsale module va order module.
+- Anh huong: FlashSaleOrderPort interface, CreateFlashSaleOrderCommand, OrderRef, ExpiredOrderRef.
+
+### AGENTS.md
+
+- Cap nhat khi: them convention moi, doi rule nghiep vu, mo rong API list.
+- KHONG tu y sua boi agent khi phat hien sai - bao user (xem source-of-truth.mdc).
+
+## Checklist dinh kem moi PR
+
+Trong mo ta PR, tac gia **PHAI** list:
+
+- docs/01_project_planning.md (N/A neu khong dung).
+- docs/02_requirement_analysis.md (N/A neu khong dung).
+- docs/03_system_design.md (N/A neu khong dung).
+- docs/04_architecture_analysis.md (N/A neu khong dung).
+- docs/api/api-document.md (N/A neu khong dung).
+- docs/flashsale_order_contract.md (N/A neu khong dung).
+- AGENTS.md (N/A neu khong dung).
+
+Neu file khong can sua -> ghi ro "N/A (ly do)".
+
+## Khi phat hien docs khong khop code
+
+- Code = source of truth cuoi cung (xem source-of-truth.mdc).
+- Bao user, **khong tu y** sua docs.
+- Neu user duyet -> tao **1 commit rieng** "docs: sync X voi code" de de review.
+- Commit docs KHONG de rieng 1 thang sau commit code.
+
+## Khi co thay doi breaking API
+
+Ngoai viec sync docs, agent phai:
+
+1. Danh version moi cho endpoint (vd /api/v2/...).
+2. Giu endpoint cu 1 release cycle (vd 1 thang) truoc khi xoa.
+3. Ghi ro trong api-document.md muc "Deprecated endpoints".
+4. Bao team FE bang note trong PR.

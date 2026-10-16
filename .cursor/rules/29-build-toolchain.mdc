@@ -1,0 +1,57 @@
+---
+description: Build & toolchain - Gradle commands, profiles, environment variables, file ignore rules.
+globs: build.gradle.kts, build.gradle, settings.gradle, gradle.properties, application*.yaml, application*.yml, .gitignore
+---
+
+# Build & Toolchain
+
+## Java 25
+
+Xem chi tiet java-25.mdc. Toolchain bat buoc JavaLanguageVersion.of(25).
+
+## Gradle
+
+- Wrapper: ./gradlew (da commit gradle/wrapper/gradle-wrapper.jar + .properties).
+- Task thuong dung:
+
+\\cmd
+gradlew compileJava        # nhanh, khong test
+gradlew test               # chi test
+gradlew build              # full build + test
+gradlew bootRun            # chay app voi profile active
+gradlew bootJar            # build jar
+\
+## Lombok + MapStruct
+
+Xem mapstruct-lombok.mdc.
+
+## Profile
+
+- local - dev (mac dinh khi khong set env).
+- prod - production.
+- Active qua SPRING_PROFILES_ACTIVE env var hoac spring.profiles.active trong application.yaml.
+
+## Environment variables bat buoc cho local
+
+\\	ext
+JWT_SECRET                     # >= 32 ky tu
+CLOUDINARY_CLOUD_NAME
+CLOUDINARY_API_KEY
+CLOUDINARY_API_SECRET
+DATASOURCE_URL                 # jdbc:postgresql://...
+DATASOURCE_USERNAME
+DATASOURCE_PASSWORD
+REDIS_HOST
+REDIS_PORT
+REDIS_PASSWORD                 # neu co
+\
+application-local.yaml.example la template - copy thanh application-local.yaml va fill gia tri that.
+
+## Khong commit
+
+- .env
+- application-local.yaml (co the chua secret that)
+- build/, target/
+- IDE files: .idea/, *.iml, .vscode/
+- *.log
+- MapStruct / Lombok generated files (*/target/generated-sources/)

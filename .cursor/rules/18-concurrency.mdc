@@ -1,0 +1,57 @@
+---
+description: Concurrency - Lua Script, Redisson strategy, PESSIMISTIC_WRITE.
+globs: flashsale/**, **/service/**, flashsale/strategy/**
+---
+
+# Concurrency
+
+## Khong dung
+
+\\	ext
+read stock
+-> if stock > 0
+-> decrement
+\
+trong high-concurrency Flash Sale.
+
+## Uu tien
+
+\\	ext
+Redis Lua Script
+\
+cho operation can atomicity.
+
+## Pluggable strategy
+
+Module flashsale/strategy/ ho tro 2 strategy:
+
+- LuaScriptStockReservationStrategy (mac dinh).
+- RedissonLockStockReservationStrategy (so sanh/benchmark).
+
+Chon qua property (vd: flashsale.strategy=lua / redisson).
+
+## Quy tac
+
+- Khong them distributed lock phuc tap neu Redis/Lua da giai quyet dung van de.
+- Khong dung synchronized Java cho cross-instance state.
+- DB lock (@Lock(PESSIMISTIC_WRITE)) chi dung khi that can (vd: settle wallet 2 user cung luc).
+
+## N+1
+
+### Phat hien
+
+- Bat spring.jpa.show-sql: true (profile local) de quan sat query.
+- Test voi data lon (>1000 records).
+
+### Giai phap
+
+- @EntityGraph(attributePaths = {...}).
+- JOIN FETCH trong JPQL.
+- Projection (interface-based DTO).
+- @BatchSize(size = 50) hoac hibernate.batch_size: 50 (da cau hinh).
+- 2 queries thay vi 1 join phuc tap (khi collection lon).
+
+### Quy tac
+
+- **Khong dung** EAGER bua bai de che N+1.
+- Moi list API co quan he (Order -> Items, Product -> Variants, Cart -> Items) **phai** test khong N+1 truoc khi merge.

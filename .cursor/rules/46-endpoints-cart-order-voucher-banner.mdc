@@ -1,0 +1,63 @@
+---
+description: Cart, Order, Voucher, Banner endpoints - contract cho frontend.
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/{cart,order,voucher,banner}/**/controller/**/*.{java,kt}
+---
+
+# Cart, Order, Voucher, Banner Endpoints
+
+> Phan nay la **API contract** cho frontend. Moi thay doi endpoint phai cap nhat docs/api/api-document.md (sau khi user duyet) + muc nay.
+
+## 46.11 Cart (/api/v1/cart)
+
+| Method | Endpoint | Access | Mo ta |
+|---|---|---|---|
+| GET | /api/v1/cart | Buyer | Cart hien tai |
+| POST | /api/v1/cart/items | Buyer | Them item |
+| PUT | /api/v1/cart/items/{id} | Buyer | Cap nhat so luong |
+| DELETE | /api/v1/cart/items/{id} | Buyer | Xoa item |
+| DELETE | /api/v1/cart | Buyer | Clear cart |
+| POST | /api/v1/cart/checkout | Buyer | Split cart theo store -> tao Orders (xem multi-vendor-order.mdc) |
+
+## 46.12 Order Buyer (/api/v1/orders) & Seller (/api/v1/seller/orders)
+
+| Method | Endpoint | Access | Mo ta |
+|---|---|---|---|
+| POST | /api/v1/orders | Buyer | Tao order (qua checkout flow) |
+| GET | /api/v1/orders/me | Buyer | List order cua toi, paging |
+| GET | /api/v1/orders/{id} | Buyer | Chi tiet (ownership check) |
+| PATCH | /api/v1/orders/{id}/cancel | Buyer | Cancel (chi khi PENDING_PAYMENT hoac CONFIRMED chua ship) |
+| GET | /api/v1/seller/orders | Seller | List order thuoc store minh |
+| GET | /api/v1/seller/orders/{id} | Seller | Chi tiet (ownership check store) |
+| PATCH | /api/v1/seller/orders/{id}/ship | Seller | Danh dau da giao hang |
+| PATCH | /api/v1/seller/orders/{id}/complete | Seller | Danh dau hoan thanh |
+
+## 46.13 Voucher (/api/v1/vouchers, /api/v1/seller/vouchers, /api/v1/admin/vouchers)
+
+Xem chi tiết voucher.mdc. Tom tat:
+
+| Method | Endpoint | Access | Mo ta |
+|---|---|---|---|
+| GET | /api/v1/vouchers | Buyer | List voucher available |
+| POST | /api/v1/vouchers | Buyer | Claim voucher |
+| GET | /api/v1/seller/vouchers | Seller | List voucher store |
+| POST | /api/v1/seller/vouchers | Seller | Tao voucher store |
+| PUT | /api/v1/seller/vouchers/{id} | Seller | Cap nhat |
+| DELETE | /api/v1/seller/vouchers/{id} | Seller | Xoa |
+| GET | /api/v1/admin/vouchers | Admin | List platform voucher |
+| POST | /api/v1/admin/vouchers | Admin | Tao platform voucher |
+
+## 46.13 Banner (/api/v1/banners, /api/v1/admin/banners)
+
+Xem chi tiết image-module.mdc (Image Module). Tom tat:
+
+| Method | Endpoint | Access | Mo ta |
+|---|---|---|---|
+| GET | /api/v1/banners/home | Public | Banner trang chu (mainSlides HERO + sideBanners) |
+| GET | /api/v1/banners/position/{position} | Public | Banner ACTIVE theo vi tri |
+| GET | /api/v1/admin/banners | Admin | List banner (paging, filter type/isActive) |
+| POST | /api/v1/admin/banners | Admin | Tao banner |
+| PUT | /api/v1/admin/banners/{id} | Admin | Cap nhat banner |
+| PATCH | /api/v1/admin/banners/{id}/status | Admin | Doi isActive (validate time window) |
+| DELETE | /api/v1/admin/banners/{id} | Admin | Soft delete (isActive=false) |
+
+Error codes: BANNER_NOT_FOUND, BANNER_INVALID_DATE_RANGE, BANNER_INVALID_STATUS, BANNER_IMAGE_URL_BLANK.

@@ -1,0 +1,23 @@
+---
+description: Agent workflow 8 buoc bat buoc khi nhan task. Applies every response.
+globs: always
+---
+
+# Agent Workflow
+
+Moi task **NEN** thuc hien theo 8 buoc:
+
+1. **Understand** - doc lai yeu cau, xac nhan pham vi (module nao, layer nao, co dung DB / Redis / WS khong).
+2. **Inspect** - doc code hien tai cua module lien quan + rule tuong ung trong .cursor/rules/ + muc docs lien quan.
+3. **Read relevant docs** - chi doc phan docs thuc su lien quan.
+4. **Plan** - liet ke file se tao/sua, migration (neu co), side-effect (Redis key, WS event, scheduled job).
+5. **Implement** - dung layer, dung convention.
+6. **Validate** - gradlew compileJava (nhanh), roi gradlew test (module lien quan), gradlew build (cuoi).
+7. **Review diff** - tu review lai cac thay doi.
+8. **Report** - bao cao theo format rule response-format.mdc.
+
+## Quy tac cung
+
+- **Khong nhay truc tiep vao code** neu task lien quan architecture, database, concurrency hoac business flow.
+- Luon load rule lien quan (xem bang Rule Index trong AGENTS.md root) **TRUOC** khi sua file trong concern tuong ung.
+- Neu user yeu cau task lon (>= 5 file hoac dung nhieu module) -> lap plan tuong minh va bao user.

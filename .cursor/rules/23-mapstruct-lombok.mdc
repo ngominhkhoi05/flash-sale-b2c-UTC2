@@ -1,0 +1,28 @@
+---
+description: MapStruct + Lombok - annotation processor, mapper Spring-managed.
+globs: **/mapper/**, **/entity/**, build.gradle.kts
+---
+
+# MapStruct + Lombok
+
+## MapStruct
+
+- Mapper phai duoc Spring quan ly: @Mapper/componentModel = spring/.
+- Dung @Mapping/target = x, source = y/ cho field khac ten.
+- Dung nullValuePropertyMappingStrategy = IGNORE cho update DTO.
+
+## Lombok
+
+- @Getter, @Setter, @Builder, @NoArgsConstructor, @AllArgsConstructor, @RequiredArgsConstructor, @Slf4j.
+- Khong dung @Data cho entity JPA /gay van de voi @EqualsAndHashCode + lazy loading/.
+- Entity dung @Getter rieng + @Setter/AccessLevel.PROTECTED/ cho field co the thay doi.
+
+## Annotation processing
+
+Lombok + MapStruct annotation processor phai cau hinh dung trong build.gradle.kts:
+
+- plugins: java + org.springframework.boot + io.spring.dependency-management + org.mapstruct
+- annotationProcessor: org.mapstruct:mapstruct-processor + org.projectlombok:lombok + org.projectlombok:lombok-mapstruct-binding
+- implementation: org.mapstruct:mapstruct
+
+- Khong commit generated files /target/ da co trong .gitignore/.

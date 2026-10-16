@@ -1,0 +1,53 @@
+---
+description: ErrorCode, GlobalExceptionHandler, error code prefix theo module.
+globs: **/exception/**, common/exception/**
+---
+
+# Error Code Convention
+
+## Xy ly tap trung
+
+\\	ext
+common/exception/
+|-- BusinessException.java        # RuntimeException + ErrorCode
+|-- ErrorCode.java                # interface { String getCode(); HttpStatus getStatus(); String getMessageKey(); }
+|-- CommonErrorCode.java          # enum implements ErrorCode, prefix COMMON_
+\-- GlobalExceptionHandler.java   # @RestControllerAdvice
+\
+## Moi module co 1 *ErrorCode enum rieng, prefix theo module
+
+| Module    | Prefix        | Vi du                       |
+|-----------|---------------|------------------------------|
+| auth      | AUTH_         | AUTH_INVALID_CREDENTIALS    |
+| user      | USER_         | USER_NOT_FOUND              |
+| store     | STORE_        | STORE_NOT_APPROVED          |
+| product   | PRODUCT_      | PRODUCT_OUT_OF_STOCK        |
+| image     | IMAGE_        | IMAGE_OWNER_FORBIDDEN       |
+| flashsale | FLASH_SALE_   | FLASH_SALE_OUT_OF_STOCK     |
+| cart      | CART_         | CART_EMPTY                  |
+| order     | ORDER_        | ORDER_NOT_OWNER             |
+| payment   | PAYMENT_      | PAYMENT_DUPLICATE           |
+| voucher   | VOUCHER_      | VOUCHER_EXPIRED             |
+| wallet    | WALLET_       | WALLET_INSUFFICIENT         |
+| review    | REVIEW_       | REVIEW_ALREADY_EXISTS       |
+
+## HTTP status mapping
+
+| HTTP | ErrorCode status             | Y nghia                |
+|------|-------------------------------|-------------------------|
+| 400  | *_BAD_REQUEST                 | Validation fail         |
+| 401  | *_UNAUTHORIZED / AUTH_INVALID_TOKEN | Token invalid/expired |
+| 403  | *_FORBIDDEN / *_ACCESS_DENIED | Khong du quyen          |
+| 404  | *_NOT_FOUND                   | Resource khong ton tai   |
+| 409  | *_CONFLICT / *_ALREADY_EXISTS | State conflict          |
+| 422  | *_UNPROCESSABLE               | Business rule fail      |
+| 500  | *_INTERNAL_ERROR              | Server error (khong expose stack) |
+
+## Quy tac
+
+- GlobalExceptionHandler tra 401 (invalid token), 403 (khong du quyen), 404, 409, 422, 500 theo ErrorCode.
+- **Khong tra stack trace** hoac exception noi bo truc tiep cho client.
+- Field-level validation error tra trong data dang { field, message }.
+- message field trong ApiResponse la **tieng Viet**, dung de hien thi cho user.
+- Error code string format: MODULE_REASON (UPPER_SNAKE).
+- Co the dung MessageSource cho i18n sau, hien tai hard-code tieng Viet trong *ErrorCode enum.

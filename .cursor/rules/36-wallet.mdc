@@ -1,0 +1,45 @@
+---
+description: Wallet module rules - audit, single entry point, balance check.
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/wallet/**/*.{java,kt}
+---
+
+# Wallet
+
+## Audit
+
+- Wallet transaction phai co kha nang audit.
+- KHONG sua/xoa lich su giao dich tuy tien.
+
+## Field nhat quan
+
+Moi WalletTransaction phai co:
+
+- balance_after - BigDecimal, snapshot sau khi cong/tru.
+- amount - BigDecimal, duong = cong, am = tru.
+- transaction_type - enum: TOPUP, WITHDRAW, ORDER_PAYMENT, ORDER_REFUND, COMMISSION, ...
+- order_id - nullable, FK orders.
+- payment_id - nullable, FK payments.
+- status - SUCCESS / PENDING / FAILED.
+- created_at - timestamp.
+
+## Quy tac
+
+- Moi transaction phai di qua 1 WalletService method duy nhat (single entry point).
+- @Transactional dam bao wallet.balance update + wallet_transactions insert atomic.
+- Kiem tra balance >= amount truoc khi tru.
+- Khi can dong bo nhieu user (vi du: 2 user settle wallet cung luc) -> su dung PESSIMISTIC_WRITE o repository.
+
+## Endpoint (placeholder)
+
+- GET /api/v1/wallets/me - Xem vi cua toi.
+- GET /api/v1/wallets/me/transactions - Lich su (paging).
+- POST /api/v1/wallets/me/topup - Tao yeu cau nap.
+- POST /api/v1/wallets/me/withdraw - Tao yeu cau rut.
+
+> Hien chua co WalletController - module wallet/controller/ chi co .gitkeep. Khi implement phai tuan thu rule tren va bo sung API list vao endpoints-payment-wallet-review.mdc.
+
+## Khi implement
+
+- Endpoint Contract phai duoc liet ke trong docs/api/api-document.md.
+- Tra migration-impact-matrix.mdc neu co migration moi.
+- Viet test cho service (topup, withdraw, balance check, concurrent settle).

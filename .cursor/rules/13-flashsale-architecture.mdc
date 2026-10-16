@@ -1,0 +1,44 @@
+---
+description: Flash Sale architecture - PostgreSQL + Redis + Lua + Redisson, boundary rule giua cac module.
+globs: flashsale/**, docs/03_system_design.md
+---
+
+# Flash Sale Architecture
+
+Flash Sale su dung:
+
+\\	ext
+PostgreSQL    # nguon ben vung (durable source of truth)
++
+Redis         # runtime stock / purchase limit
++
+Lua Script    # atomic reservation
++
+Redisson      # strategy du phong (so sanh/benchmark)
+\
+- Redis xu ly stock/concurrency trong thoi diem Flash Sale.
+- PostgreSQL la nguon du lieu ben vung.
+- **Khong coi Redis la database chinh** thay the PostgreSQL.
+- **Khong coi WS la source of truth** - chi la notification (xem websocket.mdc).
+
+## Boundary rule
+
+- Module flashsale duoc phep **doc + ghi** flash sale domain tables + Redis.
+- Cac module order, store, voucher, cart, payment, wallet la **read-only** doi voi flash sale domain.
+- Tich hop giua flashsale va order thong qua interface FlashSaleOrderPort (in-module port, default impl InMemoryFlashSaleOrderPort).
+
+## Flash Sale Item -> Order Item consistency
+
+**Khong tin tuong hoan toan cac ID Flash Sale do client gui.** Service nen load FlashSaleItem tu database roi derive:
+
+\\	ext
+slot_id, variant_id, product_id, price (flash_sale_price)
+\
+tu FlashSaleItem (khong tu client).
+
+### Quy tac
+
+- Client chi gui flash_sale_item_id (hoac slot_id + item_id).
+- Service load FlashSaleItem roi lay variant_id tu do.
+- Validate slot dang ACTIVE va nam trong [start_time, end_time].
+- Khong over-engineer bang composite FK neu Service validation du cho scope.

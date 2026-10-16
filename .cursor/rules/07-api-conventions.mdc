@@ -1,0 +1,39 @@
+---
+description: ApiResponse, PageResponse, REST API conventions.
+globs: **/controller/**, **/dto/**, **/api/**
+---
+
+# API Conventions
+
+## Response wrapper
+
+Moi API (ke ca loi) deu wrap trong ApiResponse<T>:
+
+
+
+## Pagination
+
+PageResponse<T> chuan, dung cho moi list API co phan trang. Mac dinh page=0, size=20, MAX_PAGE_SIZE=100, sort createdAt DESC.
+
+## REST API semantic
+
+| Method | Muc dich | Idempotent |
+|---|---|---|
+| GET    | Doc resource           | Yes |
+| POST   | Tao moi / action khong idempotent | No  |
+| PUT    | Replace toan bo resource | Yes |
+| PATCH  | Partial update        | No* |
+| DELETE | Xoa resource          | Yes |
+
+* PATCH idempotent neu field update khong phu thuoc state hien tai.
+
+## Quy tac
+
+- **Khong dung POST** cho moi operation neu HTTP semantic co method phu hop.
+- URL resource dung danh tu so nhieu: /api/v1/orders, /api/v1/products.
+- Action dac biet dung sub-resource: /api/v1/orders/{id}/cancel.
+- Versioning qua URL prefix /api/v1/.
+
+## Versioning
+
+Moi endpoint thuoc /api/v1/. Khi co breaking change -> danh version moi /api/v2/..., giu endpoint cu 1 release cycle (1 thang) truoc khi xoa.

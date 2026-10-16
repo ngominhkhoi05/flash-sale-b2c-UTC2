@@ -1,0 +1,33 @@
+---
+description: Address ownership - kiem tra user_id hoac store_id khi thao tac, XOR constraint, single default address.
+globs: user/**, store/**, **/address/**
+---
+
+# Address Ownership
+
+## Ownership check
+
+Khi Buyer tao Order phai kiem tra:
+
+\\	ext
+address.user_id == current_user.id
+\
+- Foreign Key hop le khong dong nghia address thuoc Buyer hien tai.
+- Snapshot dia chi trong Order phai duoc giu (xem order-snapshots.mdc) de dam bao lich su.
+- Moi thao tac GET / PUT / DELETE / PATCH default tren address deu check ownership; neu khong khop nem *ErrorCode.ADDRESS_ACCESS_DENIED (HTTP 403).
+
+## XOR Constraint
+
+Bang addresses co CHECK constraint chk_address_owner_xor:
+
+\\	ext
+(user_id IS NOT NULL AND store_id IS NULL)
+HOAC
+(user_id IS NULL AND store_id IS NOT NULL)
+\
+- Address cua **Buyer** -> user_id = currentUser, store_id = NULL.
+- Address **kho Store** -> store_id = currentStore, user_id = NULL.
+
+## Single Default Address
+
+Khi danh dau mot dia chi lam mac dinh (is_default = true), toan bo dia chi khac cung owner phai chuyen ve is_default = false. Thuc hien trong transaction.

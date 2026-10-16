@@ -1,0 +1,76 @@
+---
+description: Image module (polymorphic) - Cloudinary storage, ownership check, single primary per owner.
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/image/**/*.{java,kt}
+---
+
+# Image Module (Polymorphic)
+
+Module image/ quan ly anh cho **moi entity** (User avatar, Store logo, Product gallery, Variant gallery, Review album) qua co che **polymorphic FK**.
+
+## Schema (V3)
+
+```text
+images (
+ id BIGSERIAL PK,
+ owner_type VARCHAR(32) NOT NULL, -- enum: USER, STORE, PRODUCT, VARIANT, REVIEW
+ owner_id BIGINT NOT NULL,
+ public_id VARCHAR(255) NOT NULL, -- Cloudinary public_id
+ secure_url TEXT NOT NULL,
+ is_primary BOOLEAN NOT NULL DEFAULT false,
+ display_order INT NOT NULL DEFAULT 0,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+)
+
+-- Index:
+CREATE INDEX idx_images_owner ON images(owner_type, owner_id);
+CREATE UNIQUE INDEX uq_images_one_primary_per_owner
+ ON images(owner_type, owner_id) WHERE is_primary = true;
+```
+
+## Invariants
+
+- Mot owner chi co **dung 1** anh is_primary = true (partial unique index).
+- display_order >= 0.
+- Xoa owner (User/Store/Product/Variant/Review) phai cascade xoa anh lien quan (xu ly qua image/listener + image/event).
+- Khi xoa 1 anh primary, tu dong set anh co display_order nho nhat con lai lam primary.
+
+## Ownership rule
+
+- Moi thao tac GET / DELETE / PATCH (primary, order) tren image phai check:
+  - resolveImageOwner(image) == currentPrincipal
+- Neu khong khop -> IMAGE_OWNER_FORBIDDEN (HTTP 403).
+- Admin co the force-delete (forceDeleteImage) cho moderation.
+
+## Cloudinary
+
+- Config qua application.yaml:
+  ```yaml
+  cloudinary:
+    cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+    api-key: ${CLOUDINARY_API_KEY:}
+    api-secret: ${CLOUDINARY_API_SECRET:}
+    folder: ${CLOUDINARY_FOLDER:flash-sale-b2c/local}
+  ```
+- Folder mac dinh: flash-sale-b2c/{profile}.
+- Multipart limit: max-file-size: 10MB, max-request-size: 50MB.
+
+## Migration legacy
+
+- V4 da drop 5 cot anh cu: users.avatar_url, stores.logo_url, products.image_url, product_variants.image_url, product_reviews.image_urls.
+- KHONG them lai cac cot nay - luon dung bang images.
+
+## Endpoint (da co)
+
+- POST /api/v1/images?ownerType=...&ownerId=... - Upload.
+- GET /api/v1/images?ownerType=...&ownerId=... - List anh.
+- PATCH /api/v1/images/{id}/primary - Set primary (owner only).
+- PATCH /api/v1/images/{id}/order - Set display_order (owner only).
+- DELETE /api/v1/images/{id} - Xoa anh (ca Cloudinary).
+- DELETE /api/v1/admin/images/{id} - Force delete (Admin).
+
+## Khi implement
+
+- Endpoint Contract phai duoc liet ke trong docs/api/api-document.md.
+- Tra migration-impact-matrix.mdc neu co migration moi.
+- Viet test cho service (upload, ownership check, primary invariant, cascade delete).
+- Khi xoa owner, dam bao cascade xoa image qua Spring Event / JPA lifecycle.

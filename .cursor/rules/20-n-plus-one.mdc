@@ -1,0 +1,24 @@
+---
+description: N+1 detection, EntityGraph, JOIN FETCH, projection, batch size.
+globs: **/repository/**, **/service/**
+---
+
+# N+1
+
+## Phat hien
+
+- Bat spring.jpa.show-sql: true (profile local) de quan sat query.
+- Test voi data lon (>1000 records).
+
+## Giai phap
+
+- @EntityGraph(attributePaths = {...}).
+- JOIN FETCH trong JPQL.
+- Projection (interface-based DTO).
+- @BatchSize(size = 50) hoac hibernate.batch_size: 50 (da cau hinh).
+- 2 queries thay vi 1 join phuc tap (khi collection lon).
+
+## Quy tac
+
+- **Khong dung** EAGER bua bai de che N+1.
+- Moi list API co quan he (Order -> Items, Product -> Variants, Cart -> Items) **phai** test khong N+1 truoc khi merge.

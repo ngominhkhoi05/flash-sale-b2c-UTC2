@@ -1,0 +1,29 @@
+---
+description: Java 25 toolchain is mandatory. Build/test gate enforces java25 alias before running gradlew.
+globs: build.gradle.kts, build.gradle, gradle/wrapper/**, **/*.java
+---
+
+# Java 25 - Mandatory
+
+## Toolchain declaration
+
+build.gradle.kts PHAI khai bao:
+
+\\kotlin
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+\
+## Quy tac build/test
+
+- May development co the mac dinh Java 21 - phai dung java25 (alias trong PATH) truoc khi build/test/run.
+- Truoc build/test/run: chay java25 roi java -version xac nhan dung Java 25.
+- Neu java -version khong phai Java 25 -> **dung va bao loi**.
+
+## Cam
+
+- KHONG dung --enable-preview features tru khi user yeu cau ro.
+- KHONG hardcode JAVA_HOME trong code.
+- Gradle wrapper tu dong download JDK 25 qua toolchain -> tin tuong toolchain, khong override.

@@ -1,0 +1,31 @@
+---
+description: Flash Sale lifecycle - invariants, idempotent operations, background jobs.
+globs: flashsale/**, **/scheduler/**
+---
+
+# Flash Sale Lifecycle
+
+Cac operation quan trong nen **idempotent** (xem idempotency.mdc):
+
+- Pre-warm Redis.
+- Timeout rollback.
+- Sale-end settlement.
+- Payment callback.
+
+## Invariants
+
+1. 0 <= available_stock <= allocated_stock.
+2. allocated_stock khong vuot stock co the allocate.
+3. Seller khong pha allocated stock khi cap nhat base stock.
+4. Timeout tra dung reserved quantity.
+5. Sale-end settlement chi tao mot hieu ung (dung slot.status transition + job lock).
+6. Pre-warm khong nhan doi stock Redis (dung SETNX).
+7. Redis/DB failure co compensation phu hop.
+8. Purchase limit co lifecycle rieng voi reservation TTL.
+
+## Job chay nen
+
+- processExpiredReservations: 15s, quet Order PENDING_PAYMENT qua 300s, chuyen CANCELLED_TIMEOUT.
+- processEndedSlotsAndReturnUnsoldStock: 30s, dong phien ENDED, hoan tra available_stock.
+
+Tat ca scheduler method dung @Scheduled(fixedDelayString = ...).

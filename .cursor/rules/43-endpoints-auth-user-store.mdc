@@ -1,0 +1,72 @@
+---
+description: Auth, User, Store endpoints - contract cho frontend (Auth/User/Address/Store/Warehouse).
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/{auth,user,store}/**/controller/**/*.{java,kt}
+---
+
+# Auth, User, Store Endpoints
+
+> Phan nay la **API contract** cho frontend. Moi thay doi endpoint phai cap nhat docs/api/api-document.md (sau khi user duyet) + muc nay.
+
+## 46.1 JWT Configuration & Security
+
+- Header format: Authorization: Bearer access_token.
+- Signing Algorithm: HMAC-SHA256 (HS256).
+- Secret requirements: Toi thieu 32 ky tu (256-bit). Cau hinh qua jwt.secret (env JWT_SECRET).
+- Profile local: secret 64 ky tu trong application-local.yaml.
+- Expiration:
+  - Access Token: jwt.expiration-ms (mac dinh 3,600,000 ms = 1 gio).
+  - Refresh Token: jwt.refresh-expiration-ms (mac dinh 604,800,000 ms = 7 ngay).
+- Stateless: JwtAuthenticationFilter, 401 invalid/expired, 403 thieu quyen.
+
+## 46.2 RBAC Authorities
+
+- Role Authority: ROLE_<ROLE_NAME> (vd ROLE_BUYER, ROLE_SELLER, ROLE_ADMIN).
+- Permission Authority: Atomic code (vd order:create, product:read).
+- Feature Flag: Chi cap permission neu permissions.is_active == true.
+- Principal: CustomUserDetails chua AuthAccount (id, username, email). Lay ID qua customUserDetails.getId().
+
+## 46.3 Auth Endpoints (/api/v1/auth)
+
+| Method | Endpoint | Access | Mo ta |
+|---|---|---|---|
+| POST | /api/v1/auth/register | Public | Dang ky Buyer (username, email, password, fullName, phoneNumber) |
+| POST | /api/v1/auth/login | Public | Login (usernameOrEmail + password) -> access/refresh token + user info + roles |
+| POST | /api/v1/auth/refresh-token | Public | Cap lai accessToken tu refreshToken |
+| POST | /api/v1/auth/logout | Public | Logout client-side |
+
+## 46.4 User Profile (/api/v1/users)
+
+| Method | Endpoint | Access | Mo ta |
+|---|---|---|---|
+| GET | /api/v1/users/me | Authenticated | Profile hien tai |
+| PUT | /api/v1/users/me | Authenticated | Cap nhat profile (fullName, phoneNumber, avatarUrl) |
+| PUT | /api/v1/users/me/change-password | Authenticated | Doi mat khau (BCrypt check old) |
+
+## 46.5 User Address (/api/v1/users/addresses)
+
+| Method | Endpoint | Access | Mo ta |
+|---|---|---|---|
+| GET | /api/v1/users/addresses | Authenticated | List address cua toi |
+| POST | /api/v1/users/addresses | Authenticated | Tao address |
+| GET | /api/v1/users/addresses/{id} | Owner | Chi tiet (ownership check) |
+| PUT | /api/v1/users/addresses/{id} | Owner | Cap nhat (ownership check) |
+| DELETE | /api/v1/users/addresses/{id} | Owner | Xoa (ownership check) |
+| PATCH | /api/v1/users/addresses/{id}/default | Owner | Set default (reset cac cai khac) |
+
+## 46.6 Store & Warehouse Address (/api/v1/stores & /api/v1/admin/stores)
+
+| Method | Endpoint | Access | Mo ta |
+|---|---|---|---|
+| POST | /api/v1/stores | Authenticated | Tao Store (status PENDING, tier NORMAL, tao Wallet 1-1) |
+| GET | /api/v1/stores/me | Seller | Store cua toi |
+| PUT | /api/v1/stores/me | Seller | Cap nhat Store |
+| GET | /api/v1/stores/sidebar/summary | Seller | Tong hop metrics cho sidebar dashboard |
+| GET | /api/v1/stores/{id} | Public | Store public |
+| PATCH | /api/v1/admin/stores/{id}/status | Admin | Duyet/Khoa. APPROVED -> tu gan ROLE_SELLER |
+| GET | /api/v1/stores/me/addresses | Seller | List kho |
+| POST | /api/v1/stores/me/addresses | Seller | Tao kho (XOR: user=null) |
+| PUT | /api/v1/stores/me/addresses/{id} | Seller | Cap nhat kho |
+| DELETE | /api/v1/stores/me/addresses/{id} | Seller | Xoa kho |
+| PATCH | /api/v1/stores/me/addresses/{id}/default | Seller | Set kho mac dinh |
+
+> V8 fields: Store.tier (NORMAL, OFFICIAL_MALL, PREFERRED) + Store.lastActiveAt (Instant, nullable) - dung cho Store Extended Response (Subplan 5).

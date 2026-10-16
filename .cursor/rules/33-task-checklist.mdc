@@ -1,0 +1,84 @@
+---
+description: Task execution checklist - danh sach check truoc/trong/sau khi implement feature/fix bug.
+globs: always
+---
+
+# Task Execution Checklist
+
+## Understanding (truoc khi code)
+
+- [ ] Da doc requirement lien quan (docs/02_requirement_analysis.md).
+- [ ] Da doc docs lien quan (docs/03_system_design.md, docs/api/api-document.md).
+- [ ] Da doc phan AGENTS.md lien quan (hoac cac rule tuong ung trong .cursor/rules/).
+- [ ] Da kiem tra code hien tai (khong chi tin docs).
+- [ ] Da xac dinh module + layer (project-structure.mdc).
+
+## Implementation
+
+- [ ] Dung module (theo 15 modules + 2 common).
+- [ ] Dung layer (controller/service/repository/entity/dto/mapper/exception).
+- [ ] KHONG business logic trong Controller.
+- [ ] KHONG business logic trong Repository.
+- [ ] Mapper dung convention MapStruct + Spring component.
+- [ ] Error code dung prefix module (error-codes.mdc).
+- [ ] Neu can WS -> qua FlashSaleWsBroadcaster (websocket.mdc).
+- [ ] Neu can idempotency -> theo idempotency.mdc.
+- [ ] Neu can JWT auth -> theo security.mdc.
+
+## Database
+
+- [ ] Constraint dung (FK, UNIQUE, NOT NULL, CHECK, Index).
+- [ ] Migration moi neu can (V{n}__...sql).
+- [ ] KHONG sua migration cu.
+- [ ] KHONG sua docs/ (theo source-of-truth.mdc).
+- [ ] Da rà soát migration-impact-matrix.mdc neu co migration moi.
+
+## Flash Sale
+
+- [ ] Redis operation atomic (Lua) - xem concurrency.mdc.
+- [ ] Reservation TTL tach purchase limit - xem flashsale-purchase-limit.mdc.
+- [ ] Rollback tra dung quantity (compensation idempotent) - xem flashsale-rollback.mdc.
+- [ ] Co compensation khi DB fail.
+- [ ] Lifecycle operation idempotent - xem flashsale-lifecycle.mdc.
+
+## Image
+
+- [ ] Owner resolve dung (USER / STORE / PRODUCT / VARIANT / REVIEW).
+- [ ] Ownership check truoc moi PATCH/DELETE.
+- [ ] Co cascade xoa khi owner bi xoa.
+- [ ] Chi 1 anh primary/owner.
+
+## Security
+
+- [ ] KHONG hard-code secret.
+- [ ] Authorization dung (role/permission).
+- [ ] Ownership check dung (vi du: address.user_id == current_user.id).
+- [ ] KHONG bypass Security.
+
+## Validation
+
+- [ ] Input validation (Jakarta).
+- [ ] Business validation (Service throw BusinessException).
+- [ ] Edge cases (null, empty, max boundary, concurrent).
+
+## Documentation Sync
+
+- [ ] Da grep noi dung lien quan trong docs/.
+- [ ] Da tra bang migration-impact-matrix.mdc cho migration vua tao (neu co).
+- [ ] Da bao user danh sach file docs can sync.
+- [ ] Da update docs sau khi user duyet (hoac ghi ro "chua sync" trong PR).
+
+## Build/Test
+
+- [ ] Da chay java25 truoc build/test/run (xem java-25.mdc).
+- [ ] java -version xac nhan Java 25.
+- [ ] Build/test thanh cong hoac da bao ro loi.
+- [ ] Da review diff (git diff).
+- [ ] Da viet/sua test (testing.mdc) - service layer it nhat co 1 test.
+
+## Commit
+
+- [ ] git add . (khong add file le).
+- [ ] Commit message tieng Anh + conventional commit (git-workflow.mdc).
+- [ ] Commit CHI nhung file da thay doi trong task.
+- [ ] KHONG push (git-workflow.mdc).

@@ -1,0 +1,67 @@
+---
+description: Cascade delete - quy tac xoa cascade giua cac entity (Owner + Image, Cart + CartItem, Order + OrderItem).
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/**/entity/**/*.{java,kt}
+---
+
+# Cascade Delete
+
+Khi 1 entity owner bi xoa, cac entity lien quan phai duoc xoa theo cascade.
+
+## Pattern
+
+- Su dung JPA cascade + database FK ON DELETE CASCADE.
+- Tranh orphan record bang cach:
+  - Set orphanRemoval = true cho quan he parent-child (vd Cart -> CartItem).
+  - Dung database FK constraint voi ON DELETE CASCADE.
+  - Su dung Spring Event (@PreRemove, ApplicationEvent) de xoa resource ngoai DB (vd Cloudinary image).
+
+## Cac quan he cascade
+
+### User -> Address, Cart, Image (USER)
+
+- Khi user bi xoa: addresses (user_id), carts (user_id), images (owner_type=USER, owner_id) phai bi xoa cascade.
+- Wallet bi xoa theo (neu khong con lich su giao dich). Neu con lich su -> soft delete user, khong xoa cung.
+
+### Store -> Product, WarehouseAddress, Image (STORE), Voucher (store), Wallet
+
+- Khi store bi xoa (hoac soft delete): products, addresses (store_id), images, vouchers phai bi xoa cascade.
+- Product -> FlashSaleItem: chi cascade neu chua co order tham chieu.
+- Product -> Image (PRODUCT, VARIANT): cascade.
+
+### Cart -> CartItem
+
+- Khi cart bi xoa: cart_items phai bi xoa (orphanRemoval = true).
+- Khi xoa user: cart cua user cung bi xoa cascade.
+
+### Order -> OrderItem, Payment, VoucherUsage, WalletTransaction
+
+- Khi order bi xoa: order_items, payments, voucher_usages phai bi xoa cascade.
+- WalletTransaction KHONG nen xoa (audit) - chi set order_id = NULL hoac giu lai.
+
+### FlashSaleSlot -> FlashSaleItem
+
+- Khi slot bi xoa: items phai bi xoa cascade.
+- FlashSaleItem KHONG cascade xoa neu da co order tham chieu.
+
+### Image cleanup (orphaned)
+
+- Khi owner bi xoa, image phai bi xoa ca record trong DB + file tren Cloudinary.
+- Su dung Spring Event:
+  - User/Store/Product/Variant/Review bi xoa -> publish event ImageCleanupEvent.
+  - ImageEventListener nhan event -> xoa file Cloudinary + record trong images.
+
+## Quy tac
+
+- Moi cascade deu phai duoc kiem tra 2 lop:
+  - DB level: FK ON DELETE CASCADE hoac trigger.
+  - JPA level: cascade = CascadeType.REMOVE hoac orphanRemoval = true.
+- Soft delete (status = INACTIVE) khong cascade xoa - chi an giao dien.
+- Khi hard delete, dam bao cleanup resource ngoai (Cloudinary, Redis, file).
+- Test cascade bang integration test voi Testcontainers.
+
+## Khi them entity moi
+
+- Xac dinh cac quan he cascade (vd Category -> Product khong nen cascade neu con product).
+- Cap nhat migration voi FK constraint phu hop.
+- Cap nhat Entity voi cascade attribute.
+- Viet test cascade.

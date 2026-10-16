@@ -1,0 +1,50 @@
+---
+description: Architecture layered - Controller/Service/Repository/Entity/DTO/Mapper.
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/**
+---
+
+# Architecture Rules
+
+Project su dung kien truc phan tang (layered).
+
+## Controller
+
+- Nhan HTTP request.
+- Validate input (Jakarta Validation).
+- Goi Service.
+- Tra HTTP response (wrap trong ApiResponse<T>).
+- **Khong chua business logic phuc tap.**
+
+## Service
+
+- Business logic.
+- @Transactional boundary.
+- Ownership check.
+- State validation.
+- Dieu phoi Repository, Redis, external client.
+- Chi goi WS thong qua FlashSaleWsBroadcaster, **khong** goi SimpMessagingTemplate truc tiep.
+
+## Repository
+
+- Database access.
+- Query.
+- Lock khi thuc su can (@Lock(PESSIMISTIC_WRITE) chi cho flow can).
+- **Khong chua business logic.**
+
+## Entity
+
+- Mapping database.
+- Quan he JPA.
+- Constraint mapping khi phu hop (@Column(nullable = false), @Enumerated).
+- **Khong dat business workflow phuc tap vao Entity.**
+
+## DTO
+
+- API input/output.
+- **Khong expose Entity truc tiep** neu khong co ly do ro rang.
+
+## Mapper
+
+- MapStruct: @Mapper(componentModel = spring).
+- Mapper **phai duoc Spring quan ly** (injection qua constructor).
+- **Khong commit generated files** (*/target/generated-sources/ da co trong .gitignore).

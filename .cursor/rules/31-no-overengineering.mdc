@@ -1,0 +1,42 @@
+---
+description: No premature over-engineering - khong them microservices, kafka, saga, 2PC, CQRS, Kubernetes, message broker neu chua co yeu cau.
+globs: always
+---
+
+# No Premature Over-Engineering
+
+Khong tu y them:
+
+- Microservices
+- Kafka
+- Saga
+- 2PC
+- CQRS
+- Event Sourcing
+- Kubernetes
+- Distributed Lock phuc tap (ngoai Redisson neu da co)
+- Message broker
+- Parent Order
+- Seller Order
+- Service mesh
+
+neu chua co requirement ro rang.
+
+Muc tieu la he thong Flash Sale B2C co kien truc ro rang, dung nghiep vu va trien khai/test duoc trong scope do an.
+
+Khi phat hien rule nao da co trong nghiep vu, xu ly theo rule tuong ung:
+
+- Multi-vendor Order: xem multi-vendor-order.mdc (single-vendor per Order).
+- Flash Sale concurrency: xem flashsale-architecture.mdc + concurrency.mdc.
+- Image storage: xem image-module.mdc (Cloudinary, polymorphic).
+
+## Khi can them dependency moi
+
+- Them lib/dep moi -> bao user, list ly do + alternative da xet.
+- KHONG tu y bump version neu khong co ly do (xem build-toolchain.mdc).
+
+## Reference
+
+- Module structure: project-structure.mdc (15 modules + 2 common).
+- API design: api-conventions.mdc.
+- Concurrency: concurrency.mdc.

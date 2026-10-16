@@ -1,0 +1,49 @@
+---
+description: Cross-repo layout - 3 repo (backend, frontend, deploy) va quy tac rang buoc giua chung.
+globs: always
+---
+
+# Cross-Repo Layout
+
+Workspace hien co 3 repo:
+
+| Repo | Path | Vai tro |
+|---|---|---|
+| flash-sale-b2c-UTC2 | d:\flash-sale-b2c-UTC2 | Spring Boot backend (repo nay) |
+| flash-sale-b2c | d:\flash-sale-b2c | Next.js frontend (consume API backend) |
+| deploy-b2c-utc2 | d:\deploy-b2c-utc2 | Docker compose, nginx, scripts deploy (multi-service orchestration) |
+
+## Quy tac
+
+- Repo nay **chi chua** backend Java + config + SQL + lua script.
+- KHONG sua code frontend trong repo backend.
+- KHONG commit docker-compose / nginx vao repo backend (da co repo deploy).
+- File .env quan ly rieng o repo deploy.
+- Neu can thay doi API contract -> sua docs/api/api-document.md (sau khi user duyet) + bao team frontend.
+
+## Deploy repo (deploy-b2c-utc2)
+
+Cac file dang chu y:
+
+- docker-compose.yml - orchestrate backend, frontend, postgres, redis, nginx.
+- docker/backend.Dockerfile - build image backend.
+- docker/frontend.Dockerfile - build image frontend.
+- nginx/default.conf - reverse proxy /api -> backend, / -> frontend, /ws -> backend WS.
+- scripts/check-health.sh - health check sau deploy.
+- scripts/deploy.sh - entry point deploy.
+
+## Backend source code layout (nho)
+
+- src/main/java/com/b2c/flash_sale_b2c_UTC2/ - source code.
+- src/main/resources/db/migration/ - Flyway SQL.
+- src/main/resources/lua/ - Redis Lua scripts.
+- src/main/resources/application.yaml - config chinh.
+- src/main/resources/application-local.yaml.example - template env vars.
+- src/test/ - test code.
+- .cursor/rules/ - Cursor rules (rule cua agent).
+
+## Khi code Backend
+
+- Import path: com.b2c.flash_sale_b2c_UTC2.<module>.<layer>.<Class>.
+- Khi tao feature moi, tham chieu project-structure.mdc de xac dinh module + layer.
+- Khi thay doi API contract, xem response-format.mdc + endpoints-*.mdc.

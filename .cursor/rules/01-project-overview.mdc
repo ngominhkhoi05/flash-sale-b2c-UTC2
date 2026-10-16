@@ -1,0 +1,46 @@
+---
+description: Project overview, technology stack, and current development phase.
+globs: always
+---
+
+# Project Overview
+
+## Project
+
+**Flash Sale B2C - UTC2** - Spring Boot backend cho he thong B2C Multi-Vendor Marketplace ket hop Flash Sale, phuc vu muc dich do an.
+
+## Workspace layout
+
+| Repo | Path | Vai tro |
+|---|---|---|
+| flash-sale-b2c-UTC2 | d:\\flash-sale-b2c-UTC2 | **Spring Boot backend** (repo nay) |
+| flash-sale-b2c-fe | d:\\flash-sale-b2c-fe | Next.js frontend (consume API backend) |
+| deploy-b2c-utc2 | d:\\deploy-b2c-utc2 | Docker compose, nginx, scripts deploy |
+
+## Technology Stack
+
+- Java 25
+- Spring Boot
+- Gradle (Kotlin DSL build.gradle.kts)
+- PostgreSQL
+- Spring Data JPA / Hibernate (ddl-auto: validate)
+- Flyway
+- Spring Security
+- JWT (HS256)
+- Redis
+- Redis Lua Script + Redisson (optional strategy)
+- MapStruct
+- Lombok
+- Springdoc OpenAPI / Swagger
+- Spring WebSocket + STOMP + SockJS (realtime)
+- Cloudinary (image storage, polymorphic)
+
+## Current Development Phase
+
+Da hoan thanh:
+1. Planning
+2. Requirement
+3. Design
+
+Dang buoc vao:
+4. Implementation

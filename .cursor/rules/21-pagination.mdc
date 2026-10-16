@@ -1,0 +1,13 @@
+---
+description: PageResponse chuan, mac dinh page=0 size=20 MAX=100, khong load toan bo bang.
+globs: **/controller/**, **/repository/**
+---
+
+# Pagination
+
+- List API co du lieu lon **phai** ho tro pagination.
+- Dung PageResponse<T> chuan (xem api-conventions.mdc).
+- Mac dinh: page=0, size=20, MAX_PAGE_SIZE=100.
+- Sort mac dinh: createdAt DESC (hoac theo nghiep vu tung entity).
+- **Khong load** toan bo bang vao memory neu khong can.
+- Aggregate (count, sum) dung DB function, khong load + sum o Java.

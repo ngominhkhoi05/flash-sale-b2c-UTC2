@@ -1,0 +1,50 @@
+---
+description: Database engine, Flyway migration, Hibernate ddl-auto=validate.
+globs: **/db/migration/**, application*.yaml, application*.yml
+---
+
+# Database
+
+## Engine
+
+PostgreSQL.
+
+## Migration
+
+- **Flyway** la nguon quan ly schema duy nhat.
+- Location: classpath:db/migration.
+- Naming: V{n}__description.sql (V1, V2, ...).
+- **Khong sua migration da ap dung** trong moi truong dung chung neu khong co ly do dac biet.
+- Neu phai sua, dung repair cua Flyway + bao user.
+
+## Migration hien tai
+
+\\	ext
+V1__init_schema.sql                 # 24 bang
+V2__add_version_to_product_variants.sql  # Optimistic lock
+V3__create_images_table.sql         # Polymorphic image
+V4__drop_legacy_image_columns.sql   # Bo 5 cot anh cu
+\
+## Hibernate
+
+\\yaml
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+\
+- **Khong dung** create / create-drop / update lam co che quan ly schema chinh.
+- open-in-view: false (da cau hinh).
+
+## Init data
+
+- Co the dung data.sql (Spring Boot) cho seed data **chi trong profile local**.
+- Khong commit seed data production vao repo.
+
+## Phan biet 3 loai rule
+
+**Database Constraint**: Dam bao data integrity o database. Constraint vi pham -> exception SQL, khong duoc nuot o service.
+
+**Service Business Rule**: Dam bao nghiep vu. Validation phuc tap (multi-table, multi-step) dat o Service.
+
+**Redis Concurrency Rule**: Dam bao atomicity/concurrency cua Flash Sale. Source of truth runtime cho stock / purchase limit.

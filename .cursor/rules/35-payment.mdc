@@ -1,0 +1,47 @@
+---
+description: Payment module rules - invariant, callback idempotency, endpoints placeholder.
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/payment/**/*.{java,kt}
+---
+
+# Payment
+
+## Invariant
+
+- Mot Order **KHONG duoc co nhieu payment SUCCESS**.
+- Partial unique index:
+
+```sql
+CREATE UNIQUE INDEX uq_one_success_payment_per_order
+ON payments(order_id)
+WHERE status = 'SUCCESS';
+```
+
+- transaction_code phai **UNIQUE** (constraint DB).
+
+## Quy tac
+
+- Payment callback **phai idempotent** (xem idempotency.mdc).
+- Service nhan callback -> check payment.status hien tai:
+  - Neu da SUCCESS -> return ngay, KHONG xu ly lai.
+  - Neu PENDING -> chuyen SUCCESS + trigger cong wallet/giai phong stock (neu co).
+- Tat ca transition status deu ghi log + audit.
+- Su dung Redis marker de tranh double processing khi retry.
+
+## Transaction boundary
+
+- @Transactional o service method xu ly callback.
+- KHONG de callback chay nhieu lan trong cung request (idempotency-key + status check).
+
+## Endpoint (placeholder, se cap nhat khi implement)
+
+- POST /api/v1/payments/{orderCode} - Buyer tao payment intent.
+- POST /api/v1/payments/callback - Gateway callback (public, signed).
+- GET /api/v1/payments/{id} - Buyer xem payment.
+
+> Hien chua co PaymentController - module payment/controller/ chi co .gitkeep. Khi implement phai tuan thu rule tren va bo sung API list vao endpoints-payment-wallet-review.mdc.
+
+## Khi implement
+
+- Endpoint Contract phai duoc liet ke trong docs/api/api-document.md.
+- Tra migration-impact-matrix.mdc neu co migration moi.
+- Viet test cho service (callback handler, idempotency).

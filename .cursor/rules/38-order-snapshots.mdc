@@ -1,0 +1,37 @@
+---
+description: Order snapshots - giu snapshot lich su (price, address, recipient, commission) trong Order/OrderItem.
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/order/**/*.{java,kt}
+---
+
+# Order Snapshots
+
+Giu cac historical snapshot trong Order / OrderItem:
+
+- price_at_purchase - BigDecimal.
+- product_name - String.
+- variant_name - String.
+- recipient_name - String.
+- recipient_phone - String.
+- shipping_address - String (snapshot full dia chi).
+- commission_rate - BigDecimal.
+- platform_fee - BigDecimal.
+- seller_amount - BigDecimal.
+
+## Quy tac
+
+- Snapshot la **historical record**, khong xem la loi 3NF chi vi du lieu co the ton tai o bang khac.
+- Snapshot quan trong **khong nen thay doi** sau khi Order duoc tao.
+- Cap nhat Order sau create chi nen doi status, tracking_code, cancel_reason - khong doi snapshot gia/dia chi.
+- Neu user update address sau khi order da tao -> KHONG anh huong order hien tai (xem address-ownership.mdc).
+
+## Ly do
+
+- Audit: biet duoc gia/nguoi nhan/phi luc dat hang.
+- Compliance: tranh tranh chap khi user doi thong tin sau.
+- Finance: seller_amount/commission_rate la snapshot de tinh toan cho ky thanh toan.
+
+## Khi sua order
+
+- Service chi cap nhat cac field thuoc workflow: status, tracking_code, cancel_reason, cancel_at, completed_at.
+- KHONG sua price_at_purchase, product_name, recipient_*, shipping_address sau khi create.
+- Neu co loi trong snapshot luc tao -> cancel + tao order moi (KHONG sua snapshot).

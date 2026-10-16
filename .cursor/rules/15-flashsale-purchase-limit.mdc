@@ -1,0 +1,27 @@
+---
+description: Phan biet Reservation TTL (300s) va Purchase Limit Lifecycle.
+globs: flashsale/**, src/main/resources/lua/**
+---
+
+# Flash Sale Purchase Limit
+
+Phai phan biet ro **2 co che**:
+
+## Reservation TTL
+
+- Dung de **gioi han thoi gian giu stock** cua reservation/order chua hoan tat.
+- Key: reservation:{orderId} (Redis).
+- TTL mac dinh: **300 giay (5 phut)**.
+- Sau khi het TTL -> job processExpiredReservations cancel order + restore stock.
+
+## Purchase Limit Lifecycle
+
+- Dung de **kiem soat gioi han mua cua user** trong Flash Sale (vd: toi da 2 sp/user/slot).
+- Key: flash_sale:user_limit:{slotId}:{userId}:{itemId}.
+- **Co lifecycle rieng** - song den khi slot ENDED, khong bi xoa theo reservation TTL.
+
+## Quy tac
+
+- **Khong dung** reservation TTL 300s lam lifetime cua purchase limit.
+- Moi reservation phai check purchase limit truoc khi DECR stock.
+- Rollback phai DECRBY purchase limit tuong ung.

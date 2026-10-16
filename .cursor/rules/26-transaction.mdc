@@ -1,0 +1,24 @@
+---
+description: Transaction - @Transactional boundary, Redis khac DB transaction, khong transactional o Controller.
+globs: **/service/**, **/repository/**
+---
+
+# Transaction
+
+## Database
+
+- Dung @Transactional cho business operation can atomicity o database.
+- Default propagation: REQUIRED.
+- Read-only query method: @Transactional/readOnly = true/.
+- Khong dat @Transactional o Controller.
+
+## Redis khac DB
+
+\\	ext
+PostgreSQL transaction
+ != 
+Redis transaction
+\
+- @Transactional **khong rollback duoc Redis**.
+- Neu operation lien quan PostgreSQL + Redis, phai co compensation/retry/idempotency /xem flashsale-rollback.mdc, idempotency.mdc/.
+- Redis Lua script cung cap atomicity cho phia Redis.

@@ -1,0 +1,75 @@
+---
+description: Module list (15 nghiep vu + 2 common) va layer convention cho tung module.
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/**
+---
+
+# Project Structure
+
+## Main package
+
+src/main/java/com/b2c/flash_sale_b2c_UTC2/
+
+## Modules
+
+\\	ext
+auth/         # JWT, login, register, refresh token, RBAC seeding
+user/         # User profile, address book
+store/        # Store, warehouse address
+product/      # Category, Product SPU, ProductVariant SKU
+image/        # Polymorphic Image Management (Cloudinary)
+flashsale/    # Flash Sale core (slot, item, reservation, Lua)
+cart/         # Cart, CartItem
+order/        # Order, OrderItem (single-vendor per Order)
+payment/      # Payment + callback
+voucher/      # Voucher + VoucherUsage
+wallet/       # Wallet + WalletTransaction
+review/       # ProductReview
+
+common/       # ApiResponse, PageResponse, BusinessException, ErrorCode, GlobalExceptionHandler
+config/       # Security, JWT, Redis, Redisson, Cors, OpenApi, Cloudinary, realtime
+\
+## Config breakdown (config/)
+
+\\	ext
+config/
+|-- SecurityConfig.java
+|-- JwtProperties.java
+|-- RedisConfig.java
+|-- RedissonConfig.java
+|-- CorsConfig.java
+|-- OpenApiConfig.java
+|-- CloudinaryConfig.java
+|-- CloudinaryProperties.java
+\-- realtime/
+    |-- WebSocketConfig.java
+    |-- HandshakeAuthInterceptor.java
+    |-- WebSocketAuthConfig.java
+    \-- WsSessionEventListener.java
+\
+> Khong tao WebSocketSchedulerConfig.java rieng. WebSocketConfig dung ObjectProvider<TaskScheduler>.
+> Khong tao application-websocket.yaml rieng - config WS nam trong application.yaml chung.
+
+## Layer convention cho moi module
+
+\\	ext
+controller/    # @RestController, nhan request, validate, goi service
+service/       # Business logic, @Transactional boundary, ownership check
+repository/    # Spring Data JPA, query method, custom JPQL
+entity/        # @Entity mapping table
+dto/           # request/response, khong expose Entity
+mapper/        # MapStruct @Mapper
+exception/     # *ErrorCode enum
+config/        # Bean rieng module (chi khi can)
+scheduler/     # @Scheduled jobs
+strategy/      # Strategy pattern
+port/          # Inbound/Outbound port
+realtime/      # WS event/destination/broadcaster
+event/         # Spring event
+listener/      # @EventListener
+enums/         # enum nghiep vu module
+\
+## Quy tac
+
+- **Khong tao** package/module chi de lam code phuc tap hon neu chua co nhu cau.
+- Layer convention la **default** - chi tao package con khi thuc su co file dat vao.
+- Moi module co **1 *ErrorCode enum rieng** (xem error-codes.mdc).

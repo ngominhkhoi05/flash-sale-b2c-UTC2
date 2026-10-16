@@ -1,0 +1,40 @@
+---
+description: Payment, Wallet, Review endpoints - contract cho frontend (placeholder cho module chua implement).
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/{payment,wallet,review}/**/controller/**/*.{java,kt}
+---
+
+# Payment, Wallet, Review Endpoints
+
+> Phan nay la **API contract** cho frontend. Module payment/wallet/review chua co controller (chi co .gitkeep). Khi implement phai cap nhat docs/api/api-document.md va muc nay.
+
+## 46.14 Payment (/api/v1/payments)
+
+> Module payment/controller/ chua co - placeholder. Xem payment.mdc.
+
+- POST /api/v1/payments/{orderCode} - Buyer tao payment intent.
+- POST /api/v1/payments/callback - Gateway callback (public, signed).
+- GET /api/v1/payments/{id} - Buyer xem payment.
+
+## 46.15 Wallet (/api/v1/wallets)
+
+> Module wallet/controller/ chua co - placeholder. Xem wallet.mdc.
+
+- GET /api/v1/wallets/me - Xem vi cua toi.
+- GET /api/v1/wallets/me/transactions - Lich su (paging).
+- POST /api/v1/wallets/me/topup - Tao yeu cau nap.
+- POST /api/v1/wallets/me/withdraw - Tao yeu cau rut.
+
+## 46.16 Review (/api/v1/...)
+
+> Module review/controller/ da co ProductReviewPublicController (GET public) - xem review.mdc.
+
+- POST /api/v1/products/{productId}/reviews - Authenticated (placeholder).
+- GET /api/v1/products/{productId}/reviews - Public, paging, filter by rating/hasMedia, ratingDistribution + mediaCount (Subplan 3).
+- GET /api/v1/users/me/reviews - Buyer xem review cua minh (placeholder).
+- DELETE /api/v1/reviews/{id} - Owner hoac Admin (placeholder).
+
+## Khi implement
+
+- Endpoint Contract phai duoc liet ke trong docs/api/api-document.md.
+- Tra migration-impact-matrix.mdc neu co migration moi.
+- Viet test cho service (business rule, ownership, idempotency).

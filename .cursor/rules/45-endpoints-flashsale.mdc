@@ -1,0 +1,50 @@
+---
+description: Flash Sale endpoints - Admin/Seller/Public + reservation flow.
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/flashsale/**/controller/**/*.{java,kt}
+---
+
+# Flash Sale Endpoints
+
+> Phan nay la **API contract** cho frontend. Moi thay doi endpoint phai cap nhat docs/api/api-document.md (sau khi user duyet) + muc nay.
+
+## Boundary rule
+
+- Chi module flashsale ghi flash sale domain.
+- Tich hop order qua FlashSaleOrderPort (xem flashsale-architecture.mdc).
+
+## Concurrency Architecture
+
+- Lua script reserve_stock.lua - key flash_sale:stock:{itemId} + flash_sale:user_limit:{slotId}:{userId}:{itemId}.
+- Pluggable StockReservationStrategy (Lua mac dinh, Redisson optional) - xem concurrency.mdc.
+- Dual-write compensation: Redis rollback (INCRBY stock, DECRBY user_limit) + DB (replenishAvailableStockConditionally) - xem flashsale-rollback.mdc.
+
+## Admin (/api/v1/admin/flash-sales)
+
+| Method | Endpoint | Access | Mo ta |
+|---|---|---|---|
+| POST | /api/v1/admin/flash-sales/slots | Admin | Tao slot (chong overlap) |
+| PUT | /api/v1/admin/flash-sales/slots/{id} | Admin | Cap nhat slot (chan neu ENDED, check overlap) |
+| GET | /api/v1/admin/flash-sales/slots/{id} | Admin | Chi tiet slot |
+| GET | /api/v1/admin/flash-sales/slots | Admin | List slot |
+| PATCH | /api/v1/admin/flash-sales/items/{id}/approve | Admin | Duyet SKU, tru kho goc atomic |
+| POST | /api/v1/admin/flash-sales/slots/{id}/pre-warm | Admin | Pre-warm Redis (SETNX, idempotent, tinh pending) |
+
+## Seller (/api/v1/seller/flash-sales)
+
+| Method | Endpoint | Access | Mo ta |
+|---|---|---|---|
+| POST | /api/v1/seller/flash-sales/items | Seller | Dang ky SKU (flash_sale_price < original_price, allocated_stock <= stock_quantity) |
+
+## Public & Reservation (/api/v1/flash-sales)
+
+| Method | Endpoint | Access | Mo ta |
+|---|---|---|---|
+| GET | /api/v1/flash-sales/slots | Public | List slot dang/sap dien ra + stock realtime tu Redis |
+| POST | /api/v1/flash-sales/reservations | Authenticated | Reservation voi Idempotency-Key (xem idempotency.mdc). Lua atomic + tao Order PENDING_PAYMENT qua FlashSaleOrderPort |
+
+## Khi implement
+
+- Endpoint Contract phai duoc liet ke trong docs/api/api-document.md.
+- Tra migration-impact-matrix.mdc neu co migration moi.
+- Viet test cho service (Lua atomic, rollback idempotent, oversell prevention).
+- WebSocket event: xem websocket.mdc.

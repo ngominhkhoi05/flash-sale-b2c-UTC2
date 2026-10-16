@@ -1,0 +1,79 @@
+---
+description: Git workflow - branching model, commit message, KHONG push, conflict resolution.
+globs: always
+---
+
+# Git Workflow
+
+## Branching model
+
+- main: production-ready, duoc bao ve, chi merge qua PR.
+- dev: integration branch, base cho moi branch moi.
+- feature/short-desc: vd: feature/order-module.
+- fix/short-desc: vd: fix/auth-401-loop.
+- hotfix/short-desc: khap cap, branch tu main, merge ca main + dev.
+- refactor/short-desc: vd: refactor/extract-flashsale-order-port.
+- chore/short-desc: vd: chore/init-project-structure.
+- docs/short-desc: vd: docs/sync-api-document.md.
+
+### Khi nao dung hotfix/ thay cho fix/
+
+- fix/x: bug thuong, lam trong sprint, branch tu dev, merge vao dev.
+- hotfix/x: bug khap cap tren production, branch tu main, merge thang vao main roi cherry-pick / merge nguoc ve dev.
+
+## Quy trinh BAT BUOC truoc moi task
+
+1. git checkout dev
+2. git pull origin dev
+3. git checkout -b type/shorter-desc
+4. lam task
+5. git add .
+6. git commit --trailer "Co-authored-by: Cursor <cursoragent@cursor.com>" -m type:mo ta ngan
+7. DUNG - KHONG push.
+
+## Commit message
+
+Ngan gon, dung thay doi, conventional commit (tieng Anh):
+
+- feat: implement flash sale reservation
+- fix: restore exact reserved stock on timeout
+- chore: initialize project structure
+- docs: update API endpoint for image module
+- refactor: extract FlashSaleOrderPort interface
+- hotfix: patch payment callback signature mismatch
+
+- 1 commit = 1 concern.
+- Body giai thich tai sao, khong lap lai cai gi.
+
+## Quy tac commit & add
+
+- Dung git add . de dua toan bo file vao staging, sau do commit.
+- KHONG can (va khong khuyen khich) git add tung file thu cong.
+- Commit CHI nhung gi da thuc su thay doi trong task hien tai.
+
+## KHONG push
+
+- Agent TUYET DOI KHONG chay git push duoi moi hinh thuc.
+- Push len GitHub la cua nguoi dung.
+- Sau khi commit xong bao cao cho user, user tu quyet dinh push.
+
+## Conflict resolution
+
+1. Agent chay git status de liet ke file bi conflict.
+2. Agent KHONG tu y resolve bang git checkout --theirs/--ours / git add / sua noi dung.
+3. Agent doc tung file conflict, tom tat cho user.
+4. Agent dung AskQuestion de user chon huong xu ly.
+5. Sau khi user duyet, agent moi sua file + git add . + commit.
+
+## Khong commit
+
+- .env, application-local.yaml (chi commit .example), secret, password, API key
+- IDE files khong can thiet
+- build output (build/, target/)
+
+## PR
+
+- 1 PR = 1 concern.
+- Mo ta ngan gon: thay doi gi, tai sao, anh huong gi.
+- Neu co migration: ghi ro version + anh huong rollback.
+- Neu co breaking change API: ghi ro trong PR body.

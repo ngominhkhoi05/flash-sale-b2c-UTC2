@@ -1,0 +1,30 @@
+---
+description: Realtime WebSocket - STOMP + SockJS, destinations, FlashSaleWsBroadcaster, payload format.
+globs: **/realtime/**, config/realtime/**, flashsale/realtime/**
+---
+
+# Realtime WebSocket /STOMP + SockJS/
+
+## Tong quan
+
+Realtime channel phuc vu push event cho client /stock update, slot status, order result/. **Khong thay the HTTP REST** - chi bo sung lop notification.
+
+**Stack**: Spring WebSocket + STOMP + SockJS.
+
+**Endpoint handshake**: ws://host/ws /SockJS fallback: http://host/ws/.../.
+
+## Cau hinh chinh
+
+- config/realtime/WebSocketConfig.java: Broker prefix /topic, /user; heartbeat 10s; ObjectProvider<TaskScheduler>.
+- config/realtime/HandshakeAuthInterceptor.java: Doc JWT tu ?token= query param.
+- config/realtime/WebSocketAuthConfig.java: Reload authorities qua UserDetailsService tai CONNECT.
+- config/realtime/WsSessionEventListener.java: Log lifecycle events + dem active sessions.
+- config/CorsConfig.java: CORS mapping /ws/**.
+- config/SecurityConfig.java: permitAll() cho /ws/** /auth xu ly trong interceptor/.
+
+> **Khong tao** WebSocketSchedulerConfig.java rieng. **Khong tao** application-websocket.yaml rieng.
+
+## Auth flow /browser -> server/
+
+\\	ext
+Browser: new WebSocket/

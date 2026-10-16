@@ -1,0 +1,24 @@
+---
+description: Flash Sale 3 muc stock, invariants, optimistic lock.
+globs: flashsale/**, product/**
+---
+
+# Flash Sale Stock Model
+
+Co the ton tai 3 muc stock:
+
+\\	ext
+product_variants.stock_quantity     # base stock (seller quan ly)
+flash_sale_items.allocated_stock    # da allocate cho slot
+flash_sale_items.available_stock    # con ban duoc trong slot (Redis mirror)
+\
+Day la **operational/materialized state** phuc vu Flash Sale va khong tu dong duoc xem la vi pham 3NF.
+
+## Invariants
+
+\\	ext
+0 <= available_stock <= allocated_stock
+allocated_stock <= product_variants.stock_quantity (tai thoi diem approve)
+\
+- Seller **khong duoc giam** base stock xuong duoi phan stock dang allocate cho Flash Sale dang ACTIVE.
+- Optimistic lock @Version tren ProductVariant bao ve update dong thoi.

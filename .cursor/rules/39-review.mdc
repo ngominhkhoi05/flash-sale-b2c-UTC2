@@ -1,0 +1,45 @@
+---
+description: Product review rules - ownership, completed order check, unique per order item.
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/review/**/*.{java,kt}
+---
+
+# Product Review
+
+Khi tao Review phai kiem tra:
+
+1. User so huu Order (order.user_id == currentUserId).
+2. Order da COMPLETED theo nghiep vu.
+3. order_item_id thuoc Order cua user.
+4. Product cua Review khop Product trong OrderItem.
+5. Mot OrderItem khong bi review nhieu lan (UNIQUE constraint tren order_item_id).
+
+## product_id
+
+- product_id co the duoc giu nhu **intentional denormalization / read optimization** de truy van review theo product nhanh.
+
+## Image (album review)
+
+- Review album anh dung bang images (owner_type=REVIEW) - khong con product_reviews.image_urls JSONB (da xoa V4).
+- Khi user upload anh cho review -> upload qua ImageService voi ownerType=REVIEW, ownerId=reviewId.
+- 1 review co the co nhieu anh, toi da 1 primary.
+
+## Visibility
+
+- Review co status VISIBLE / HIDDEN.
+- Chi Review VISIBLE moi dem vao rating avg/count tren Product.
+- Admin co the HIDDEN review vi pham noi quy.
+
+## Endpoint
+
+- POST /api/v1/products/{productId}/reviews - Authenticated (placeholder).
+- GET /api/v1/products/{productId}/reviews - Public, paging, filter by rating/hasMedia, ratingDistribution + mediaCount.
+- GET /api/v1/users/me/reviews - Buyer xem review cua minh (placeholder).
+- DELETE /api/v1/reviews/{id} - Owner hoac Admin (placeholder).
+
+> review/controller/ProductReviewPublicController.java da implement GET public endpoint (Subplan 3). Review album anh dung bang images (owner_type=REVIEW) - khong con product_reviews.image_urls JSONB (da xoa V4).
+
+## Khi implement
+
+- Endpoint Contract phai duoc liet ke trong docs/api/api-document.md.
+- Tra migration-impact-matrix.mdc neu co migration moi.
+- Viet test cho service (ownership check, completed order check, unique order_item_id, denormalized product_id).

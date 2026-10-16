@@ -1,0 +1,44 @@
+---
+description: Timeout rollback - tra lai dung so luong da reserve, idempotent qua marker Redis.
+globs: flashsale/**, src/main/resources/lua/**
+---
+
+# Timeout Rollback
+
+Khi reservation timeout/cancel phai tra lai **dung so luong da reserve**.
+
+\\	ext
+Sai:  INCRBY stock 1
+Dung: INCRBY stock {reservedQuantity}
+\
+- Neu reserve 5 san pham thi phai tra lai 5.
+- Rollback phai **idempotent** (xem idempotency.mdc) de tranh tra stock nhieu lan.
+- Dung Redis marker rollback:{orderId}:{itemId} set khi rollback lan dau, cac lan sau skip.
+
+## Lua script
+
+File src/main/resources/lua/rollback_stock.lua thuc hien:
+- Check marker idempotency.
+- INCRBY flash_sale:stock:{itemId} dung reservedQuantity.
+- DECRBY flash_sale:user_limit:{slotId}:{userId}:{itemId} dung reservedQuantity.
+- SET marker rollback:{orderId}:{itemId} voi TTL 1 ngay.
+
+## Redis -> Database Compensation
+
+Redis decrement thanh cong nhung DB order creation that bai co the gay inconsistency.
+
+### Flow fail
+
+\\	ext
+Redis reserve
+ \-- DB fail (constraint / timeout / deadlock)
+ \-- Compensate Redis (rollback_stock.lua)
+ \-- Restore exact reserved quantity
+\
+### Quy tac
+
+- **Khong trien khai Saga hoac 2PC** cho scope hien tai.
+- Try-Catch compensation **phai tranh double compensation** (dung marker idempotency).
+- Ca 2 phia (Redis + DB) deu phai co marker rieng:
+  - Redis: rollback:{orderId}:{itemId} (TTL 1 ngay).
+  - DB: cot order.status transition hop le (PENDING_PAYMENT -> CANCELLED_TIMEOUT chi 1 lan).

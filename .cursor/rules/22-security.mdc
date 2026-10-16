@@ -1,0 +1,58 @@
+---
+description: Security - khong hard-code secret, JWT, CORS, public route, filter chain.
+globs: config/**, **/filter/**, application*.yaml
+---
+
+# Security
+
+## Khong hard-code
+
+- JWT secret, Database password, Redis password, Payment secret/API key, Cloudinary secret.
+
+Dung environment variables hoac secret configuration (qua application-{profile}.yaml).
+
+## Quy tac
+
+- JWT authentication/authorization xu ly tai Security layer (SecurityConfig + JwtAuthenticationFilter).
+- Khong bypass Security chi de test feature.
+- 401 cho token invalid/expired; 403 cho thieu quyen.
+- Moi @PreAuthorize phai reference permission code (vd: order:create) hoac role (hasRole SELLER).
+
+## Auth endpoint
+
+- /api/v1/auth/** -> public.
+- /api/v1/admin/** -> hasRole ADMIN.
+- /api/v1/seller/** -> hasRole SELLER.
+- /api/v1/** con lai -> authenticated.
+- WebSocket /ws/** -> permitAll() (auth trong HandshakeAuthInterceptor).
+
+## CORS
+
+- CorsConfig mapping /ws/** cho WebSocket.
+- API REST /api/v1/** cung can CORS neu frontend goi cross-origin.
+- Whitelist origin qua property app.cors.allowed-origins (mac dinh http://localhost:3000).
+
+## Public route
+
+- /api/v1/auth/**
+- /api/v1/products/** (public)
+- /api/v1/flash-sales/slots (public)
+- /api/v1/categories/** (public)
+- /api/v1/stores/{id} (public)
+- /v3/api-docs/**, /swagger-ui/**, /swagger-ui.html
+- /actuator/health
+- /ws/**
+
+## Stateless
+
+- SessionCreationPolicy.STATELESS.
+- JwtAuthenticationFilter dat truoc UsernamePasswordAuthenticationFilter.
+- Custom AuthenticationEntryPoint tra ApiResponse 401.
+- Custom AccessDeniedHandler tra ApiResponse 403.
+
+## Filter chain order
+
+1. CorsFilter
+2. JwtAuthenticationFilter
+3. UsernamePasswordAuthenticationFilter (disabled)
+4. AuthorizationFilter

@@ -1,0 +1,48 @@
+---
+description: Idempotency - Idempotency-Key header, Redis storage TTL 24h, flow IN_PROGRESS/COMPLETED/FAILED.
+globs: **/controller/**, **/service/**
+---
+
+# Idempotency Convention
+
+Ap dung cho moi operation co retry / co the bi client goi lai do network.
+
+## Khi nao BAT BUOC
+
+- Payment callback.
+- Stock rollback.
+- Flash Sale settlement.
+- Redis pre-warm.
+- Order creation trong flow co retry.
+- Flash Sale reservation.
+
+## HTTP header
+
+\Idempotency-Key: <uuid-v4 hoac client-gen string, max 255 chars>
+\
+- Client phai gui kem Idempotency-Key cho endpoint ho tro.
+- Server phai reject 400 neu thieu key o endpoint yeu cau.
+
+## Storage
+
+- Redis key: idempotency:{key}.
+- Value: JSON snapshot gom userId, requestHash/sha256-of-body/, responseSnapshot, status, expiresAt.
+- TTL: 24 gio.
+
+## Flow
+
+1. Nhan request + Idempotency-Key
+2. SETNX idempotency:{key} = { status: IN_PROGRESS, ... } TTL 24h
+   - Neu da ton tai:
+     - Lay record cu
+     - Neu COMPLETED -> tra responseSnapshot
+     - Neu IN_PROGRESS -> tra 409 IDEMPOTENCY_IN_PROGRESS
+     - Neu FAILED -> cho retry, set lai IN_PROGRESS
+3. Xu ly business
+4. Update record: status = COMPLETED, responseSnapshot = response
+5. Tra response cho client
+
+## Quy tac
+
+- requestHash phai match - neu client goi lai voi body khac -> 422 IDEMPOTENCY_KEY_MISMATCH.
+- Compensation /xem flashsale-rollback.mdc/ khong dung Idempotency-Key cua client, ma dung marker rieng /vd rollback:{orderId}:{itemId}/.

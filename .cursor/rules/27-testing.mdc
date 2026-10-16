@@ -1,0 +1,94 @@
+---
+description: Testing - unit, integration, concurrency, WebSocket test, Testcontainers, rollback DB.
+globs: src/test/**, build.gradle.kts
+---
+
+# Testing
+
+## Sau moi task
+
+1. Build project.
+2. Chay test lien quan.
+3. Neu lien quan DB, kiem tra migration.
+4. Neu lien quan Redis/concurrency, kiem tra atomicity va edge cases.
+5. Review diff.
+
+## BAT BUOC
+
+Truoc build/test/run: chay java25 + java -version xac nhan Java 25.
+
+Sau do:
+
+\\cmd
+gradlew clean build
+\
+hoac:
+
+\\cmd
+gradlew test
+\
+Neu java -version khong phai Java 25 thi **dung va bao loi**.
+
+## Test layer
+
+- **Unit test**: Service logic, khong can Spring context. Dung Mockito.
+- **Integration test**: @SpringBootTest + Testcontainers /Postgres + Redis/ cho flow DB/Redis.
+- **Concurrency test**: Test Lua script voi nhieu thread mo phong race condition.
+- **WebSocket test**: @SpringBootTest + WebSocketStompClient cho event flow.
+
+## Quy tac
+
+- Moi bug fix phai co test reproduce truoc, sau do fix.
+- Moi feature moi phai co unit test co ban.
+- Coverage muc tieu: **>= 60%** cho service layer, **>= 40%** tong.
+
+## Bat buoc viet test
+
+Moi task implement feature / fix bug PHAI kem test trong cung PR /commit rieng neu can/:
+
+- **Scope bat buoc**: service layer cua module dang thay doi.
+  - Controller khong bat buoc /co the mock service/ tru khi task chu yeu o controller layer.
+  - Repository khong bat buoc test rieng /da duoc cover qua integration test/.
+- **Loai test**:
+  - Unit test cho business logic thuan /validation, ownership check, state machine/.
+  - Integration test cho flow co **read/write DB**, **Redis**, hoac **external client**.
+- **Quy tac pham vi**:
+  - Cover happy path + it nhat 1 edge case /boundary, null/empty, invalid input/.
+  - Test cho error path khi service throw BusinessException/*ErrorCode/.
+- Task chi doi config / docs / convention khong co code nghiep vu -> KHONG bat buoc viet test.
+- Bao cao cuoi task phai ghi ro:
+  - So test them/sua.
+  - Ket qua gradlew test /passed/failed + tong so/.
+  - Coverage delta neu co cong cu do /Jacoco / IntelliJ/.
+
+## Rollback DB sau integration test
+
+Integration test co the lam thay doi du lieu DB that. PHAI dam bao DB duoc dua ve trang thai ban dau sau khi test xong.
+
+### Co che mac dinh /bat buoc theo thu tu uu tien/
+
+1. **@Transactional tren test method** /Spring Test/.
+   - Spring se tu rollback sau khi method ket thuc /ke ca khi test pass hay fail/.
+   - Phu hop khi test chi thuc hien write trong transaction duy nhat.
+   - KHONG dung neu test can commit that /vd: test trigger, test async job, test scheduler/.
+
+2. **@Sql script cleanup** /cuoi method/.
+   - Dung khi @Transactional khong phu hop /vd: can commit de verify trigger / constraint / scheduler/.
+   - Dat script rollback /TRUNCATE TABLE ..., DELETE FROM .../ trong src/test/resources/cleanup.sql va reference bang @Sql.
+
+3. **Testcontainers** /mac dinh cho integration test backend/.
+   - Moi test class dung container Postgres rieng /qua @Container + @Testcontainers/.
+   - Container bi huy sau khi test class ket thuc -> DB sach cho class sau.
+   - Tan dung @DynamicPropertySource de wire spring.datasource.* toi container.
+
+4. **Manual cleanup trong @AfterEach** /chi khi 3 cach tren khong kha thi/.
+   - Dung JdbcTemplate hoac TestEntityManager de xoa data inserted.
+   - KHONG khuyen khich vi de sot va khong cover duoc loi giua chung.
+
+### Quy tac chung
+
+- Test khong duoc de lai data rac trong DB sau khi chay.
+- Test khong duoc phu thuoc vao data co san trong DB that /dev / staging/.
+- Neu test phai dung data seed co dinh -> seed trong @BeforeEach + cleanup trong @AfterEach.
+- Khi test fail giua chung -> cleanup **van phai chay** /JUnit dam bao @AfterEach luon chay, ke ca khi @Before fail/.
+- Bao cao cuoi task ghi ro co che rollback nao dang dung cho integration test cua task.

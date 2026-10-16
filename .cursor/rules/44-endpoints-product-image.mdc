@@ -1,0 +1,56 @@
+---
+description: Category, Product, Image endpoints - contract cho frontend.
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/{category,product,image}/**/controller/**/*.{java,kt}
+---
+
+# Category, Product, Image Endpoints
+
+> Phan nay la **API contract** cho frontend. Moi thay doi endpoint phai cap nhat docs/api/api-document.md (sau khi user duyet) + muc nay.
+
+## 46.7 Category (/api/v1/categories & /api/v1/admin/categories)
+
+| Method | Endpoint | Access | Mo ta |
+|---|---|---|---|
+| GET | /api/v1/categories | Public | Cay nganh hang |
+| GET | /api/v1/categories/{id} | Public | Chi tiet |
+| POST | /api/v1/admin/categories | Admin | Tao |
+| PUT | /api/v1/admin/categories/{id} | Admin | Cap nhat |
+| DELETE | /api/v1/admin/categories/{id} | Admin | Xoa (chan neu co con) |
+
+## 46.8 Product SPU-SKU (/api/v1/products & /api/v1/seller/products)
+
+| Method | Endpoint | Access | Mo ta |
+|---|---|---|---|
+| GET | /api/v1/products | Public | Tim/filter (categoryId, keyword, minPrice, maxPrice, rating, flashSaleOnly, hasDiscount, minSold), paging. Chi product ACTIVE cua store APPROVED. Ho tro sort: createdAt_desc (default), createdAt_asc, price_asc, price_desc, sold_desc, rating_desc. Batch fetch variants (khong N+1). |
+| GET | /api/v1/products/{id} | Public | Chi tiet SPU + SKU ACTIVE |
+| POST | /api/v1/seller/products | Seller | Tao SPU-SKU. Validate store APPROVED, gia > 0, ton kho >= 0, SKU unique, so SKU khop tier_variation_configs |
+| GET | /api/v1/seller/products | Seller | List san pham cua toi, paging, filter status |
+| GET | /api/v1/seller/products/{id} | Seller | Chi tiet + toan bo SKU (ownership check) |
+| PUT | /api/v1/seller/products/{id} | Seller | Cap nhat SPU + SKU. Chan sua gia/giam ton kho neu SKU trong Flash Sale ACTIVE. Optimistic lock (@Version). |
+| DELETE | /api/v1/seller/products/{id} | Seller | Soft delete neu co order/flash_sale reference, hard delete neu chua |
+| PATCH | /api/v1/seller/products/{id}/status | Seller | Doi status ACTIVE / INACTIVE / OUT_OF_STOCK |
+
+> V8 field: Product.slug (VARCHAR(255), nullable, unique partial index) - dung cho SEO URL, backfill tu name.
+
+> ProductDetailResponse new fields (Subplan 2 + Subplan 4):
+> - Double ratingAvg - trung binh rating tu reviews VISIBLE (default 0.0).
+> - Integer ratingCount - tong review VISIBLE.
+> - Integer soldCount - tu products.total_sold (V7).
+> - BigDecimal minPrice - MIN variant original_price WHERE ACTIVE.
+> - BigDecimal maxPrice - MAX variant original_price WHERE ACTIVE.
+> - Integer discountPercent - round((original - flashSale) / original * 100) tu lowest-price active FlashSaleItem; null neu khong co.
+> - List<ProductImageDto> images - anh tu ImageService.listImages(PRODUCT, productId), alt = product name.
+> - List<ActiveFlashSaleDto> flashSales (Subplan 4) - danh sach FlashSaleItem ACTIVE cua product. Gom: slotId, slotStartTime, slotEndTime, itemId, variantId, originalPrice, flashSalePrice, stockAvailable (Redis -> fallback DB), slotStatus. Sorted by flashSalePrice ASC. Empty list neu khong co.
+
+## 46.9 Image (/api/v1/images & /api/v1/admin/images)
+
+Xem chi tiết image-module.mdc. Tom tat:
+
+| Method | Endpoint | Access | Mo ta |
+|---|---|---|---|
+| POST | /api/v1/images?ownerType=...&ownerId=... | Owner | Upload + attach |
+| GET | /api/v1/images?ownerType=...&ownerId=... | Owner / Public (tuy owner) | List anh |
+| PATCH | /api/v1/images/{id}/primary | Owner | Set primary (reset primary khac) |
+| PATCH | /api/v1/images/{id}/order | Owner | Set display_order |
+| DELETE | /api/v1/images/{id} | Owner | Xoa anh (ca Cloudinary) |
+| DELETE | /api/v1/admin/images/{id} | Admin | Force delete |

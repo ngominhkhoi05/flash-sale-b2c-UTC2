@@ -1,0 +1,50 @@
+---
+description: Voucher module rules - store/platform split, usage invariant, rollback.
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/voucher/**/*.{java,kt}
+---
+
+# Voucher
+
+## Invariant store
+
+- vouchers.store_id IS NOT NULL -> checkout phai kiem tra voucher.store_id == order.store_id.
+- vouchers.store_id IS NULL -> platform voucher (ap dung moi store).
+
+## Invariant usage
+
+- used_quantity <= total_quantity.
+- CHECK constraint tuong ung o DB.
+
+## Voucher percentage
+
+- discount_value <= 100.
+- CHECK constraint o DB.
+
+## Quy tac
+
+- Ap dung voucher o **service checkout** (sau khi split cart theo store, xem multi-vendor-order.mdc).
+- Moi Order chi ap dung toi da 1 store-voucher + 1 platform-voucher.
+- Voucher usage ghi vao voucher_usages (FK voucher_id, order_id, user_id).
+- Rollback khi order cancel: xoa voucher_usage + decrement used_quantity.
+
+## Endpoint (da co)
+
+- GET /api/v1/vouchers - Buyer list voucher available.
+- POST /api/v1/vouchers - Buyer claim voucher vao vi.
+- GET /api/v1/seller/vouchers - Seller quan ly voucher store.
+- POST /api/v1/seller/vouchers - Seller tao voucher store.
+- PUT /api/v1/seller/vouchers/{id} - Seller cap nhat.
+- DELETE /api/v1/seller/vouchers/{id} - Seller xoa.
+- GET /api/v1/admin/vouchers - Admin quan ly platform voucher.
+- POST /api/v1/admin/vouchers - Admin tao platform voucher.
+
+## Voucher Code khi tao
+
+- Code phai UNIQUE trong pham vi store (hoac platform neu voucher he thong).
+- Su dung prefix de phan biet: STORE-XXXXX cho store, PLATFORM-XXXXX cho platform.
+
+## Khi implement
+
+- Endpoint Contract phai duoc liet ke trong docs/api/api-document.md.
+- Tra migration-impact-matrix.mdc neu co migration moi.
+- Viet test cho service (claim, validate store match, usage increment, rollback).
