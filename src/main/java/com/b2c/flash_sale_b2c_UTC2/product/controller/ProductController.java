@@ -54,19 +54,15 @@ public class ProductController {
     }
 
     @GetMapping
-    @Operation(summary = "Tim kiem & loc danh sach san pham san (Public)",
-               description = "Ho tro loc theo slug, categoryId, tu khoa keyword, khoang gia minPrice-maxPrice, phan trang PageResponse")
-    public ResponseEntity<?> getPublicProducts(
-            @RequestParam(value = "slug", required = false) String slug,
+    @Operation(summary = "Tìm kiếm & lọc danh sách sản phẩm sàn (Public)",
+               description = "Hỗ trợ lọc theo categoryId, từ khoá keyword, khoang giá minPrice-maxPrice, phân trang PageResponse. " +
+                             "Để xem chi tiết sản phẩm theo ID dùng GET /api/v1/products/{id}, theo slug dùng GET /api/v1/products/slug/{slug}.")
+    public ResponseEntity<ApiResponse<PageResponse<ProductSummaryResponse>>> getPublicProducts(
             @ModelAttribute ProductFilterRequest filter,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        if (slug != null && !slug.isBlank()) {
-            ProductDetailResponse detail = productService.getPublicProductDetailBySlug(slug.trim());
-            return ResponseEntity.ok(ApiResponse.success("Lay chi tiet san pham thanh cong", detail));
-        }
         PageResponse<ProductSummaryResponse> response = productService.getPublicProducts(filter, pageable);
-        return ResponseEntity.ok(ApiResponse.success("Lay danh sach san pham thanh cong", response));
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm thành công", response));
     }
 
     @GetMapping("/{id}")
