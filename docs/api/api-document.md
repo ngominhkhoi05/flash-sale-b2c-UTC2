@@ -155,27 +155,52 @@ Authorization: Bearer <access_token>
 
 | Endpoint | Loại token trả về |
 |---|---|
-| `POST /api/v1/auth/login` | `accessToken` + `refreshToken` |
-| `POST /api/v1/auth/register` | `accessToken` + `refreshToken` |
-| `POST /api/v1/auth/refresh-token` | `accessToken` mới (refreshToken giữ nguyên) |
+| `POST /api/v1/auth/login` | `accessToken` + `refreshToken` mới |
+| `POST /api/v1/auth/register` | `accessToken` + `refreshToken` mới |
+| `POST /api/v1/auth/refresh-token` | `accessToken` + `refreshToken` mới (rotation — RT cũ bị thu hồi) |
+| `POST /api/v1/auth/google` | `accessToken` + `refreshToken` mới |
 
 ### Thời hạn token
 
-| Loại | Mặc định | Cấu hình |
+| Loại | Mặc định | Cấu hình | Trả về trong `AuthResponse` |
+|---|---|---|---|
+| Access Token | 1 giờ (3,600,000 ms) | `jwt.expiration-ms` | `expiresIn` = **giây** (`expirationMs / 1000`) |
+| Refresh Token | 7 ngày (604,800,000 ms) | `jwt.refresh-expiration-ms` | Không trả trực tiếp — FE dùng giá trị RT để gọi `/refresh-token` |
+
+> **Lưu ý quan trọng cho FE**: Field `expiresIn` trong `AuthResponse.data` là **giây** (ví dụ `3600`), không phải millisecond. Khi set timer refresh tự động, dùng `expiresIn * 1000` để quy đổi.
+
+### Cấu trúc JWT claim
+
+| Claim | Kiểu | Ý nghĩa |
 |---|---|---|
-| Access Token | 1 giờ (3,600,000 ms) | `jwt.expiration-ms` |
-| Refresh Token | 7 ngày (604,800,000 ms) | `jwt.refresh-expiration-ms` |
+| `sub` | string | Email user (subject) |
+| `type` | string | `ACCESS` hoặc `REFRESH` |
+| `authorities` | array[string] | Chỉ có trong Access Token, ví dụ `["ROLE_BUYER"]` |
+| `jti` | string (UUID) | Chỉ có trong Refresh Token — định danh RT trong Redis whitelist |
+| `userId` | number (Long) | Chỉ có trong Refresh Token — id user |
+| `iat` | number | Thời điểm phát hành (epoch seconds) |
+| `exp` | number | Thời điểm hết hạn (epoch seconds) |
+
+### Refresh Token Rotation
+
+Backend áp dụng **rotation** cho Refresh Token:
+
+1. FE gọi `POST /api/v1/auth/refresh-token` với RT hiện tại.
+2. BE xác thực: kiểm tra signature, kiểm tra `type=REFRESH`, kiểm tra `exp`, kiểm tra Redis key `auth:refresh:{userId}:{jti}` tồn tại.
+3. Nếu hợp lệ: BE **xóa Redis key của RT cũ**, cấp cặp Access Token + Refresh Token mới (với `jti` mới), lưu key mới vào Redis với TTL = RT expiration.
+4. FE nhận về cặp token mới → phải **ghi đè** RT cũ trong storage. Nếu FE gửi lại RT cũ (đã bị thu hồi) → trả 401 `AUTH_401_REFRESH_TOKEN`.
 
 ### Khi nào nhận 401
 
 - Không có header `Authorization`
 - Token hết hạn / không hợp lệ / bị chỉnh sửa
-- User bị `INACTIVE` / `SUSPENDED`
+- User bị `LOCKED` / `BANNED` (status != ACTIVE) — `CustomUserDetails.isAccountNonLocked() = false`
 
 ### Khi nào nhận 403
 
 - Có token nhưng không đủ role (`BUYER` cố gọi `/api/v1/seller/...`)
 - Có token nhưng không phải chủ sở hữu resource (vd địa chỉ của người khác)
+- Tài khoản `ACTIVE` thành công nhưng Spring Security trả 403 do status check trong `CustomUserDetails.isAccountNonLocked()`
 
 ---
 
@@ -185,7 +210,7 @@ Tổng cộng **83 endpoints** được nhóm theo 24 controller:
 
 | Module | Public | Buyer | Seller | Admin | Tổng |
 |---|---|---|---|---|---|
-| Auth | 4 | – | – | – | 4 |
+| Auth | 6 | – | – | – | 6 |
 | User Profile | – | 4 | – | – | 4 |
 | Address Book | – | 6 | – | – | 6 |
 | Store | 2 | – | 10 | – | 12 |
@@ -220,34 +245,80 @@ Tổng cộng **83 endpoints** được nhóm theo 24 controller:
 | `POST` | `/api/v1/auth/register` | Public | Đăng ký tài khoản mới (mặc định role BUYER) |
 | `POST` | `/api/v1/auth/login` | Public | Đăng nhập bằng email + password |
 | `POST` | `/api/v1/auth/refresh-token` | Public | Làm mới access token từ refresh token |
-| `POST` | `/api/v1/auth/logout` | Public | Đăng xuất client-side |
+| `POST` | `/api/v1/auth/logout` | Public | Đăng xuất + thu hồi Refresh Token (nếu body có) |
+| `GET`  | `/api/v1/auth/google/url` | Public | Lấy Google consent screen URL (scope: openid + email + profile) |
+| `POST` | `/api/v1/auth/google` | Public | Đăng nhập/đăng ký qua Google OAuth2 (Authorization Code flow) |
+
+### Vai trò (Role) và cách FE chọn
+
+| Role trong DB | Role trong JWT | Quyền truy cập |
+|---|---|---|
+| `BUYER` | `ROLE_BUYER` | Mặc định khi đăng ký. Được gọi Buyer API (`/api/v1/cart`, `/api/v1/orders`, `/api/v1/flash-sales/reservations`, ...). |
+| `SELLER` | `ROLE_SELLER` | Truyền `role: "SELLER"` trong body đăng ký. Được gọi Seller API (`/api/v1/seller/**`). |
+| `ADMIN` | `ROLE_ADMIN` | Không thể tự đăng ký. Được cấp qua seed data hoặc DB trực tiếp. Được gọi Admin API (`/api/v1/admin/**`). |
+
+> **Lưu ý cho FE**: Role trả về trong `AuthResponse.data.roles` LUÔN có prefix `ROLE_` (vd `["ROLE_BUYER"]`). Khi gọi các API cần role, Spring Security tự động match — FE không cần kiểm tra, chỉ cần gửi `Authorization: Bearer <accessToken>` đúng.
+
+### `AuthResponse` schema (dùng chung cho cả 6 endpoint)
+
+| Field | Type | Mô tả |
+|---|---|---|
+| `accessToken` | string (JWT) | Access Token, dùng cho header `Authorization` |
+| `refreshToken` | string (JWT) | Refresh Token, dùng cho `/refresh-token` |
+| `tokenType` | string | Luôn là `"Bearer"` |
+| `expiresIn` | long | Thời gian sống của Access Token, **tính bằng giây** (vd `3600`) |
+| `user` | UserResponse | Thông tin user (xem schema dưới) |
+| `roles` | array[string] | Danh sách role có prefix `ROLE_` (vd `["ROLE_BUYER"]`) |
+
+### `UserResponse` schema (object `user` lồng trong `AuthResponse.data.user`)
+
+| Field | Type | Mô tả |
+|---|---|---|
+| `id` | Long | ID user trong DB |
+| `email` | string | Email (đã lowercase) |
+| `fullName` | string | Họ tên |
+| `phone` | string \| null | Số ĐT (có thể null nếu user Google không cung cấp) |
+| `avatarUrl` | string \| null | URL ảnh đại diện (managed bởi Image module) |
+| `status` | string | `ACTIVE` \| `LOCKED` \| `BANNED` — chỉ `ACTIVE` mới đăng nhập được |
+| `createdAt` | string (ISO-8601) | Thời điểm tạo tài khoản |
+| `roles` | array[string] | Roles của user (có prefix `ROLE_`) |
+
+---
 
 ### 6.1 `POST /api/v1/auth/register`
 
-Đăng ký tài khoản mới.
+Đăng ký tài khoản mới. Tự động đăng nhập (trả về `AuthResponse` luôn).
+
+**Quyền truy cập**: Public (không cần JWT).
+
+**Headers (bắt buộc):**
+
+| Header | Value |
+|---|---|
+| `Content-Type` | `application/json` |
 
 **Request Body:**
 
 | Field | Type | Required | Validation | Mô tả |
 |---|---|---|---|---|
-| `email` | `string` | Có | `@Email`, không blank | Email đăng nhập |
-| `password` | `string` | Có | min 6 ký tự | Mật khẩu |
-| `fullName` | `string` | Có | max 100 | Họ và tên |
-| `phone` | `string` | Không | max 15 | Số điện thoại |
-| `role` | `string` | Không | Mặc định `BUYER`, có thể truyền `SELLER` | Vai trò đăng ký ban đầu |
+| `email` | `string` | Có | `@NotBlank`, `@Email` | Email đăng nhập. BE tự `trim().toLowerCase()` |
+| `password` | `string` | Có | `@NotBlank`, `@Size(min=6)` | Mật khẩu (BE hash bằng BCrypt, không lưu plain text) |
+| `fullName` | `string` | Có | `@NotBlank`, `@Size(max=100)` | Họ và tên hiển thị |
+| `phone` | `string` | Không | `@Size(max=15)` | Số điện thoại (tùy chọn). Nếu có → check unique |
+| `role` | `string` | Không (mặc định `BUYER`) | Không validation cụ thể | Giá trị: `BUYER` hoặc `SELLER` (không kèm `ROLE_` prefix). Nếu truyền `SELLER` → user tạo với role SELLER, có thể mở Store sau |
 
-**HTTP Status:** 201 Created
+**HTTP Status:** `201 Created`
 
-**Lỗi thường gặp:**
+**Lỗi thường gặp (response bọc trong `ApiResponse`):**
 
-| Code | ErrorCode | Message |
-|---|---|---|
-| 409 | `AUTH_409_EMAIL` | Email này đã được đăng ký trên hệ thống |
-| 409 | `AUTH_409_PHONE` | Số điện thoại này đã được sử dụng |
-| 404 | `AUTH_404_ROLE` | Vai trò yêu cầu không tồn tại trên hệ thống |
-| 400 | (Validation) | Email không hợp lệ / mật khẩu dưới 6 ký tự |
+| HTTP | `ApiResponse.code` | ErrorCode enum | Khi nào xảy ra |
+|---|---|---|---|
+| 400 | 400 | (validation) | Field `@NotBlank` / `@Email` / `@Size` fail. `message` chứa: `"Email không được để trống"` / `"Định dạng email không hợp lệ"` / `"Mật khẩu phải chứa ít nhất 6 ký tự"` / `"Họ và tên không được để trống"` / `"Số điện thoại không được vượt quá 15 ký tự"` |
+| 409 | 409 | `AUTH_409_EMAIL` | `email` đã tồn tại trong DB |
+| 409 | 409 | `AUTH_409_PHONE` | `phone` (nếu có) đã tồn tại trong DB |
+| 500 | 500 | `SYS_500` | Lỗi hệ thống (DB down, Redis down, ...) |
 
-**Response:**
+**Response 201 (success):**
 
 ```json
 {
@@ -255,11 +326,11 @@ Tổng cộng **83 endpoints** được nhóm theo 24 controller:
   "code": 201,
   "message": "Đăng ký tài khoản thành công",
   "data": {
-    "accessToken": "eyJ...",
-    "refreshToken": "eyJ...",
+    "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+    "refreshToken": "eyJhbGciOiJIUzI1NiJ9...",
     "tokenType": "Bearer",
-    "expiresIn": 3600000,
-    "roles": ["ROLE_CUSTOMER"],
+    "expiresIn": 3600,
+    "roles": ["ROLE_BUYER"],
     "user": {
       "id": 1,
       "email": "buyer@example.com",
@@ -267,54 +338,285 @@ Tổng cộng **83 endpoints** được nhóm theo 24 controller:
       "phone": "0987654321",
       "avatarUrl": null,
       "status": "ACTIVE",
-      "createdAt": "2026-10-03T...",
-      "roles": ["ROLE_CUSTOMER"]
+      "createdAt": "2026-10-16T08:00:00Z",
+      "roles": ["ROLE_BUYER"]
     }
   },
-  "timestamp": "2026-10-03T..."
+  "timestamp": "2026-10-16T08:00:00Z"
 }
 ```
 
+**FE cần gửi gì / nhận gì:**
+
+- **Gửi**: JSON body như trên. Không cần header `Authorization`.
+- **Nhận**: Lưu `data.accessToken` vào `localStorage` key `fs_access_token`, `data.refreshToken` vào `fs_refresh_token` (xem `auth-jwt.mdc` ở FE repo).
+- **Bước tiếp theo**: Thêm header `Authorization: Bearer <accessToken>` cho mọi request sau. Nếu nhận 401 → thử `/refresh-token` để lấy cặp token mới, nếu vẫn 401 → logout, redirect về `/login`.
+
+**Ví dụ Postman body:**
+
+```json
+{
+  "email": "buyer.test@flash-sale.local",
+  "password": "Test@123456",
+  "fullName": "Test Buyer",
+  "phone": "0900000001",
+  "role": "BUYER"
+}
+```
+
+---
+
 ### 6.2 `POST /api/v1/auth/login`
+
+Đăng nhập bằng **email hoặc số điện thoại** + mật khẩu. BE tự nhận diện: nếu input chứa `@` → tra theo email, ngược lại tra theo phone.
+
+**Quyền truy cập**: Public.
+
+**Headers (bắt buộc):**
+
+| Header | Value |
+|---|---|
+| `Content-Type` | `application/json` |
 
 **Request Body:**
 
-| Field | Type | Required | Mô tả |
-|---|---|---|---|
-| `email` | `string` | Có | Email hoặc Username đăng nhập |
-| `password` | `string` | Có | Mật khẩu |
+| Field | Type | Required | Validation | Mô tả |
+|---|---|---|---|---|
+| `usernameOrEmail` | `string` | Có | `@NotBlank`, `@Size(max=100)` | Email hoặc số điện thoại. BE tự phân loại dựa trên ký tự `@` |
+| `password` | `string` | Có | `@NotBlank` | Mật khẩu (so sánh bằng BCrypt match) |
 
-**HTTP Status:** 200 OK
+**HTTP Status:** `200 OK`
 
 **Lỗi thường gặp:**
 
-| Code | ErrorCode | Message |
-|---|---|---|
-| 404 | `AUTH_404_USER` | Tài khoản không tồn tại trên hệ thống |
-| 401 | `AUTH_401_CREDENTIALS` | Email hoặc mật khẩu không chính xác |
-| 403 | `AUTH_403_USER_DISABLED` | Tài khoản của bạn đã bị khóa hoặc tạm ngưng |
+| HTTP | `ApiResponse.code` | ErrorCode enum | Khi nào xảy ra |
+|---|---|---|---|
+| 400 | 400 | (validation) | `usernameOrEmail` hoặc `password` rỗng |
+| 401 | 401 | `AUTH_401_CREDENTIALS` | Sai mật khẩu. **Lưu ý**: BE cũng trả mã này khi email/phone không tồn tại (tránh lộ thông tin user enumeration) |
+| 404 | 404 | `AUTH_404_USER` | Trong một số nhánh code, BE trả 404 khi user không tồn tại (xem `AuthServiceImpl.login`) |
+| 403 | 403 | `AUTH_403_USER_DISABLED` | User tồn tại nhưng `status != ACTIVE` (vd `LOCKED`, `BANNED`) |
+| 500 | 500 | `SYS_500` | Lỗi hệ thống |
 
-**Response:** Giống `register`.
+**Response 200 (success):** Cùng schema `AuthResponse` như 6.1.
+
+**FE cần gửi gì / nhận gì:**
+
+- **Gửi**: Form login — để user nhập 1 trong 2: email hoặc SĐT (tùy UI). Truyền vào `usernameOrEmail`.
+- **Nhận**: Lưu `data.accessToken`, `data.refreshToken` như 6.1. Đồng thời lưu `data.user.id` (cần cho các request sau), `data.roles[0]` (để phân luồng UI theo role).
+
+**Ví dụ Postman body:**
+
+```json
+{
+  "usernameOrEmail": "buyer.test@flash-sale.local",
+  "password": "Test@123456"
+}
+```
+
+---
 
 ### 6.3 `POST /api/v1/auth/refresh-token`
 
+Làm mới cặp Access Token + Refresh Token mới. **Refresh Token Rotation được áp dụng** — RT cũ sẽ bị thu hồi ngay khi cấp RT mới.
+
+**Quyền truy cập**: Public (vì RT đã là bằng chứng xác thực).
+
+**Headers (bắt buộc):**
+
+| Header | Value |
+|---|---|
+| `Content-Type` | `application/json` |
+
 **Request Body:**
 
-| Field | Type | Required | Mô tả |
+| Field | Type | Required | Validation | Mô tả |
+|---|---|---|---|---|
+| `refreshToken` | `string` | Có | `@NotBlank` | Refresh Token hiện tại (còn hạn và còn trong Redis whitelist) |
+
+**HTTP Status:** `200 OK`
+
+**Lỗi thường gặp:**
+
+| HTTP | `ApiResponse.code` | ErrorCode enum | Khi nào xảy ra |
 |---|---|---|---|
-| `refreshToken` | `string` | Có | Refresh token còn hiệu lực |
+| 400 | 400 | (validation) | `refreshToken` rỗng |
+| 401 | 401 | `AUTH_401_REFRESH_TOKEN` | (1) Sai signature / (2) `type != REFRESH` / (3) hết hạn (`exp` < now) / (4) Không có trong Redis whitelist (đã bị thu hồi bởi rotation trước đó, hoặc chưa từng được cấp) / (5) User `status != ACTIVE` |
 
-**Lỗi:**
+**Response 200 (success):** Cùng schema `AuthResponse`. `data.refreshToken` sẽ là RT mới (khác RT cũ) — FE **BẮT BUỘC** phải ghi đè.
 
-| Code | ErrorCode | Message |
-|---|---|---|
-| 401 | `AUTH_401_REFRESH_TOKEN` | Refresh token không hợp lệ hoặc đã hết hạn |
+**FE cần gửi gì / nhận gì:**
+
+- **Gửi**: `refreshToken` hiện tại (lưu trong localStorage / cookie).
+- **Nhận**: Cặp token mới → ghi đè `fs_access_token` và `fs_refresh_token`. KHÔNG dùng lại RT cũ.
+- **Khi nào gọi**: Khi `apiFetch` nhận 401 (AT hết hạn), thử refresh 1 lần. Nếu refresh cũng 401 → logout.
+- **Idempotency**: An toàn khi gọi lại với RT MỚI (vì nó đã rotate). KHÔNG gọi lại với RT cũ (sẽ fail).
+
+**Ví dụ Postman body:**
+
+```json
+{
+  "refreshToken": "{{refreshToken}}"
+}
+```
+
+---
 
 ### 6.4 `POST /api/v1/auth/logout`
 
-**Request Body:** `{ refreshToken?: string }` (optional)
+Đăng xuất — server-side thu hồi Refresh Token (nếu body có), client-side xóa tokens.
 
-**HTTP Status:** 200 OK
+**Quyền truy cập**: Public (lý do: cho phép client gọi logout ngay cả khi AT đã hết hạn, miễn có RT hợp lệ).
+
+**Headers:**
+
+| Header | Value | Bắt buộc? |
+|---|---|---|
+| `Content-Type` | `application/json` | Có (nếu có body) |
+
+**Request Body (optional):**
+
+| Field | Type | Required | Mô tả |
+|---|---|---|---|
+| `refreshToken` | `string` | Không | Nếu có → BE parse `userId` + `jti`, xóa Redis key `auth:refresh:{userId}:{jti}`. Nếu body rỗng hoặc thiếu field → BE chỉ log, không lỗi |
+
+**HTTP Status:** `200 OK` (kể cả khi body rỗng hoặc RT không hợp lệ)
+
+**Lỗi thường gặp:** Không có — endpoint luôn trả 200. Lỗi parse RT chỉ được log warning, không throw exception.
+
+**Response 200:**
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Đăng xuất thành công",
+  "data": null,
+  "timestamp": "2026-10-16T08:00:00Z"
+}
+```
+
+**FE cần gửi gì / nhận gì:**
+
+- **Gửi**: Optional body `{ refreshToken }`. Nên gửi để revoke RT phía server.
+- **Nhận**: 200 → xóa `fs_access_token`, `fs_refresh_token` khỏi localStorage. Redirect về `/login`.
+- **Idempotency**: An toàn khi gọi nhiều lần (luôn trả 200).
+
+**Ví dụ Postman body (khuyến nghị):**
+
+```json
+{
+  "refreshToken": "{{refreshToken}}"
+}
+```
+
+---
+
+### 6.5 `GET /api/v1/auth/google/url`
+
+Lấy URL Google consent screen để FE redirect user. Scope yêu cầu: `openid + email + profile`.
+
+**Quyền truy cập**: Public.
+
+**Headers:** Không yêu cầu.
+
+**Query Params:** Không có.
+
+**HTTP Status:** `200 OK`
+
+**Lỗi thường gặp:**
+
+| HTTP | `ApiResponse.code` | ErrorCode enum | Khi nào xảy ra |
+|---|---|---|---|
+| 500 | 500 | `AUTH_500_GOOGLE_CONFIG` | Server chưa cấu hình `google.oauth2.clientId` / `clientSecret` / `redirectUri` (đọc từ `application.yaml`, set qua env `GOOGLE_OAUTH2_CLIENT_ID` / `GOOGLE_OAUTH2_CLIENT_SECRET` / `GOOGLE_OAUTH2_REDIRECT_URI`) |
+
+**Response 200 (success):**
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Lấy Google consent URL thành công",
+  "data": {
+    "authorizationUrl": "https://accounts.google.com/o/oauth2/v2/auth?client_id=...&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fauth%2Fgoogle%2Fcallback&response_type=code&scope=openid+email+profile&access_type=offline&prompt=consent",
+    "state": "9b8e1f3a-4c5d-4e7a-8f2b-1d3c5e7f9a0b"
+  },
+  "timestamp": "2026-10-16T08:00:00Z"
+}
+```
+
+**Schema `GoogleConsentUrlResponse`:**
+
+| Field | Type | Mô tả |
+|---|---|---|
+| `authorizationUrl` | string | URL đầy đủ để redirect user đến Google consent screen (chứa `client_id`, `redirect_uri`, `scope=openid email profile`, `access_type=offline`, `prompt=consent`) |
+| `state` | string (UUID) | Token ngẫu nhiên mà BE sinh cho mỗi request — FE có thể dùng để CSRF protection (lưu localStorage trước khi redirect, verify khi Google redirect về) |
+
+**FE cần gửi gì / nhận gì:**
+
+- **Gửi**: GET request, không body.
+- **Nhận**: `data.authorizationUrl` → dùng `window.location.href = data.authorizationUrl` để redirect user sang Google.
+- **Sau khi user consent**: Google redirect về `redirect_uri` kèm query `?code=...&state=...`. FE lấy `code` và gọi endpoint 6.6.
+
+---
+
+### 6.6 `POST /api/v1/auth/google`
+
+Hoàn tất Google OAuth2 flow: FE gửi `code` (authorization code) + `redirectUri` lên BE, BE tự đổi code lấy `id_token`, verify signature, upsert user, cấp JWT.
+
+**Quyền truy cập**: Public.
+
+**Headers (bắt buộc):**
+
+| Header | Value |
+|---|---|
+| `Content-Type` | `application/json` |
+
+**Request Body:**
+
+| Field | Type | Required | Validation | Mô tả |
+|---|---|---|---|---|
+| `code` | `string` | Có | `@NotBlank` | Authorization code từ Google redirect (one-time use, TTL ~10 phút) |
+| `redirectUri` | `string` | Có | `@NotBlank` | Redirect URI mà FE đã dùng khi gọi 6.5. **Phải khớp** với Authorized redirect URI đã đăng ký ở Google Cloud Console, nếu không Google từ chối đổi code |
+
+**HTTP Status:** `200 OK`
+
+**Lỗi thường gặp:**
+
+| HTTP | `ApiResponse.code` | ErrorCode enum | Khi nào xảy ra |
+|---|---|---|---|
+| 400 | 400 | (validation) | `code` hoặc `redirectUri` rỗng |
+| 401 | 401 | `AUTH_401_GOOGLE_TOKEN` | (1) Google trả error khi đổi code (invalid/expired/redirect_uri mismatch) / (2) `id_token` signature sai / audience mismatch / expired |
+| 401 | 401 | `AUTH_401_GOOGLE_EMAIL_UNVERIFIED` | Google user có email nhưng `email_verified = false` |
+| 502 | 502 | `AUTH_502_GOOGLE_EXCHANGE` | (1) Network error khi gọi Google token endpoint / (2) Google trả response không hợp lệ (thiếu `id_token`) / (3) Code đã dùng rồi |
+| 500 | 500 | `AUTH_500_GOOGLE_CONFIG` | Thiếu `clientId` / `clientSecret` / `redirectUri` ở server config |
+
+**Response 200 (success):** Cùng schema `AuthResponse` như 6.1.
+
+**Luồng xử lý phía BE (4 bước):**
+
+1. **Đổi code lấy id_token**: gọi `POST https://oauth2.googleapis.com/token` với `code`, `client_id`, `client_secret`, `redirect_uri`, `grant_type=authorization_code`. Response chứa `id_token` (JWT do Google ký).
+2. **Verify id_token**: dùng `GoogleIdTokenVerifier` (JWKS cache offline) — kiểm tra signature, audience (phải là `clientId` của mình), issuer (`https://accounts.google.com`), expiration. Trích `sub` (Google user ID), `email`, `email_verified`, `name`, `picture`.
+3. **Upsert User + AuthAccount**:
+   - Tìm `AuthAccount` theo `(provider=GOOGLE, providerAccountId=sub)`. Nếu có → dùng user đó.
+   - Nếu không → tìm `User` theo email. Nếu có → gắn `AuthAccount` mới (link tài khoản local với Google). Nếu không có → tạo user mới (`password=null`, `status=ACTIVE`, role mặc định `BUYER`).
+4. **Cấp JWT**: giống login — sinh access + refresh token, lưu RT vào Redis whitelist.
+
+**FE cần gửi gì / nhận gì:**
+
+- **Bước 1**: Gọi 6.5 → nhận `authorizationUrl` → `window.location.href = authorizationUrl`.
+- **Bước 2**: Google redirect về `redirect_uri?code=...&state=...`. FE parse `code` từ URL.
+- **Bước 3**: Gọi 6.6 với body `{ code, redirectUri }`. Nhận về `AuthResponse` → lưu token như 6.1.
+
+**Ví dụ Postman body:**
+
+```json
+{
+  "code": "4/0AeaYSHB-rGc...long-google-code...",
+  "redirectUri": "http://localhost:3000/auth/google/callback"
+}
+```
+
+---
 
 ---
 ## 7. User Profile Module `/api/v1/users`
@@ -2019,11 +2321,15 @@ stompClient.subscribe(
 |---|---|---|
 | 401 | `AUTH_401_CREDENTIALS` | Email hoặc mật khẩu không chính xác |
 | 401 | `AUTH_401_REFRESH_TOKEN` | Refresh token không hợp lệ hoặc đã hết hạn |
+| 401 | `AUTH_401_GOOGLE_TOKEN` | Google ID token không hợp lệ hoặc đã hết hạn |
+| 401 | `AUTH_401_GOOGLE_EMAIL_UNVERIFIED` | Email Google chưa được xác minh |
 | 403 | `AUTH_403_USER_DISABLED` | Tài khoản của bạn đã bị khóa hoặc tạm ngưng |
 | 404 | `AUTH_404_ROLE` | Vai trò yêu cầu không tồn tại trên hệ thống |
 | 404 | `AUTH_404_USER` | Tài khoản không tồn tại trên hệ thống |
 | 409 | `AUTH_409_EMAIL` | Email này đã được đăng ký trên hệ thống |
 | 409 | `AUTH_409_PHONE` | Số điện thoại này đã được sử dụng |
+| 502 | `AUTH_502_GOOGLE_EXCHANGE` | Không thể trao đổi authorization code với Google |
+| 500 | `AUTH_500_GOOGLE_CONFIG` | Thiếu cấu hình Google OAuth2 trên server |
 
 ### 26.3 User Errors
 
@@ -2498,17 +2804,19 @@ Xóa banner (soft delete: `isActive = false`).
 
 ---
 
-**Phiên bản tài liệu**: 1.4 · **Cập nhật lần cuối**: 2026-10-13 · **Nguồn**: Backend `flash-sale-b2c-UTC2`
+**Phiên bản tài liệu**: 1.5 · **Cập nhật lần cuối**: 2026-10-16 · **Nguồn**: Backend `flash-sale-b2c-UTC2`
 
-**Thay đổi trong phiên bản 1.4 (2026-10-13):**
-- Cập nhật bảng mục 5: 83 endpoints (thêm Image Management, Product Review, Banner Public/Admin tách dòng).
-- Thêm TOC mục 14b. Product Review Module.
-- Đổi số section 13b → 14b cho Product Review Module.
-- Banner public endpoint `/position/{position}` đánh dấu là placeholder (chưa implement).
-- Banner error codes: cập nhật format `BANNER_<HTTP>_<REASON>` (theo code).
-- Image error codes: thêm 6 codes còn thiếu (`IMAGE_400_EMPTY_FILE`, `IMAGE_400_INVALID_OWNER_TYPE`, `IMAGE_400_PRIMARY_NOT_ALLOWED`, `IMAGE_400_ORDER_NOT_ALLOWED`, `IMAGE_404_NOT_FOUND`, `IMAGE_404_OWNER_NOT_FOUND`); chuyển `IMAGE_400` → `IMAGE_413_FILE_TOO_LARGE` cho đúng HTTP status.
-- Thêm mục 26.10 Review Errors.
-- Auth errors: thêm `AUTH_404_USER`.
+**Thay đổi trong phiên bản 1.5 (2026-10-16):**
+- Mục 6 (Auth Module): bổ sung 2 endpoint mới `GET /api/v1/auth/google/url` (6.5) và `POST /api/v1/auth/google` (6.6) cho Google OAuth2 Authorization Code flow.
+- Mục 6.1 (`/register`): thêm validation tiếng Việt đầy đủ + ghi chú về role `BUYER` / `SELLER`. Sửa `expiresIn` từ ms sang giây.
+- Mục 6.2 (`/login`): sửa field name từ `email` → `usernameOrEmail` (BE tự nhận diện email/phone theo ký tự `@`).
+- Mục 6.3 (`/refresh-token`): bổ sung giải thích Refresh Token Rotation (RT cũ bị thu hồi khi cấp RT mới, lưu Redis whitelist `auth:refresh:{userId}:{jti}`).
+- Mục 6.4 (`/logout`): bổ sung giải thích body optional + idempotency.
+- Mục 4 (Auth Header): thêm schema JWT claim (`type`, `jti`, `userId`, `authorities`) + giải thích rotation flow. Sửa đơn vị `expiresIn` = giây.
+- Mục 5 (Danh Mục API): tăng tổng Auth từ 4 → 6 endpoint.
+- Mục 26.2 (Auth Errors): bổ sung 4 mã lỗi Google OAuth2 — `AUTH_401_GOOGLE_TOKEN`, `AUTH_401_GOOGLE_EMAIL_UNVERIFIED`, `AUTH_502_GOOGLE_EXCHANGE`, `AUTH_500_GOOGLE_CONFIG`. Tổng cộng 11 mã Auth.
+- Bổ sung schema `AuthResponse` và `UserResponse` ở đầu mục 6.
+- Bổ sung bảng "Vai trò (Role) và cách FE chọn" để giải thích `BUYER` / `SELLER` / `ADMIN` và quyền truy cập tương ứng.
 
 ---
 

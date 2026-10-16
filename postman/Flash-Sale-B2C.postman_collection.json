@@ -343,9 +343,90 @@
               }
             }
           ]
+        },
+        {
+          "name": "GET Google Consent URL",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/google/url",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "google",
+                "url"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j=pm.response.json();",
+                  "if (j.success && j.data && j.data.authorizationUrl) { pm.environment.set(\"googleAuthUrl\", j.data.authorizationUrl); pm.environment.set(\"googleState\", j.data.state); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Login Google (Authorization Code)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/google",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "google"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{googleCode}}\",\n  \"redirectUri\": \"{{googleRedirectUri}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j=pm.response.json();",
+                  "if (j.success && j.data) { pm.environment.set(\"accessToken\", j.data.accessToken); pm.environment.set(\"refreshToken\", j.data.refreshToken); pm.environment.set(\"userId\", j.data.user.id); pm.environment.set(\"userRole\", j.data.roles[0]); pm.collectionVariables.set(\"accessToken\", j.data.accessToken); }"
+                ]
+              }
+            }
+          ]
         }
       ],
-      "description": "Auth - register, login (3 roles), refresh, logout."
+      "description": "Auth - register, login (3 roles), refresh, logout, Google OAuth2 (consent URL + Authorization Code exchange)."
     },
     {
       "name": "01_Public_Catalog",
@@ -4217,6 +4298,415 @@
         }
       ],
       "description": "Negative tests - 401/403/404/409/422."
+    },
+    {
+      "name": "20b_Negative_Tests_Auth",
+      "item": [
+        {
+          "name": "[NEG] Auth 400 - Register empty body",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "v1", "auth", "register" ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", function () { pm.expect(pm.response.code).to.equal(400); });",
+                  "var j=pm.response.json(); pm.expect(j.success).to.equal(false); pm.expect(j.code).to.equal(400);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] Auth 400 - Register invalid email",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "v1", "auth", "register" ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"not-an-email\",\n  \"password\": \"Test@123456\",\n  \"fullName\": \"Test\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", function () { pm.expect(pm.response.code).to.equal(400); });",
+                  "pm.test(\"Message contains email format\", function () { pm.expect(pm.response.json().message).to.include(\"Định dạng email\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] Auth 400 - Register password < 6",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "v1", "auth", "register" ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"x@y.z\",\n  \"password\": \"123\",\n  \"fullName\": \"Test\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", function () { pm.expect(pm.response.code).to.equal(400); });",
+                  "pm.test(\"Message contains 6 ky tu\", function () { pm.expect(pm.response.json().message).to.include(\"6 ký tự\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] Auth 409 - Register duplicate email",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "v1", "auth", "register" ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"Test@123456\",\n  \"fullName\": \"Duplicate Email\",\n  \"phone\": \"0900000999\",\n  \"role\": \"BUYER\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", function () { pm.expect(pm.response.code).to.equal(409); });",
+                  "pm.test(\"Message contains email da dang ky\", function () { pm.expect(pm.response.json().message).to.include(\"đã được đăng ký\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] Auth 409 - Register duplicate phone",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "v1", "auth", "register" ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"new.unique@flash-sale.local\",\n  \"password\": \"Test@123456\",\n  \"fullName\": \"Duplicate Phone\",\n  \"phone\": \"{{testPhone}}\",\n  \"role\": \"BUYER\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", function () { pm.expect(pm.response.code).to.equal(409); });",
+                  "pm.test(\"Message contains so dien thoai da su dung\", function () { pm.expect(pm.response.json().message).to.include(\"Số điện thoại\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] Auth 401 - Login wrong password",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "v1", "auth", "login" ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usernameOrEmail\": \"{{testEmail}}\",\n  \"password\": \"WrongPassword@999\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", function () { pm.expect(pm.response.code).to.equal(401); });",
+                  "pm.test(\"Message contains khong chinh xac\", function () { pm.expect(pm.response.json().message).to.include(\"không chính xác\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] Auth 401 - Login unknown email",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "v1", "auth", "login" ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usernameOrEmail\": \"nobody-12345@unknown.local\",\n  \"password\": \"Test@123456\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401 or 404\", function () { pm.expect(pm.response.code).to.be.oneOf(401, 404); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] Auth 400 - Login empty body",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "v1", "auth", "login" ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", function () { pm.expect(pm.response.code).to.equal(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] Auth 401 - Refresh invalid token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh-token",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "v1", "auth", "refresh-token" ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"invalid.jwt.token\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", function () { pm.expect(pm.response.code).to.equal(401); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] Auth 400 - Refresh empty body",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh-token",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "v1", "auth", "refresh-token" ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", function () { pm.expect(pm.response.code).to.equal(400); });",
+                  "pm.test(\"Message contains refresh token khong duoc de trong\", function () { pm.expect(pm.response.json().message).to.include(\"Refresh token\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] Auth 400 - Google empty body",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/google",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "v1", "auth", "google" ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", function () { pm.expect(pm.response.code).to.equal(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] Auth 502 - Google invalid code",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/google",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "v1", "auth", "google" ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"fake-google-code-12345\",\n  \"redirectUri\": \"http://localhost:3000/auth/google/callback\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 502 (Google exchange fail)\", function () { pm.expect(pm.response.code).to.equal(502); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] Auth 405 - Wrong method on login",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "v1", "auth", "login" ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 405\", function () { pm.expect(pm.response.code).to.equal(405); });"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Negative tests for module Auth: 400 (validation), 401 (credentials/refresh/Google), 404 (user not found), 405 (wrong method), 409 (duplicate email/phone), 502 (Google exchange fail)."
     }
   ],
   "event": [
