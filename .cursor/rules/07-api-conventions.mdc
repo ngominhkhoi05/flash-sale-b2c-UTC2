@@ -1,0 +1,47 @@
+---
+description: Quy ước API - ApiResponse, PageResponse và chuẩn RESTful API.
+globs: **/controller/**, **/dto/**, **/api/**
+---
+
+# Quy ước API (API Conventions)
+
+## Vỏ bọc phản hồi chuẩn (Response Wrapper)
+
+Mọi API (kể cả thành công hay thất bại) đều được bọc trong `ApiResponse<T>`:
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "Thao tác thành công",
+  "data": { ... },
+  "timestamp": "2026-10-16T15:00:00Z"
+}
+```
+
+## Phân trang (Pagination)
+
+Sử dụng `PageResponse<T>` chuẩn cho mọi API danh sách có phân trang. Mặc định `page = 0`, `size = 20`, `MAX_PAGE_SIZE = 100`.
+
+## Ý nghĩa phương thức REST API (REST API Semantics)
+
+| Phương thức | Mục đích | Idempotent |
+|---|---|---|
+| GET    | Đọc tài nguyên | Có |
+| POST   | Tạo mới / Thực hiện hành động không idempotent | Không |
+| PUT    | Thay thế toàn bộ tài nguyên | Có |
+| PATCH  | Cập nhật một phần tài nguyên | Không* |
+| DELETE | Xóa tài nguyên | Có |
+
+* PATCH có tính idempotent nếu trường được cập nhật không phụ thuộc vào trạng thái hiện tại.
+
+## Quy tắc đặt tên và cấu trúc URL
+
+- **Không lạm dụng POST** cho mọi thao tác nếu chuẩn HTTP có phương thức phù hợp hơn.
+- URL tài nguyên dùng danh từ số nhiều: `/api/v1/orders`, `/api/v1/products`.
+- Thao tác đặc biệt sử dụng sub-resource: `/api/v1/orders/{id}/cancel`.
+- Định phiên bản API qua tiền tố URL: `/api/v1/`.
+
+## Quản lý phiên bản (Versioning)
+
+Mọi endpoint đều thuộc `/api/v1/`. Khi có breaking change -> phát hành phiên bản mới `/api/v2/...`, duy trì endpoint cũ trong tối thiểu 1 chu kỳ phát hành (1 tháng) trước khi loại bỏ hoàn toàn.

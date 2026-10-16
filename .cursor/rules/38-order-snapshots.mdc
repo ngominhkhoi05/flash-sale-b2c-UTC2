@@ -1,0 +1,30 @@
+---
+description: Ảnh chụp nhanh lịch sử đơn hàng (Order Snapshots) - Bảo toàn giá bán, địa chỉ, người nhận, hoa hồng trong Order và OrderItem.
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/order/**/*.{java,kt}
+---
+
+# Ảnh chụp nhanh Đơn hàng (Order Snapshots)
+
+Đơn hàng đại diện cho một hợp đồng mua bán tại một thời điểm lịch sử xác định. **Mọi thông tin liên quan đến giá bán, thông tin liên hệ và địa chỉ giao hàng tại thời điểm đặt hàng đều phải được chụp ảnh nhanh (snapshot) và lưu trữ trực tiếp vào các bảng đơn hàng.**
+
+## Các thông tin bắt buộc phải Snapshot
+
+### Trong bảng `orders`:
+
+- `shipping_address_snapshot`: Lưu toàn bộ chuỗi địa chỉ chi tiết (số nhà, đường, phường/xã, quận/huyện, tỉnh/thành phố).
+- `recipient_name`: Họ và tên người nhận hàng tại thời điểm đặt.
+- `recipient_phone`: Số điện thoại người nhận hàng tại thời điểm đặt.
+- `commission_rate`: Tỷ lệ phần trăm hoa hồng của sàn tại thời điểm tạo đơn (phục vụ đối soát doanh thu sau này).
+
+### Trong bảng `order_items`:
+
+- `price`: Đơn giá thực tế tại thời điểm mua hàng (giá Flash Sale hoặc giá niêm yết gốc).
+- `product_name`: Tên sản phẩm tại thời điểm mua (tránh trường hợp người bán đổi tên sản phẩm sau này làm sai lệch lịch sử).
+- `variant_sku`: Mã SKU của biến thể sản phẩm tại thời điểm mua.
+
+## Quy tắc bất di bất dịch
+
+- **Tuyệt đối KHÔNG phụ thuộc hoàn toàn vào Foreign Key để lấy thông tin hiển thị lịch sử đơn hàng**:
+  - Không truy vấn sang bảng `addresses` để lấy địa chỉ giao của một đơn hàng cũ (vì người dùng có thể sửa hoặc xóa địa chỉ bất kỳ lúc nào).
+  - Không truy vấn sang bảng `product_variants` để lấy giá bán của một đơn hàng trong quá khứ (vì người bán có thể điều chỉnh giá niêm yết trong tương lai).
+- Dữ liệu snapshot sau khi đã lưu vào đơn hàng là **bất biến (Immutable)** - tuyệt đối không được cập nhật lại theo các bảng gốc.

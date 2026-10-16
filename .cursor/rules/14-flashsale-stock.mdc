@@ -1,0 +1,26 @@
+---
+description: Mô hình 3 mức tồn kho trong Flash Sale, bất biến dữ liệu (invariants) và khóa lạc quan.
+globs: flashsale/**, product/**
+---
+
+# Mô hình Tồn kho Flash Sale (Flash Sale Stock Model)
+
+Hệ thống tồn tại đồng thời 3 mức tồn kho:
+
+```text
+product_variants.stock_quantity     # Tồn kho gốc của sản phẩm (Người bán quản lý)
+flash_sale_items.allocated_stock    # Số lượng phân bổ cho phiên Flash Sale
+flash_sale_items.available_stock    # Số lượng còn có thể bán trong phiên (đồng bộ với Redis)
+```
+
+Đây là **trạng thái vận hành được vật chất hóa (operational/materialized state)** phục vụ riêng cho Flash Sale và không bị xem là vi phạm chuẩn 3NF.
+
+## Các bất biến dữ liệu (Invariants)
+
+```text
+0 <= available_stock <= allocated_stock
+allocated_stock <= product_variants.stock_quantity (tại thời điểm phê duyệt)
+```
+
+- Người bán (Seller) **không được phép giảm** tồn kho gốc của sản phẩm xuống thấp hơn phần tồn kho đang phân bổ cho các phiên Flash Sale đang ở trạng thái `ACTIVE`.
+- Sử dụng Khóa lạc quan (Optimistic Lock) `@Version` trên `ProductVariant` để bảo vệ chống cập nhật đồng thời gây xung đột dữ liệu.

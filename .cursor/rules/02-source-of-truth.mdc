@@ -1,0 +1,36 @@
+---
+description: Thứ tự ưu tiên nguồn chân lý (Source of Truth), giải quyết xung đột và quy tắc chỉ đọc với thư mục docs/.
+globs: always
+---
+
+# Nguồn chân lý (Source of Truth)
+
+## Thứ tự ưu tiên (từ trên xuống dưới, trên thắng)
+
+1. **Code hiện tại** (luôn là nguồn chân lý cuối cùng).
+2. **AGENTS.md** (file gốc, tài liệu sống do user quản lý).
+3. **.cursor/rules/*.mdc** (thư mục này - agent quản lý, chia tách và nâng cấp từ AGENTS.md).
+4. **docs/** (01_project_planning.md, 02_requirement_analysis.md, 03_system_design.md, 04_architecture_analysis.md, api/api-document.md, flashsale_order_contract.md).
+5. **Migration SQL** trong `src/main/resources/db/migration/`.
+6. **Quy ước và cấu trúc hiện có** trong codebase.
+
+## Quy tắc đối với docs/
+
+- `docs/` chứa tài liệu thiết kế đã được chốt.
+- Không tự ý sửa, xóa, đổi tên hoặc định dạng lại file trong `docs/`.
+- Chỉ sửa `docs/` khi user yêu cầu rõ ràng.
+- Nếu code khác tài liệu, không tự ý thay đổi thiết kế lớn; báo lại user trước.
+
+## Khi phát hiện mâu thuẫn
+
+- Code khác `AGENTS.md` hoặc `.cursor/rules/` -> báo user, không tự ý sửa `AGENTS.md` hoặc rule.
+- Code khác `docs/` -> báo user, không tự ý sửa `docs/`.
+- `AGENTS.md` / `.cursor/rules/` khác `docs/` -> ưu tiên `docs/`, cập nhật rule/AGENTS cho khớp (nếu user yêu cầu).
+- Phát hiện docs lỗi thời khi đang triển khai -> dùng bảng Migration Impact Matrix (`42-migration-impact-matrix.mdc`) để biết file nào cần đồng bộ, báo danh sách cho user trước khi sửa.
+
+## Quy tắc nâng cấp rule
+
+- Có thể chỉnh sửa / tách / gộp các file trong `.cursor/rules/` mà không cần xin phép user, trừ khi mâu thuẫn với `AGENTS.md` (root) hoặc `docs/`.
+- Khi thêm rule mới -> cập nhật bảng Rule Index trong `AGENTS.md` (root).
+- File `.mdc` phải có frontmatter YAML (`description` + `globs`) để Cursor load đúng ngữ cảnh.
+- Mã hóa: tất cả file `.mdc` PHẢI là UTF-8 no BOM. KHÔNG dùng tool Write của Cursor để ghi file `.mdc` chứa tiếng Việt trên Windows vì tool này có thể ghi UTF-16 LE gây hỏng nội dung. Dùng PowerShell với UTF8Encoding(false) hoặc script Python.

@@ -1,0 +1,73 @@
+---
+description: Quy trình làm việc với Git - Mô hình phân nhánh, quy ước commit message, cấm tự ý push, giải quyết xung đột.
+globs: always
+---
+
+# Quy trình Làm việc với Git (Git Workflow)
+
+## Mô hình Phân nhánh (Branching Model)
+
+- `main`: Nhánh production-ready, được bảo vệ nghiêm ngặt, chỉ nhận code thông qua Pull Request (PR).
+- `dev`: Nhánh tích hợp chính, là nhánh gốc (base) cho mọi nhánh làm việc mới.
+- `feature/{mô-tả-ngắn}`: Phát triển tính năng mới (ví dụ: `feature/order-module`).
+- `fix/{mô-tả-ngắn}`: Sửa lỗi thông thường (ví dụ: `fix/auth-401-loop`).
+- `hotfix/{mô-tả-ngắn}`: Sửa lỗi khẩn cấp, tạo từ nhánh `main`, sau đó merge vào cả `main` lẫn `dev`.
+- `refactor/{mô-tả-ngắn}`: Tái cấu trúc mã nguồn (ví dụ: `refactor/extract-flashsale-order-port`).
+- `chore/{mô-tả-ngắn}`: Tác vụ bảo trì, cấu hình (ví dụ: `chore/init-project-structure`).
+- `docs/{mô-tả-ngắn}`: Cập nhật tài liệu (ví dụ: `docs/sync-api-document`).
+
+### Phân biệt giữa fix/ và hotfix/
+
+- `fix/x`: Lỗi thông thường phát hiện trong quá trình phát triển sprint, tạo nhánh từ `dev` và merge ngược vào `dev`.
+- `hotfix/x`: Lỗi nghiêm trọng phát sinh trực tiếp trên môi trường production, tạo nhánh từ `main`, merge trực tiếp vào `main` rồi cherry-pick hoặc merge ngược lại về `dev`.
+
+## Quy trình BẮT BUỘC trước khi thực hiện mọi task
+
+1. `git checkout dev`
+2. `git pull origin dev`
+3. `git checkout -b type/mo-ta-ngan`
+4. Thực hiện công việc của task
+5. `git add .`
+6. `git commit --trailer "Co-authored-by: Cursor <cursoragent@cursor.com>" -m "type: mô tả ngắn gọn"`
+7. **DỪNG LẠI - TUYỆT ĐỐI KHÔNG CHẠY LỆNH PUSH.**
+
+## Quy ước Đặt tên Commit Message
+
+Ngắn gọn, phản ánh chính xác thay đổi, tuân theo chuẩn Conventional Commits (viết bằng tiếng Anh):
+
+- `feat: implement flash sale reservation`
+- `fix: restore exact reserved stock on timeout`
+- `chore: initialize project structure`
+- `docs: update API endpoint for image module`
+- `refactor: extract FlashSaleOrderPort interface`
+- `hotfix: patch payment callback signature mismatch`
+
+- 1 commit chỉ phục vụ đúng 1 mục tiêu (single concern).
+- Phần nội dung (body) giải thích rõ lý do tại sao thay đổi, không diễn giải lại những gì đã hiển thị trong diff.
+
+## Quy tắc thêm file và commit
+
+- Dùng lệnh `git add .` để đưa toàn bộ các file thay đổi vào staging, sau đó commit.
+- KHÔNG cần thiết (và không khuyến khích) chạy lệnh `git add` lẻ từng file thủ công.
+- Chỉ commit ĐÚNG những nội dung thực sự thay đổi trong phạm vi task hiện tại.
+
+## Điều cấm: TUYỆT ĐỐI KHÔNG PUSH
+
+- Agent TUYỆT ĐỐI KHÔNG được phép tự ý chạy lệnh `git push` dưới bất kỳ hình thức nào.
+- Quyền đẩy mã nguồn lên GitHub hoàn toàn thuộc về người dùng.
+- Sau khi commit thành công, agent báo cáo kết quả cho user, user sẽ tự quyết định thời điểm push.
+
+## Xử lý Xung đột Mã nguồn (Conflict Resolution)
+
+1. Agent chạy lệnh `git status` để liệt kê danh sách các file đang bị xung đột.
+2. Agent TUYỆT ĐỐI KHÔNG tự ý giải quyết xung đột bằng các lệnh như `git checkout --theirs/--ours` hoặc tự sửa mà chưa hỏi ý kiến.
+3. Agent đọc kỹ từng file bị conflict, tóm tắt bản chất xung đột cho user.
+4. Agent sử dụng công cụ hỏi đáp tương tác để user quyết định phương án xử lý.
+5. Sau khi nhận được sự phê duyệt của user, agent mới tiến hành giải quyết, thực hiện `git add .` và commit hoàn tất.
+
+## Pull Request (PR)
+
+- 1 PR tương ứng với 1 mối quan tâm duy nhất.
+- Mô tả PR súc tích: thay đổi những gì, lý do thực hiện, ảnh hưởng tới hệ thống ra sao.
+- Nếu có migration cơ sở dữ liệu: ghi rõ phiên bản và phương án rollback dự phòng.
+- Nếu có breaking change ở API: bắt buộc phải nêu bật rõ ràng trong phần mô tả của PR.

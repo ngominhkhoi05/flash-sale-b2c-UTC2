@@ -1,0 +1,28 @@
+---
+description: Quy tắc module Đánh giá sản phẩm (Product Review) - Kiểm tra quyền sở hữu, điều kiện đơn hàng đã hoàn tất, mỗi item chỉ review 1 lần.
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/review/**/*.{java,kt}
+---
+
+# Module Đánh giá Sản phẩm (Product Review)
+
+## Các điều kiện tiên quyết khi Đánh giá (Pre-conditions)
+
+Khách hàng chỉ được phép đánh giá một sản phẩm khi và chỉ khi thỏa mãn toàn bộ các điều kiện sau:
+
+1. **Quyền sở hữu đơn hàng (Ownership)**: `order.user_id == current_user.id`.
+2. **Trạng thái đơn hàng hợp lệ**: Đơn hàng bắt buộc phải ở trạng thái đã giao thành công `order.status == COMPLETED`.
+3. **Sản phẩm thuộc đơn hàng**: Sản phẩm được đánh giá phải tồn tại trong danh sách `order_items` của đơn hàng đó.
+4. **Giới hạn số lần đánh giá**: Mỗi chi tiết đơn hàng (`order_item_id`) chỉ được phép tạo **duy nhất 1 bài đánh giá** (ràng buộc `UNIQUE(order_item_id)` trong cơ sở dữ liệu).
+
+## Tính toán Điểm đánh giá Trung bình
+
+- Cập nhật điểm đánh giá trung bình `average_rating` và tổng số lượt đánh giá `total_reviews` trên bảng `products`.
+- Việc tính toán lại điểm trung bình nên được thực hiện thông qua Sự kiện nội bộ Spring Event (`ReviewCreatedEvent`) để không làm nghẽn luồng xử lý chính của người dùng:
+  - Tầng Service lưu đánh giá mới vào bảng `product_reviews`.
+  - Phát sự kiện `applicationEventPublisher.publishEvent(new ReviewCreatedEvent(productId))`.
+  - Event Listener tiếp nhận và thực hiện cập nhật lại `average_rating` cho sản phẩm.
+
+## Tích hợp Hình ảnh Đánh giá
+
+- Một bài đánh giá có thể đính kèm nhiều hình ảnh hoặc video minh họa.
+- Các hình ảnh đính kèm bài đánh giá được lưu trữ tại bảng `images` với loại đối tượng `owner_type = REVIEW` và `owner_id = review.id` (xem chi tiết tại `40-image-module.mdc`).

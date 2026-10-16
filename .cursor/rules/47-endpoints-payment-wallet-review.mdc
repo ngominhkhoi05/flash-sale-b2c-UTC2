@@ -1,0 +1,28 @@
+---
+description: Hợp đồng API các module Thanh toán, Ví điện tử và Đánh giá (Payment, Wallet, Review).
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/{payment,wallet,review}/**/controller/**/*.{java,kt}
+---
+
+# Hợp đồng API: Payment, Wallet, Review
+
+> Phần này là **Hợp đồng API (API Contract)** chuẩn dành cho phía Frontend.
+
+## Module Thanh toán (Payment) - `/api/v1/payments`
+
+- `POST /api/v1/payments/{orderCode}`: Người mua khởi tạo giao dịch thanh toán cho đơn hàng.
+- `POST /api/v1/payments/callback`: Điểm tiếp nhận thông báo kết quả từ cổng thanh toán đối tác (ZaloPay).
+- `GET /api/v1/payments/{id}`: Người mua tra cứu trạng thái giao dịch thanh toán.
+
+## Module Ví điện tử (Wallet) - `/api/v1/wallets`
+
+- `GET /api/v1/wallets/me`: Người dùng xem số dư ví hiện tại.
+- `GET /api/v1/wallets/me/transactions`: Lịch sử biến động số dư ví (hỗ trợ phân trang).
+- `POST /api/v1/wallets/me/topup`: Khởi tạo yêu cầu nạp tiền vào ví điện tử.
+- `POST /api/v1/wallets/me/withdraw`: Khởi tạo yêu cầu rút tiền từ ví về tài khoản ngân hàng.
+
+## Module Đánh giá Sản phẩm (Review) - `/api/v1/products/{id}/reviews`
+
+- `GET /api/v1/products/{productId}/reviews`: Công khai, danh sách đánh giá của sản phẩm (hỗ trợ phân trang, lọc theo số sao, lọc có ảnh/video, kèm thống kê phân bố số sao).
+- `POST /api/v1/products/{productId}/reviews`: Khách hàng gửi bài đánh giá sản phẩm sau khi đơn hàng đã hoàn tất.
+- `GET /api/v1/users/me/reviews`: Danh sách các bài đánh giá do chính người dùng hiện tại đã viết.
+- `DELETE /api/v1/reviews/{id}`: Xóa bài đánh giá (người viết hoặc Quản trị viên).

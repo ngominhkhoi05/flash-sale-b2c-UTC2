@@ -1,0 +1,27 @@
+---
+description: Quy ước kiểm tra dữ liệu (Validation) - Jakarta Validation trên DTO, kiểm tra nghiệp vụ trong Service.
+globs: **/dto/**, **/service/**, **/controller/**
+---
+
+# Quy ước Kiểm tra Dữ liệu (Validation)
+
+## Kiểm tra dữ liệu đầu vào API (Input Validation)
+
+Sử dụng Jakarta Validation phù hợp trên các DTO Request:
+
+- `@NotNull`, `@NotBlank`, `@NotEmpty`
+- `@Positive`, `@PositiveOrZero`, `@Negative`
+- `@Min(0)`, `@Max(100)`
+- `@Size(min = 1, max = 255)`
+- `@Email`
+- `@Pattern(regexp = "...")`
+- `@Valid` - Bắt buộc khai báo cho các đối tượng lồng nhau (nested objects)
+
+- Đặt các annotation validation trực tiếp trên thuộc tính của DTO Request.
+- Khai báo `@Valid` bên cạnh `@RequestBody` trong Controller để kích hoạt kiểm tra.
+- Các lỗi vi phạm chi tiết theo từng trường sẽ được trả về trong thuộc tính `data` của `ApiResponse` (xem chi tiết tại `07-api-conventions.mdc`).
+
+## Kiểm tra Nghiệp vụ (Business Validation)
+
+- Các kiểm tra nghiệp vụ phức tạp (truy vấn nhiều bảng, kiểm tra nhiều bước tuần tự) bắt buộc phải nằm trong tầng **Service**, và ném ra ngoại lệ `BusinessException` kèm theo mã `*ErrorCode` tương ứng.
+- Tuyệt đối không ném ngoại lệ `RuntimeException` thuần túy - luôn đính kèm `ErrorCode`.

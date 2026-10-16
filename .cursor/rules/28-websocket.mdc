@@ -1,0 +1,43 @@
+---
+description: WebSocket thời gian thực - Giao thức STOMP + SockJS, danh sách destination, FlashSaleWsBroadcaster, định dạng dữ liệu payload.
+globs: **/realtime/**, config/realtime/**, flashsale/realtime/**
+---
+
+# WebSocket Thời gian thực (STOMP + SockJS)
+
+## Tổng quan
+
+Kênh realtime phục vụ việc đẩy sự kiện (push events) trực tiếp xuống trình duyệt của khách hàng (cập nhật số lượng tồn kho, trạng thái khung giờ slot, kết quả đặt hàng). **WebSocket không thay thế REST API** - chỉ đóng vai trò bổ sung kênh thông báo tức thì.
+
+- **Ngăn xếp công nghệ (Stack)**: Spring WebSocket + STOMP + SockJS.
+- **Điểm kết nối bắt tay (Handshake Endpoint)**: `ws://host/ws` (hỗ trợ SockJS fallback: `http://host/ws/...`).
+
+## Cấu hình chính
+
+- `config/realtime/WebSocketConfig.java`: Cấu hình tiền tố broker `/topic`, `/user`; chu kỳ heartbeat 10s; cấu hình `ObjectProvider<TaskScheduler>`.
+- `config/realtime/HandshakeAuthInterceptor.java`: Trích xuất và giải mã JWT token từ query parameter `?token=`.
+- `config/realtime/WebSocketAuthConfig.java`: Nạp lại quyền hạn của người dùng qua `UserDetailsService` ngay tại thời điểm kết nối `CONNECT`.
+- `config/realtime/WsSessionEventListener.java`: Ghi nhận log vòng đời phiên kết nối và thống kê số lượng session đang hoạt động.
+- `config/CorsConfig.java`: Thiết lập CORS cho đường dẫn `/ws/**`.
+- `config/SecurityConfig.java`: Cho phép truy cập `permitAll()` đối với `/ws/**` (việc xác thực được thực hiện ở tầng interceptor).
+
+> **Không tạo** `WebSocketSchedulerConfig.java` riêng. **Không tạo** `application-websocket.yaml` riêng.
+
+## Luồng xác thực từ Trình duyệt lên Máy chủ
+
+```text
+Trình duyệt: Khởi tạo WebSocket kết nối đến /ws?token={jwt}
+Máy chủ: HandshakeAuthInterceptor trích xuất token, xác thực và lưu Principal
+STOMP Connect: WebSocketAuthConfig nạp lại authorities
+Máy chủ chấp thuận kết nối -> Trình duyệt bắt đầu subscribe các topic
+```
+
+## Các kênh truyền thông điệp (Destinations)
+
+- `/topic/flash-sales/{slotId}/stock`: Broadcast cập nhật tồn kho công khai cho mọi người theo dõi phiên.
+- `/topic/flash-sales/{slotId}/status`: Broadcast thay đổi trạng thái khung giờ (UPCOMING -> ACTIVE -> ENDED).
+- `/user/queue/flash-sale-results`: Kênh riêng tư gửi kết quả giữ chỗ / đặt hàng thành công cho từng người dùng cụ thể.
+
+## Lớp điều phối phát sóng (FlashSaleWsBroadcaster)
+
+Mọi module muốn gửi thông điệp WebSocket **bắt buộc phải thông qua `FlashSaleWsBroadcaster`**, tuyệt đối không tự ý tiêm và gọi trực tiếp `SimpMessagingTemplate` ở các Service nghiệp vụ.

@@ -1,0 +1,51 @@
+---
+description: Module quản lý hình ảnh đa hình (Polymorphic Image Module) - Lưu trữ Cloudinary, kiểm tra quyền sở hữu, duy nhất 1 ảnh đại diện chính.
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/image/**/*.{java,kt}
+---
+
+# Module Quản lý Hình ảnh Đa hình (Image Module)
+
+## Kiến trúc Bảng Đa hình (Polymorphic Design)
+
+Hệ thống quản lý tập trung toàn bộ hình ảnh thông qua một bảng duy nhất `images`:
+
+```sql
+CREATE TABLE images (
+    id BIGSERIAL PRIMARY KEY,
+    owner_type VARCHAR(20) NOT NULL, -- USER, STORE, PRODUCT, VARIANT, REVIEW, BANNER
+    owner_id BIGINT NOT NULL,
+    url VARCHAR(500) NOT NULL,
+    public_id VARCHAR(255) NOT NULL, -- Public ID trên Cloudinary để phục vụ xóa file
+    is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+    display_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_images_owner ON images(owner_type, owner_id);
+```
+
+> **Lưu ý**: Bản migration V4 đã loại bỏ hoàn toàn các cột ảnh cũ phân tán ở các bảng (`users.avatar_url`, `stores.logo_url`, `products.image_url`, v.v.). Bảng `images` là nguồn dữ liệu hình ảnh duy nhất.
+
+## Quy tắc Kiểm tra Quyền sở hữu (Ownership Check)
+
+Trước khi thực hiện các thao tác thay đổi (thêm ảnh mới, đổi ảnh chính, sắp xếp lại thứ tự, xóa ảnh), hệ thống bắt buộc phải kiểm tra quyền sở hữu tương ứng:
+
+- `owner_type = USER`: `owner_id` bắt buộc phải trùng khớp với `current_user.id`.
+- `owner_type = STORE`: Cửa hàng `owner_id` phải thuộc sở hữu của người dùng hiện tại (`store.user_id == current_user.id`).
+- `owner_type = PRODUCT / VARIANT`: Sản phẩm hoặc biến thể phải thuộc quyền sở hữu của cửa hàng mà người dùng hiện tại đang quản lý.
+- `owner_type = REVIEW`: Bài đánh giá phải do chính người dùng hiện tại tạo ra.
+- `owner_type = BANNER`: Yêu cầu quyền Quản trị viên (`hasRole('ADMIN')`).
+
+Nếu người dùng cố tình can thiệp vào hình ảnh của chủ thể khác, ném mã lỗi `IMAGE_OWNER_FORBIDDEN` (HTTP 403).
+
+## Bất biến Ảnh đại diện Chính (Single Primary Image)
+
+- Mỗi đối tượng sở hữu (`owner_type` + `owner_id`) chỉ được phép có **tối đa duy nhất 1 hình ảnh đại diện chính (`is_primary = true`)**.
+- Khi một hình ảnh mới được chỉ định làm ảnh chính, toàn bộ các hình ảnh khác của cùng đối tượng đó phải được cập nhật về `is_primary = false`.
+- Thao tác này bắt buộc phải thực hiện trong cùng một giao dịch (`@Transactional`).
+
+## Dọn dẹp File trên Cloudinary (Resource Cleanup)
+
+- Khi xóa một bản ghi trong bảng `images`, hệ thống bắt buộc phải đồng thời gọi Cloudinary API để xóa file vật lý tương ứng (sử dụng `public_id`).
+- Khi một thực thể chủ quản bị xóa (người dùng, cửa hàng, sản phẩm, bài đánh giá), phát sự kiện `ImageCleanupEvent` để xóa toàn bộ các ảnh liên kết cả trong cơ sở dữ liệu lẫn trên Cloudinary.

@@ -1,0 +1,46 @@
+---
+description: Tổng quan dự án, công nghệ sử dụng và giai đoạn phát triển hiện tại.
+globs: always
+---
+
+# Tổng quan Dự án (Project Overview)
+
+## Dự án
+
+**Flash Sale B2C - UTC2** - Spring Boot backend cho hệ thống B2C Multi-Vendor Marketplace kết hợp Flash Sale, phục vụ mục đích đồ án.
+
+## Bố cục Workspace (Workspace Layout)
+
+| Repo | Đường dẫn | Vai trò |
+|---|---|---|
+| flash-sale-b2c-UTC2 | d:\flash-sale-b2c-UTC2 | **Spring Boot backend** (repo này) |
+| flash-sale-b2c-fe | d:\flash-sale-b2c-fe | Next.js frontend (consume API backend) |
+| deploy-b2c-utc2 | d:\deploy-b2c-utc2 | Docker compose, Nginx, scripts deploy |
+
+## Công nghệ sử dụng (Technology Stack)
+
+- Java 25
+- Spring Boot
+- Gradle (Kotlin DSL `build.gradle.kts`)
+- PostgreSQL
+- Spring Data JPA / Hibernate (`ddl-auto: validate`)
+- Flyway
+- Spring Security
+- JWT (HS256)
+- Redis
+- Redis Lua Script + Redisson (chiến lược tùy chọn)
+- MapStruct
+- Lombok
+- Springdoc OpenAPI / Swagger
+- Spring WebSocket + STOMP + SockJS (thời gian thực)
+- Cloudinary (lưu trữ hình ảnh, đa hình)
+
+## Giai đoạn phát triển hiện tại (Current Development Phase)
+
+Đã hoàn thành:
+1. Planning (Lập kế hoạch)
+2. Requirement (Phân tích yêu cầu)
+3. Design (Thiết kế hệ thống & CSDL)
+
+Đang bước vào:
+4. Implementation (Triển khai mã nguồn)

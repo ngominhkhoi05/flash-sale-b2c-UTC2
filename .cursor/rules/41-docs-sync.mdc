@@ -1,0 +1,51 @@
+---
+description: Quy trình đồng bộ tài liệu và mã nguồn (Documentation & Code Sync Checklist) - Các thời điểm và bước thực hiện đồng bộ.
+globs: always
+---
+
+# Quy trình Đồng bộ Tài liệu & Mã nguồn (Docs Sync Checklist)
+
+## Nguyên tắc cốt lõi
+
+Mã nguồn (Code), các bản migration cơ sở dữ liệu và hệ thống tài liệu thiết kế (`docs/`) **BẮT BUỘC PHẢI LUÔN LUÔN ĐỒNG BỘ 100%**.
+
+- Mã nguồn hiện tại luôn là nguồn chân lý cuối cùng (xem `02-source-of-truth.mdc`).
+- Nghiêm cấm tình trạng sửa đổi cấu trúc bảng hoặc thêm mới endpoint mà không cập nhật tài liệu thiết kế.
+
+## Quy trình Đồng bộ Chuẩn
+
+1. **Tra cứu bảng Ma trận Tác động** (`42-migration-impact-matrix.mdc`) để xác định chính xác các tài liệu nào bị ảnh hưởng bởi thay đổi.
+2. **Đọc lại nội dung** của các file tài liệu đó để định vị chính xác vị trí cần chỉnh sửa.
+3. **Báo cáo danh sách file cần đồng bộ cho user TRƯỚC** khi thực hiện chỉnh sửa (vì quy tắc `02-source-of-truth.mdc` nghiêm cấm agent tự ý sửa đổi file trong `docs/` khi chưa có yêu cầu).
+4. Sau khi được user phê duyệt, tiến hành cập nhật theo đúng thứ tự ưu tiên:
+   - Cập nhật sơ đồ ERD và bảng chi tiết các cột (`docs/03_system_design.md`).
+   - Cập nhật quy ước chung (`docs/api/api-document.md` mục 1).
+   - Cập nhật danh sách chi tiết các endpoint (`docs/api/api-document.md` mục tương ứng).
+   - Cập nhật bảng mã lỗi toàn hệ thống (`docs/api/api-document.md` mục 26).
+   - Cập nhật các rule liên quan trong thư mục `.cursor/rules/`.
+5. Nếu thay đổi có khả năng gây ảnh hưởng đến giao diện frontend -> ghi rõ chi tiết trong phần mô tả của PR để thông báo cho team Frontend.
+
+## Quy tắc chi tiết cho từng tài liệu
+
+### `docs/01_project_planning.md`
+- Cập nhật khi: Điều chỉnh mốc thời gian (Milestone M1/M2/M3), thay đổi phạm vi đồ án, điều chỉnh kế hoạch các tuần.
+- KHÔNG đưa các chi tiết kỹ thuật chuyên sâu vào tài liệu này.
+
+### `docs/02_requirement_analysis.md`
+- Cập nhật khi: Bổ sung hoặc chỉnh sửa User Story, Use Case, quy tắc nghiệp vụ (Business Rule).
+- Mỗi quy tắc thay đổi bắt buộc phải có mã định danh rõ ràng (ví dụ: `US-001`, `BR-014`) để tiện dẫn chiếu.
+
+### `docs/03_system_design.md`
+- Cập nhật khi: Thay đổi schema cơ sở dữ liệu, sửa sơ đồ ERD, sơ đồ tuần tự Sequence Diagram, cấu trúc Redis key hoặc Lua script.
+- Danh sách các cột của từng bảng phải khớp chính xác 1:1 với các bản migration SQL (tên cột, kiểu dữ liệu, ràng buộc).
+
+### `docs/04_architecture_analysis.md`
+- Cập nhật khi: Có sự thay đổi lớn về mặt kiến trúc tổng thể (áp dụng mẫu thiết kế mới, thay đổi cơ chế lưu trữ bền vững).
+
+### `docs/api/api-document.md`
+- Cập nhật khi: Thêm mới hoặc chỉnh sửa endpoint API, thay đổi cấu trúc request/response, bổ sung mã lỗi mới.
+- Mỗi endpoint phải cung cấp đủ: Phương thức (Method), URL, Quyền truy cập (Access), Schema Request, Schema Response và Danh sách mã lỗi có thể trả về.
+- Mục 26 (Mã lỗi Error Code) phải được cập nhật đầy đủ và sắp xếp theo bảng chữ cái.
+
+### `docs/flashsale_order_contract.md`
+- Cập nhật khi: Thay đổi hợp đồng giao tiếp giữa module `flashsale` và module `order`.

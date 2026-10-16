@@ -1,0 +1,59 @@
+---
+description: Công cụ xây dựng dự án - Lệnh Gradle, hồ sơ cấu hình profiles, biến môi trường và quy tắc bỏ qua file.
+globs: build.gradle.kts, build.gradle, settings.gradle, gradle.properties, application*.yaml, application*.yml, .gitignore
+---
+
+# Công cụ Xây dựng & Môi trường (Build & Toolchain)
+
+## Phiên bản Java 25
+
+Xem chi tiết tại `04-java-25.mdc`. Toolchain bắt buộc khai báo `JavaLanguageVersion.of(25)`.
+
+## Công cụ Gradle
+
+- Sử dụng Gradle Wrapper: `./gradlew` (đã commit sẵn `gradle/wrapper/gradle-wrapper.jar` và `gradle-wrapper.properties`).
+- Các lệnh thường dùng:
+
+```cmd
+gradlew compileJava        # Biên dịch nhanh, không chạy test
+gradlew test               # Chạy toàn bộ unit & integration tests
+gradlew build              # Build hoàn chỉnh kèm chạy test
+gradlew bootRun            # Khởi chạy ứng dụng với profile đang kích hoạt
+gradlew bootJar            # Đóng gói file thực thi jar
+```
+
+## Cấu hình Lombok + MapStruct
+
+Xem chi tiết hướng dẫn tại `23-mapstruct-lombok.mdc`.
+
+## Các hồ sơ môi trường (Profiles)
+
+- `local`: Dành cho môi trường phát triển cục bộ (mặc định khi không khai báo biến môi trường).
+- `prod`: Dành cho môi trường triển khai thực tế (production).
+- Kích hoạt thông qua biến môi trường `SPRING_PROFILES_ACTIVE` hoặc thiết lập `spring.profiles.active` trong `application.yaml`.
+
+## Các biến môi trường bắt buộc khi chạy môi trường local
+
+```text
+JWT_SECRET                     # Độ dài tối thiểu >= 32 ký tự
+CLOUDINARY_CLOUD_NAME
+CLOUDINARY_API_KEY
+CLOUDINARY_API_SECRET
+DATASOURCE_URL                 # jdbc:postgresql://...
+DATASOURCE_USERNAME
+DATASOURCE_PASSWORD
+REDIS_HOST
+REDIS_PORT
+REDIS_PASSWORD                 # Nếu có
+```
+
+File `application-local.yaml.example` là mẫu cấu hình - sao chép thành `application-local.yaml` và điền giá trị thực tế vào máy của bạn.
+
+## Các tệp tin tuyệt đối không commit lên Git
+
+- `.env`
+- `application-local.yaml` (có thể chứa mật khẩu thật của máy phát triển)
+- Các thư mục build: `build/`, `target/`, `.gradle/`
+- Thư mục IDE: `.idea/`, `*.iml`, `.vscode/`
+- Các file log: `*.log`
+- Các mã sinh tự động bởi MapStruct / Lombok (`*/target/generated-sources/` hoặc `build/generated/`)

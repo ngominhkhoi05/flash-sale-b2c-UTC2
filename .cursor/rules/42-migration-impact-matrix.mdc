@@ -1,0 +1,38 @@
+---
+description: Ma trận tác động của Migration (Migration Impact Matrix) - Bảng tra cứu khi chỉnh sửa bảng/cột thì cần rà soát tài liệu nào.
+globs: always
+---
+
+# Ma trận Tác động của Migration (Migration Impact Matrix)
+
+Bảng tra cứu nhanh: "Khi sửa đổi bảng hoặc cột dữ liệu X thì cần rà soát và cập nhật những tài liệu nào".
+
+## Ma trận theo Bảng Dữ liệu
+
+| Bảng dữ liệu bị tác động | docs/01 | docs/02 | docs/03 | docs/04 | api-doc (mục) | AGENTS.md / Rules liên quan |
+|---|---|---|---|---|---|---|
+| `users` / `user_roles` | - | US-001..010 | ERD, mục 1 (Users) | - | 6, 7 | `43-endpoints-auth-user-store.mdc` |
+| `auth_accounts` | - | US-001 | ERD | - | 6 | `43-endpoints-auth-user-store.mdc` |
+| `addresses` | - | BR-Address | ERD, mục 6 | - | 8 | `12-address-ownership.mdc`, `43-endpoints...` |
+| `stores` | - | US-Store | ERD, mục 7 | - | 9, 10 | `43-endpoints-auth-user-store.mdc` |
+| `categories` | - | US-006 | ERD | - | 11, 12 | `44-endpoints-product-image.mdc` |
+| `products` / `product_variants` | M1 | US-011..015 | ERD, mục 12-13 | - | 13, 14 | `14-flashsale-stock.mdc`, `44-endpoints...` |
+| `flash_sale_slots` / `flash_sale_items` | M2 | US-020..030 | ERD, mục 14-15, Redis keys, Lua | Kiến trúc Flash Sale | 15, 16, 17, 18 | `13-19-flashsale-*.mdc`, `45-endpoints...` |
+| `vouchers` / `voucher_usages` | - | US-040 | ERD, mục 19 | - | 22, 23, 24 | `37-voucher.mdc`, `46-endpoints...` |
+| `orders` / `order_items` | M2 | US-035 | ERD, mục 16-17, Snapshots | Luồng xử lý đơn hàng | 20, 21 | `11-multi-vendor.mdc`, `38-order-snapshots.mdc` |
+| `payments` | - | US-038 | ERD, mục 18 | - | Mục thanh toán | `35-payment.mdc`, `47-endpoints...` |
+| `wallets` / `wallet_transactions` | - | US-039 | ERD, mục 20 | - | Mục ví điện tử | `36-wallet.mdc`, `47-endpoints...` |
+| `carts` / `cart_items` | - | US-033 | ERD | - | 19 | `46-endpoints-cart-order-voucher-banner.mdc` |
+| `product_reviews` | - | US-050 | ERD, mục 21 | - | Mục đánh giá | `39-review.mdc`, `47-endpoints...` |
+| `images` (từ V3 trở đi) | - | US-Image | ERD, mục 22 (Images) | - | 28, mục 1 | `40-image-module.mdc`, `44-endpoints...` |
+| Phân quyền (`permissions`, `roles`, v.v.) | - | US-002 | ERD | - | 27 | `22-security.mdc` |
+
+## Quy trình Xử lý khi Thay đổi Migration
+
+1. Tạo file migration mới: `V{n}__{mô_tả}.sql`.
+2. Tra cứu bảng ma trận ở trên -> lập danh sách các file tài liệu thiết kế bị ảnh hưởng.
+3. Chạy lệnh grep để rà soát toàn bộ các vị trí xuất hiện nội dung liên quan trong các tài liệu.
+4. Lập bản tóm tắt các điểm khác biệt cần chỉnh sửa (tuyệt đối KHÔNG sửa ngay vào tài liệu).
+5. Trình bày danh sách file và nội dung thay đổi dự kiến cho người dùng.
+6. Sau khi nhận được sự phê duyệt của người dùng -> tiến hành cập nhật tài liệu.
+7. Đưa cả file mã nguồn, file migration và file tài liệu vào chung một commit hoặc PR thống nhất.

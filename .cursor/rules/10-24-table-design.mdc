@@ -1,0 +1,28 @@
+---
+description: Thiết kế 24 bảng dữ liệu cốt lõi, cấm tự ý thay đổi schema lớn.
+globs: docs/03_system_design.md, src/main/resources/db/migration/V*__init_schema.sql
+---
+
+# Thiết kế 24 Bảng Dữ liệu Cốt lõi (24-Table Design)
+
+## Danh sách 24 bảng (xem V1__init_schema.sql)
+
+```text
+roles, users, permission_groups, permissions, group_permissions, user_roles,
+auth_accounts, stores, addresses, wallets, categories, products, product_variants,
+flash_sale_slots, flash_sale_items, vouchers, orders, order_items, payments,
+wallet_transactions, voucher_usages, carts, cart_items, product_reviews
+```
+
+> **Lưu ý**: Bản migration V3 bổ sung thêm bảng `images` (đa hình) - đây là bảng thứ 25, đóng vai trò module phụ trợ quản lý ảnh, không làm thay đổi mô hình 24 bảng nghiệp vụ cốt lõi.
+
+## Những điều tuyệt đối không tự ý làm
+
+- Không tự ý thêm bảng Parent Order.
+- Không tự ý thêm bảng Seller Order.
+- Không tự ý tách dự án thành microservices.
+- Không tự ý thêm Saga Pattern.
+- Không tự ý thêm Two-Phase Commit (2PC).
+- Không tự ý thay đổi lớn mô hình dữ liệu.
+
+Chỉ thay đổi schema khi có yêu cầu bằng văn bản rõ ràng từ user hoặc phát hiện lỗi thiết kế thực sự nghiêm trọng.

@@ -1,0 +1,78 @@
+---
+description: Danh sách module (15 nghiệp vụ + 2 common) và quy ước phân tầng kiến trúc cho từng module.
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/**
+---
+
+# Cấu trúc Dự án (Project Structure)
+
+## Package chính
+
+`src/main/java/com/b2c/flash_sale_b2c_UTC2/`
+
+## Danh sách Modules
+
+```text
+auth/         # JWT, đăng nhập, đăng ký, refresh token, khởi tạo dữ liệu RBAC
+user/         # Hồ sơ người dùng, sổ địa chỉ
+store/        # Cửa hàng, địa chỉ kho hàng
+product/      # Danh mục (Category), Sản phẩm SPU, Biến thể sản phẩm SKU
+image/        # Quản lý hình ảnh đa hình (Polymorphic Cloudinary)
+flashsale/    # Lõi Flash Sale (khung giờ slot, mặt hàng item, đặt chỗ reservation, Lua script)
+cart/         # Giỏ hàng (Cart, CartItem)
+order/        # Đơn hàng (Order, OrderItem - mỗi đơn thuộc duy nhất 1 cửa hàng)
+payment/      # Thanh toán + webhook/callback
+voucher/      # Mã giảm giá (Voucher + VoucherUsage)
+wallet/       # Ví điện tử (Wallet + WalletTransaction)
+review/       # Đánh giá sản phẩm (ProductReview)
+
+common/       # ApiResponse, PageResponse, BusinessException, ErrorCode, GlobalExceptionHandler
+config/       # Cấu hình Security, JWT, Redis, Redisson, CORS, OpenAPI, Cloudinary, Realtime
+```
+
+## Chi tiết thư mục cấu hình (config/)
+
+```text
+config/
+|-- SecurityConfig.java
+|-- JwtProperties.java
+|-- RedisConfig.java
+|-- RedissonConfig.java
+|-- CorsConfig.java
+|-- OpenApiConfig.java
+|-- CloudinaryConfig.java
+|-- CloudinaryProperties.java
+\-- realtime/
+    |-- WebSocketConfig.java
+    |-- HandshakeAuthInterceptor.java
+    |-- WebSocketAuthConfig.java
+    \-- WsSessionEventListener.java
+```
+
+> Không tạo `WebSocketSchedulerConfig.java` riêng. `WebSocketConfig` dùng `ObjectProvider<TaskScheduler>`.
+> Không tạo `application-websocket.yaml` riêng - cấu hình WebSocket nằm trong `application.yaml` chung.
+
+## Quy ước phân tầng (Layer convention) cho mỗi module
+
+```text
+controller/    # @RestController, tiếp nhận request, validate, gọi service
+service/       # Nghiệp vụ (Business logic), ranh giới @Transactional, kiểm tra quyền sở hữu
+repository/    # Spring Data JPA, query method, JPQL tùy biến
+entity/        # @Entity ánh xạ bảng cơ sở dữ liệu
+dto/           # Request/Response DTO, không để lộ Entity ra ngoài
+mapper/        # MapStruct @Mapper
+exception/     # *ErrorCode enum riêng của module
+config/        # Bean cấu hình riêng của module (chỉ khi thực sự cần)
+scheduler/     # Các tác vụ định kỳ (@Scheduled jobs)
+strategy/      # Triển khai Strategy pattern
+port/          # Cổng Inbound / Outbound port
+realtime/      # WebSocket event / destination / broadcaster
+event/         # Sự kiện nội bộ Spring event
+listener/      # Lắng nghe sự kiện (@EventListener)
+enums/         # Các enum nghiệp vụ của module
+```
+
+## Quy tắc
+
+- **Không tạo** package/module chỉ để làm code phức tạp hơn nếu chưa có nhu cầu thực tế.
+- Quy ước phân tầng là **mặc định** - chỉ tạo package con khi thực sự có file đặt vào.
+- Mỗi module có **1 enum *ErrorCode riêng** (xem chi tiết tại `08-error-codes.mdc`).

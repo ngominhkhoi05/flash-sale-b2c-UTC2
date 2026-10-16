@@ -1,0 +1,54 @@
+---
+description: Quy ước mã lỗi ErrorCode, GlobalExceptionHandler và tiền tố mã lỗi theo từng module.
+globs: **/exception/**, common/exception/**
+---
+
+# Quy ước Mã lỗi (Error Code Convention)
+
+## Xử lý tập trung (Centralized Handling)
+
+```text
+common/exception/
+|-- BusinessException.java        # RuntimeException + ErrorCode
+|-- ErrorCode.java                # interface { String getCode(); HttpStatus getStatus(); String getMessageKey(); }
+|-- CommonErrorCode.java          # enum implements ErrorCode, tiền tố COMMON_
+\-- GlobalExceptionHandler.java   # @RestControllerAdvice
+```
+
+## Mỗi module có 1 enum *ErrorCode riêng, có tiền tố (prefix) theo module
+
+| Module    | Tiền tố (Prefix) | Ví dụ minh họa              |
+|-----------|------------------|------------------------------|
+| auth      | AUTH_            | AUTH_INVALID_CREDENTIALS     |
+| user      | USER_            | USER_NOT_FOUND               |
+| store     | STORE_           | STORE_NOT_APPROVED           |
+| product   | PRODUCT_         | PRODUCT_OUT_OF_STOCK         |
+| image     | IMAGE_           | IMAGE_OWNER_FORBIDDEN        |
+| flashsale | FLASH_SALE_      | FLASH_SALE_OUT_OF_STOCK      |
+| cart      | CART_            | CART_EMPTY                   |
+| order     | ORDER_           | ORDER_NOT_OWNER              |
+| payment   | PAYMENT_         | PAYMENT_DUPLICATE            |
+| voucher   | VOUCHER_         | VOUCHER_EXPIRED              |
+| wallet    | WALLET_          | WALLET_INSUFFICIENT          |
+| review    | REVIEW_          | REVIEW_ALREADY_EXISTS        |
+
+## Ánh xạ mã trạng thái HTTP (HTTP Status Mapping)
+
+| HTTP | Trạng thái ErrorCode          | Ý nghĩa |
+|------|-------------------------------|---------|
+| 400  | *_BAD_REQUEST                 | Dữ liệu đầu vào không hợp lệ (Validation fail) |
+| 401  | *_UNAUTHORIZED / AUTH_INVALID_TOKEN | Token không hợp lệ hoặc đã hết hạn |
+| 403  | *_FORBIDDEN / *_ACCESS_DENIED | Không có quyền truy cập tài nguyên |
+| 404  | *_NOT_FOUND                   | Tài nguyên không tồn tại |
+| 409  | *_CONFLICT / *_ALREADY_EXISTS | Xung đột trạng thái tài nguyên |
+| 422  | *_UNPROCESSABLE               | Vi phạm quy tắc nghiệp vụ |
+| 500  | *_INTERNAL_ERROR              | Lỗi nội bộ phía máy chủ (không để lộ stack trace) |
+
+## Quy tắc
+
+- `GlobalExceptionHandler` trả về các mã HTTP 401 (token không hợp lệ), 403 (thiếu quyền), 404, 409, 422, 500 chuẩn xác theo `ErrorCode`.
+- **Không bao giờ trả về stack trace** hoặc chi tiết ngoại lệ kỹ thuật nội bộ cho phía client.
+- Lỗi kiểm tra dữ liệu theo từng trường (field-level validation error) được trả về trong `data` dạng `{ field, message }`.
+- Trường `message` trong `ApiResponse` là **tiếng Việt**, dùng để hiển thị thông báo thân thiện cho người dùng.
+- Định dạng chuỗi mã lỗi: `MODULE_REASON` (in hoa UPPER_SNAKE).
+- Có thể áp dụng `MessageSource` cho đa ngôn ngữ (i18n) sau này, hiện tại hardcode thông điệp tiếng Việt trong enum `*ErrorCode`.

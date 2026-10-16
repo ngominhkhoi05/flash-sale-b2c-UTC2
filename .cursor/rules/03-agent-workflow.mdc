@@ -1,0 +1,23 @@
+---
+description: Quy trình làm việc của Agent gồm 8 bước bắt buộc khi nhận task. Áp dụng cho mọi phản hồi.
+globs: always
+---
+
+# Quy trình làm việc của Agent (Agent Workflow)
+
+Mỗi task **NÊN** thực hiện theo 8 bước:
+
+1. **Understand** - Đọc lại yêu cầu, xác nhận phạm vi (module nào, tầng kiến trúc nào, có đụng DB / Redis / WebSocket không).
+2. **Inspect** - Đọc code hiện tại của module liên quan + rule tương ứng trong `.cursor/rules/` + mục docs liên quan.
+3. **Read relevant docs** - Chỉ đọc phần docs thực sự liên quan.
+4. **Plan** - Liệt kê file sẽ tạo/sửa, migration (nếu có), tác dụng phụ (Redis key, WebSocket event, scheduled job).
+5. **Implement** - Đúng layer, đúng quy ước (convention).
+6. **Validate** - `gradlew compileJava` (nhanh), rồi `gradlew test` (module liên quan), `gradlew build` (cuối cùng).
+7. **Review diff** - Tự rà soát lại các thay đổi (`git diff`).
+8. **Report** - Báo cáo theo đúng định dạng tại rule `34-response-format.mdc`.
+
+## Quy tắc cứng
+
+- **Không nhảy trực tiếp vào viết code** nếu task liên quan đến kiến trúc (architecture), cơ sở dữ liệu (database), xử lý đồng thời (concurrency) hoặc luồng nghiệp vụ (business flow).
+- Luôn tải các rule liên quan (xem bảng Rule Index trong `AGENTS.md` gốc) **TRƯỚC** khi sửa file trong phạm vi tương ứng.
+- Nếu user yêu cầu task lớn (>= 5 file hoặc đụng chạm nhiều module) -> lập kế hoạch (plan) rõ ràng và báo user xác nhận.

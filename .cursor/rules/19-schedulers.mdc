@@ -1,0 +1,34 @@
+---
+description: Tác vụ chạy nền định kỳ - @Scheduled fixedDelayString, an toàn đa instance, tính idempotent và ghi log.
+globs: **/scheduler/**
+---
+
+# Tác vụ Chạy nền / Schedulers (Background Jobs)
+
+## Quy tắc chung
+
+- Mỗi tác vụ phải có mục đích nghiệp vụ rõ ràng.
+- Phải có cơ chế chống chạy trùng lặp khi cần thiết.
+- Phải ghi log chi tiết: thời điểm bắt đầu, kết thúc, số lượng bản ghi xử lý, và các ngoại lệ phát sinh.
+- Đảm bảo tính Idempotent (xem chi tiết tại `25-idempotency.mdc`).
+- Không âm thầm thay đổi dữ liệu vượt ra ngoài các quy tắc nghiệp vụ đã định nghĩa.
+
+## An toàn khi triển khai nhiều Instance (Multi-instance safety)
+
+- Hiện tại hệ thống chưa tích hợp ShedLock (đã kiểm tra: codebase chưa có `@SchedulerLock`).
+- Mỗi job phải tự đảm bảo tính Idempotent để an toàn khi chạy trên 2 hoặc nhiều instance đồng thời.
+- Khi mở rộng theo chiều ngang (scale horizontally), cần bổ sung ShedLock hoặc sử dụng khóa cấp hàng của DB (`SELECT ... FOR UPDATE SKIP LOCKED`).
+
+## Các tác vụ định kỳ hiện có
+
+- `processExpiredReservations`: Chu kỳ 15 giây, quét đơn hàng `PENDING_PAYMENT` quá 300 giây và chuyển sang `CANCELLED_TIMEOUT`.
+- `processEndedSlotsAndReturnUnsoldStock`: Chu kỳ 30 giây, đóng các phiên `ENDED` và hoàn trả số lượng `available_stock` về kho gốc.
+- `imageCleanup`: Định kỳ hàng ngày, dọn dẹp các hình ảnh rác (orphaned image chưa gắn với chủ sở hữu nào).
+
+Tất cả các method scheduler đều sử dụng `@Scheduled(fixedDelayString = "...")` để có thể dễ dàng điều chỉnh chu kỳ qua cấu hình.
+
+## Cấu trúc chuẩn của một Scheduler
+
+- Khai báo các annotation: `@Slf4j`, `@Component`, `@RequiredArgsConstructor`.
+- Annotation định kỳ: `@Scheduled(fixedDelayString = "${app.scheduler.xxx-delay:15000}")`.
+- Ghi log thời điểm bắt đầu, kết thúc, thời gian thực thi (elapsed time) và số lượng bản ghi đã xử lý.

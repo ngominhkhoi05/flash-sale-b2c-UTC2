@@ -1,0 +1,35 @@
+---
+description: Kiểm tra quyền sở hữu địa chỉ, ràng buộc XOR giữa user_id và store_id, duy nhất 1 địa chỉ mặc định.
+globs: user/**, store/**, **/address/**
+---
+
+# Quyền Sở hữu Địa chỉ (Address Ownership)
+
+## Kiểm tra quyền sở hữu (Ownership check)
+
+Khi người mua (Buyer) tạo đơn hàng, hệ thống phải kiểm tra:
+
+```text
+address.user_id == current_user.id
+```
+
+- Một Foreign Key hợp lệ trong cơ sở dữ liệu không đồng nghĩa với việc địa chỉ đó thuộc về người mua hiện tại.
+- Ảnh chụp nhanh (Snapshot) địa chỉ giao hàng trong đơn hàng phải được lưu lại đầy đủ (xem chi tiết tại `38-order-snapshots.mdc`) để đảm bảo tính toàn vẹn lịch sử.
+- Mọi thao tác GET / PUT / DELETE / PATCH mặc định trên địa chỉ đều phải kiểm tra quyền sở hữu; nếu không khớp, ném lỗi `*ErrorCode.ADDRESS_ACCESS_DENIED` (HTTP 403).
+
+## Ràng buộc loại trừ XOR (XOR Constraint)
+
+Bảng `addresses` sở hữu ràng buộc kiểm tra (CHECK constraint) `chk_address_owner_xor`:
+
+```text
+(user_id IS NOT NULL AND store_id IS NULL)
+HOẶC
+(user_id IS NULL AND store_id IS NOT NULL)
+```
+
+- Địa chỉ của **Người mua (Buyer)** -> `user_id = currentUser`, `store_id = NULL`.
+- Địa chỉ **Kho hàng của Cửa hàng (Store Warehouse)** -> `store_id = currentStore`, `user_id = NULL`.
+
+## Địa chỉ Mặc định Duy nhất (Single Default Address)
+
+Khi đánh dấu một địa chỉ là mặc định (`is_default = true`), toàn bộ các địa chỉ khác của cùng chủ sở hữu (owner) đó phải được cập nhật về `is_default = false`. Thao tác này bắt buộc phải thực hiện trong một giao dịch (`@Transactional`).
