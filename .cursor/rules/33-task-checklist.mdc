@@ -62,9 +62,9 @@ globs: always
 - [ ] Đã tự rà soát lại toàn bộ khác biệt mã nguồn thông qua lệnh `git diff`.
 - [ ] Đã viết bổ sung bài kiểm thử (tối thiểu 1 test cho tầng Service vừa xử lý).
 
-## Hoàn tất & Commit
+## Hoàn tất & Bàn giao (Handoff)
 
-- [ ] Sử dụng lệnh `git add .` để đưa thay đổi vào staging.
-- [ ] Commit message viết bằng tiếng Anh, tuân thủ đúng chuẩn Conventional Commits.
-- [ ] Chỉ commit những file liên quan trực tiếp đến phạm vi công việc của task hiện tại.
-- [ ] **DỪNG LẠI - TUYỆT ĐỐI KHÔNG CHẠY LỆNH PUSH.**
+- [ ] Tự rà soát toàn bộ diff bằng lệnh `git status` và `git diff`.
+- [ ] Gợi ý commit message bằng tiếng Anh, tuân thủ đúng chuẩn Conventional Commits trong báo cáo cuối.
+- [ ] **DỪNG LẠI - TUYỆT ĐỐI KHÔNG CHẠY `git add`, `git commit` HAY `git push`.** Toàn bộ quyền staging, commit và push thuộc về user.
+
