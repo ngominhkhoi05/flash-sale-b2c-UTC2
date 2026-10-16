@@ -28,7 +28,7 @@ globs: always
 3. `git checkout -b type/mo-ta-ngan`
 4. Thực hiện công việc của task
 5. `git add .`
-6. `git commit --trailer "Co-authored-by: Cursor <cursoragent@cursor.com>" -m "type: mô tả ngắn gọn"`
+6. `git commit -m "type: mô tả ngắn gọn"` (sử dụng cấu hình Git cục bộ của user)
 7. **DỪNG LẠI - TUYỆT ĐỐI KHÔNG CHẠY LỆNH PUSH.**
 
 ## Quy ước Đặt tên Commit Message
@@ -50,6 +50,9 @@ Ngắn gọn, phản ánh chính xác thay đổi, tuân theo chuẩn Convention
 - Dùng lệnh `git add .` để đưa toàn bộ các file thay đổi vào staging, sau đó commit.
 - KHÔNG cần thiết (và không khuyến khích) chạy lệnh `git add` lẻ từng file thủ công.
 - Chỉ commit ĐÚNG những nội dung thực sự thay đổi trong phạm vi task hiện tại.
+- **Bắt buộc sử dụng cấu hình Git cục bộ của máy (Local Git configuration)**:
+  - Khi add commit bắt buộc phải sử dụng cấu hình Git cục bộ của máy (Local Git configuration) với thông tin `user.name` và `user.email` của chính user để thực hiện commit.
+  - TUYỆT ĐỐI KHÔNG được dùng tài khoản của `cursor-agent` (ví dụ: cấm dùng cờ `--author`, `--trailer "Co-authored-by: Cursor <cursoragent@cursor.com>"`, hoặc gán bất kỳ thông tin nào của cursor-agent vào commit).
 
 ## Điều cấm: TUYỆT ĐỐI KHÔNG PUSH
 
