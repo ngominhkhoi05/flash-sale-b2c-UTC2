@@ -1,84 +1,70 @@
 ---
-description: Task execution checklist - danh sach check truoc/trong/sau khi implement feature/fix bug.
+description: Danh sách kiểm tra thực thi công việc (Task Execution Checklist) - Các bước kiểm tra trước, trong và sau khi code.
 globs: always
 ---
 
-# Task Execution Checklist
+# Danh sách Kiểm tra Thực thi Task (Task Checklist)
 
-## Understanding (truoc khi code)
+## Giai đoạn Tìm hiểu (Trước khi code)
 
-- [ ] Da doc requirement lien quan (docs/02_requirement_analysis.md).
-- [ ] Da doc docs lien quan (docs/03_system_design.md, docs/api/api-document.md).
-- [ ] Da doc phan AGENTS.md lien quan (hoac cac rule tuong ung trong .cursor/rules/).
-- [ ] Da kiem tra code hien tai (khong chi tin docs).
-- [ ] Da xac dinh module + layer (project-structure.mdc).
+- [ ] Đã đọc kỹ tài liệu yêu cầu liên quan (`docs/02_requirement_analysis.md`).
+- [ ] Đã đọc tài liệu thiết kế liên quan (`docs/03_system_design.md`, `docs/api/api-document.md`).
+- [ ] Đã đọc kỹ các rule tương ứng trong thư mục `.cursor/rules/`.
+- [ ] Đã kiểm tra trực tiếp mã nguồn hiện tại trong codebase (không chỉ tin tưởng tài liệu).
+- [ ] Đã xác định rõ module và tầng kiến trúc sẽ triển khai (`05-project-structure.mdc`).
 
-## Implementation
+## Giai đoạn Triển khai (Implementation)
 
-- [ ] Dung module (theo 15 modules + 2 common).
-- [ ] Dung layer (controller/service/repository/entity/dto/mapper/exception).
-- [ ] KHONG business logic trong Controller.
-- [ ] KHONG business logic trong Repository.
-- [ ] Mapper dung convention MapStruct + Spring component.
-- [ ] Error code dung prefix module (error-codes.mdc).
-- [ ] Neu can WS -> qua FlashSaleWsBroadcaster (websocket.mdc).
-- [ ] Neu can idempotency -> theo idempotency.mdc.
-- [ ] Neu can JWT auth -> theo security.mdc.
+- [ ] Đặt đúng module (trong số 15 module nghiệp vụ + 2 module dùng chung).
+- [ ] Đặt đúng tầng kiến trúc (`controller`, `service`, `repository`, `entity`, `dto`, `mapper`, `exception`).
+- [ ] TUYỆT ĐỐI KHÔNG viết logic nghiệp vụ trong Controller.
+- [ ] TUYỆT ĐỐI KHÔNG viết logic nghiệp vụ trong Repository.
+- [ ] Mapper tuân thủ đúng quy ước MapStruct và được Spring quản lý như một Bean.
+- [ ] Mã lỗi tuân thủ đúng tiền tố (prefix) của từng module (`08-error-codes.mdc`).
+- [ ] Nếu có gửi thông báo WebSocket -> bắt buộc gọi qua `FlashSaleWsBroadcaster` (`28-websocket.mdc`).
+- [ ] Nếu cần cơ chế chống gọi lặp -> tuân thủ quy ước Idempotent (`25-idempotency.mdc`).
+- [ ] Nếu liên quan đến bảo mật và xác thực -> tuân thủ quy tắc Security (`22-security.mdc`).
 
-## Database
+## Cơ sở Dữ liệu
 
-- [ ] Constraint dung (FK, UNIQUE, NOT NULL, CHECK, Index).
-- [ ] Migration moi neu can (V{n}__...sql).
-- [ ] KHONG sua migration cu.
-- [ ] KHONG sua docs/ (theo source-of-truth.mdc).
-- [ ] Da rà soát migration-impact-matrix.mdc neu co migration moi.
+- [ ] Ràng buộc được thiết kế chuẩn xác (Foreign Key, UNIQUE, NOT NULL, CHECK, Index).
+- [ ] Tạo file migration mới nếu có thay đổi schema (`V{n}__*.sql`).
+- [ ] TUYỆT ĐỐI KHÔNG sửa các file migration cũ đã áp dụng.
+- [ ] Không tự ý sửa đổi file trong thư mục `docs/` nếu chưa có yêu cầu của user.
+- [ ] Đã rà soát bảng ma trận tác động `42-migration-impact-matrix.mdc` khi có migration mới.
 
-## Flash Sale
+## Miền nghiệp vụ Flash Sale
 
-- [ ] Redis operation atomic (Lua) - xem concurrency.mdc.
-- [ ] Reservation TTL tach purchase limit - xem flashsale-purchase-limit.mdc.
-- [ ] Rollback tra dung quantity (compensation idempotent) - xem flashsale-rollback.mdc.
-- [ ] Co compensation khi DB fail.
-- [ ] Lifecycle operation idempotent - xem flashsale-lifecycle.mdc.
+- [ ] Mọi thao tác kiểm tra và trừ tồn kho trên Redis đều đảm bảo tính nguyên tử (dùng Lua Script).
+- [ ] Phân định rõ ràng giữa thời gian giữ chỗ (Reservation TTL 300s) và giới hạn mua của người dùng.
+- [ ] Quá trình hoàn kho (Rollback) hoàn trả chính xác số lượng hàng đã giữ và có tính Idempotent.
+- [ ] Có khối xử lý bù trừ (Compensation) khi thao tác lưu vào Database gặp sự cố.
+- [ ] Các tác vụ quản lý vòng đời phiên Flash Sale đều đảm bảo tính Idempotent.
 
-## Image
+## Quản lý Hình ảnh (Image Module)
 
-- [ ] Owner resolve dung (USER / STORE / PRODUCT / VARIANT / REVIEW).
-- [ ] Ownership check truoc moi PATCH/DELETE.
-- [ ] Co cascade xoa khi owner bi xoa.
-- [ ] Chi 1 anh primary/owner.
+- [ ] Xác định đúng loại đối tượng sở hữu (`USER`, `STORE`, `PRODUCT`, `VARIANT`, `REVIEW`).
+- [ ] Kiểm tra quyền sở hữu trước mọi thao tác cập nhật (PATCH) hoặc xóa (DELETE).
+- [ ] Có cơ chế xóa liên hoàn (Cascade Delete) khi đối tượng sở hữu bị xóa.
+- [ ] Đảm bảo mỗi đối tượng chỉ có duy nhất 1 ảnh đại diện chính (`is_primary = true`).
 
-## Security
+## Bảo mật & Quyền riêng tư
 
-- [ ] KHONG hard-code secret.
-- [ ] Authorization dung (role/permission).
-- [ ] Ownership check dung (vi du: address.user_id == current_user.id).
-- [ ] KHONG bypass Security.
+- [ ] Không gán cứng bất kỳ thông tin nhạy cảm nào trong mã nguồn.
+- [ ] Phân quyền chuẩn xác theo vai trò (`hasRole`) hoặc quyền hạn cụ thể.
+- [ ] Luôn kiểm tra quyền sở hữu tài nguyên (ví dụ: `address.user_id == current_user.id`).
+- [ ] Không bao giờ vượt rào hoặc tắt cơ chế bảo mật.
 
-## Validation
+## Kiểm thử & Đóng gói (Build / Test)
 
-- [ ] Input validation (Jakarta).
-- [ ] Business validation (Service throw BusinessException).
-- [ ] Edge cases (null, empty, max boundary, concurrent).
+- [ ] Đã xác nhận phiên bản Java 25 đang được kích hoạt thông qua lệnh `java -version`.
+- [ ] Chạy lệnh `gradlew compileJava` và `gradlew test` thành công không phát sinh lỗi.
+- [ ] Đã tự rà soát lại toàn bộ khác biệt mã nguồn thông qua lệnh `git diff`.
+- [ ] Đã viết bổ sung bài kiểm thử (tối thiểu 1 test cho tầng Service vừa xử lý).
 
-## Documentation Sync
+## Hoàn tất & Commit
 
-- [ ] Da grep noi dung lien quan trong docs/.
-- [ ] Da tra bang migration-impact-matrix.mdc cho migration vua tao (neu co).
-- [ ] Da bao user danh sach file docs can sync.
-- [ ] Da update docs sau khi user duyet (hoac ghi ro "chua sync" trong PR).
-
-## Build/Test
-
-- [ ] Da chay java25 truoc build/test/run (xem java-25.mdc).
-- [ ] java -version xac nhan Java 25.
-- [ ] Build/test thanh cong hoac da bao ro loi.
-- [ ] Da review diff (git diff).
-- [ ] Da viet/sua test (testing.mdc) - service layer it nhat co 1 test.
-
-## Commit
-
-- [ ] git add . (khong add file le).
-- [ ] Commit message tieng Anh + conventional commit (git-workflow.mdc).
-- [ ] Commit CHI nhung file da thay doi trong task.
-- [ ] KHONG push (git-workflow.mdc).
+- [ ] Sử dụng lệnh `git add .` để đưa thay đổi vào staging.
+- [ ] Commit message viết bằng tiếng Anh, tuân thủ đúng chuẩn Conventional Commits.
+- [ ] Chỉ commit những file liên quan trực tiếp đến phạm vi công việc của task hiện tại.
+- [ ] **DỪNG LẠI - TUYỆT ĐỐI KHÔNG CHẠY LỆNH PUSH.**

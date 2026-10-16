@@ -1,57 +1,41 @@
 ---
-description: Concurrency - Lua Script, Redisson strategy, PESSIMISTIC_WRITE.
+description: Xử lý đồng thời cao - Sử dụng Lua Script, chiến lược Redisson và khóa bi quan PESSIMISTIC_WRITE.
 globs: flashsale/**, **/service/**, flashsale/strategy/**
 ---
 
-# Concurrency
+# Xử lý Đồng thời (Concurrency)
 
-## Khong dung
+## Anti-pattern cần tránh
 
-\\	ext
+Tuyệt đối không sử dụng mô hình đọc - kiểm tra - trừ:
+
+```text
 read stock
 -> if stock > 0
 -> decrement
-\
-trong high-concurrency Flash Sale.
+```
 
-## Uu tien
+trong môi trường Flash Sale có mức độ chịu tải và tương tranh cao.
 
-\\	ext
+## Chiến lược ưu tiên
+
+```text
 Redis Lua Script
-\
-cho operation can atomicity.
+```
 
-## Pluggable strategy
+dành cho mọi thao tác đòi hỏi tính nguyên tử tuyệt đối (Atomicity).
 
-Module flashsale/strategy/ ho tro 2 strategy:
+## Chiến lược linh hoạt (Pluggable Strategy)
 
-- LuaScriptStockReservationStrategy (mac dinh).
-- RedissonLockStockReservationStrategy (so sanh/benchmark).
+Package `flashsale/strategy/` hỗ trợ 2 chiến lược giữ chỗ:
 
-Chon qua property (vd: flashsale.strategy=lua / redisson).
+- `LuaScriptStockReservationStrategy`: Mặc định, cho hiệu năng cao nhất.
+- `RedissonLockStockReservationStrategy`: Dự phòng, phục vụ kiểm thử so sánh và đo điểm chuẩn (benchmark).
 
-## Quy tac
+Lựa chọn chiến lược thông qua cấu hình trong file properties (ví dụ: `flashsale.strategy=lua` hoặc `redisson`).
 
-- Khong them distributed lock phuc tap neu Redis/Lua da giai quyet dung van de.
-- Khong dung synchronized Java cho cross-instance state.
-- DB lock (@Lock(PESSIMISTIC_WRITE)) chi dung khi that can (vd: settle wallet 2 user cung luc).
+## Quy tắc
 
-## N+1
-
-### Phat hien
-
-- Bat spring.jpa.show-sql: true (profile local) de quan sat query.
-- Test voi data lon (>1000 records).
-
-### Giai phap
-
-- @EntityGraph(attributePaths = {...}).
-- JOIN FETCH trong JPQL.
-- Projection (interface-based DTO).
-- @BatchSize(size = 50) hoac hibernate.batch_size: 50 (da cau hinh).
-- 2 queries thay vi 1 join phuc tap (khi collection lon).
-
-### Quy tac
-
-- **Khong dung** EAGER bua bai de che N+1.
-- Moi list API co quan he (Order -> Items, Product -> Variants, Cart -> Items) **phai** test khong N+1 truoc khi merge.
+- Không tự ý thêm cơ chế khóa phân tán phức tạp nếu Redis kết hợp Lua Script đã giải quyết triệt để vấn đề.
+- Không sử dụng từ khóa `synchronized` của Java cho các trạng thái cần đồng bộ xuyên suốt nhiều instance.
+- Khóa cơ sở dữ liệu (`@Lock(LockModeType.PESSIMISTIC_WRITE)`) chỉ dùng trong trường hợp thực sự cần thiết (ví dụ: thanh toán ví điện tử của 2 người dùng diễn ra đồng thời).

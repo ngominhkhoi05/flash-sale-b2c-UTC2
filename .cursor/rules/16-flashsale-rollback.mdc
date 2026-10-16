@@ -1,44 +1,46 @@
 ---
-description: Timeout rollback - tra lai dung so luong da reserve, idempotent qua marker Redis.
+description: Hoàn kho khi quá hạn (Timeout Rollback) - trả lại đúng số lượng đã giữ, tính idempotent qua Redis marker.
 globs: flashsale/**, src/main/resources/lua/**
 ---
 
-# Timeout Rollback
+# Hoàn kho khi Quá hạn (Timeout Rollback)
 
-Khi reservation timeout/cancel phai tra lai **dung so luong da reserve**.
+Khi lượt giữ chỗ bị hết hạn hoặc hủy bỏ, hệ thống phải hoàn trả lại **đúng số lượng sản phẩm đã giữ chỗ**.
 
-\\	ext
+```text
 Sai:  INCRBY stock 1
-Dung: INCRBY stock {reservedQuantity}
-\
-- Neu reserve 5 san pham thi phai tra lai 5.
-- Rollback phai **idempotent** (xem idempotency.mdc) de tranh tra stock nhieu lan.
-- Dung Redis marker rollback:{orderId}:{itemId} set khi rollback lan dau, cac lan sau skip.
+Đúng: INCRBY stock {reservedQuantity}
+```
 
-## Lua script
+- Nếu người dùng giữ trước 5 sản phẩm thì khi rollback phải trả lại đúng 5 sản phẩm vào kho.
+- Quá trình rollback bắt buộc phải có **tính Idempotent** (xem chi tiết tại `25-idempotency.mdc`) để ngăn chặn việc hoàn kho nhiều lần cho cùng một đơn hàng.
+- Sử dụng Redis marker `rollback:{orderId}:{itemId}` được thiết lập ngay lần đầu hoàn kho; các lần gọi tiếp theo sẽ bỏ qua.
 
-File src/main/resources/lua/rollback_stock.lua thuc hien:
-- Check marker idempotency.
-- INCRBY flash_sale:stock:{itemId} dung reservedQuantity.
-- DECRBY flash_sale:user_limit:{slotId}:{userId}:{itemId} dung reservedQuantity.
-- SET marker rollback:{orderId}:{itemId} voi TTL 1 ngay.
+## Kịch bản Lua script
 
-## Redis -> Database Compensation
+File `src/main/resources/lua/rollback_stock.lua` thực hiện các bước:
+1. Kiểm tra marker idempotent (nếu đã tồn tại -> dừng lại ngay).
+2. Tăng tồn kho: `INCRBY flash_sale:stock:{itemId} {reservedQuantity}`.
+3. Trả lại giới hạn mua: `DECRBY flash_sale:user_limit:{slotId}:{userId}:{itemId} {reservedQuantity}`.
+4. Đánh dấu marker: `SET rollback:{orderId}:{itemId} "DONE" EX 86400` (TTL 1 ngày).
 
-Redis decrement thanh cong nhung DB order creation that bai co the gay inconsistency.
+## Bù trừ giữa Redis và Cơ sở Dữ liệu (Redis -> Database Compensation)
 
-### Flow fail
+Nếu việc trừ tồn kho trên Redis thành công nhưng thao tác tạo đơn hàng trong Database thất bại (do lỗi ràng buộc, timeout, deadlock), hệ thống sẽ gặp tình trạng bất đồng bộ dữ liệu.
 
-\\	ext
-Redis reserve
- \-- DB fail (constraint / timeout / deadlock)
- \-- Compensate Redis (rollback_stock.lua)
- \-- Restore exact reserved quantity
-\
-### Quy tac
+### Luồng xử lý khi gặp sự cố (Failure Flow)
 
-- **Khong trien khai Saga hoac 2PC** cho scope hien tai.
-- Try-Catch compensation **phai tranh double compensation** (dung marker idempotency).
-- Ca 2 phia (Redis + DB) deu phai co marker rieng:
-  - Redis: rollback:{orderId}:{itemId} (TTL 1 ngay).
-  - DB: cot order.status transition hop le (PENDING_PAYMENT -> CANCELLED_TIMEOUT chi 1 lan).
+```text
+Redis giữ chỗ thành công
+ \-- Database thất bại (vi phạm ràng buộc / timeout / deadlock)
+ \-- Kích hoạt bù trừ trên Redis (chạy rollback_stock.lua)
+ \-- Hoàn trả chính xác số lượng tồn kho đã giữ
+```
+
+### Quy tắc
+
+- **Không triển khai Saga Pattern hoặc Two-Phase Commit (2PC)** cho phạm vi hiện tại nhằm tránh phức tạp hóa kiến trúc.
+- Khối try-catch bù trừ **bắt buộc phải chống bù trừ lặp lại (double compensation)** bằng marker idempotent.
+- Cả hai phía (Redis và Database) đều phải có cơ chế đánh dấu riêng biệt:
+  - Phía Redis: Khóa `rollback:{orderId}:{itemId}` (TTL 1 ngày).
+  - Phía DB: Kiểm tra chuyển đổi trạng thái đơn hàng hợp lệ (`PENDING_PAYMENT` -> `CANCELLED_TIMEOUT` chỉ thực hiện đúng 1 lần).

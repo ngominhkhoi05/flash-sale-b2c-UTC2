@@ -1,50 +1,50 @@
 ---
-description: Database engine, Flyway migration, Hibernate ddl-auto=validate.
+description: Cơ sở dữ liệu, Flyway migration, Hibernate ddl-auto=validate và các loại ràng buộc.
 globs: **/db/migration/**, application*.yaml, application*.yml
 ---
 
-# Database
+# Cơ sở Dữ liệu (Database)
 
-## Engine
+## Hệ quản trị cơ sở dữ liệu
 
 PostgreSQL.
 
-## Migration
+## Quản lý Migration
 
-- **Flyway** la nguon quan ly schema duy nhat.
-- Location: classpath:db/migration.
-- Naming: V{n}__description.sql (V1, V2, ...).
-- **Khong sua migration da ap dung** trong moi truong dung chung neu khong co ly do dac biet.
-- Neu phai sua, dung repair cua Flyway + bao user.
+- **Flyway** là nguồn quản lý schema cơ sở dữ liệu duy nhất.
+- Vị trí: `classpath:db/migration`.
+- Quy tắc đặt tên: `V{n}__{mô_tả}.sql` (`V1`, `V2`, ...).
+- **Tuyệt đối không sửa file migration đã áp dụng** trong môi trường dùng chung nếu không có lý do đặc biệt.
+- Nếu buộc phải sửa, sử dụng lệnh `repair` của Flyway và báo trước cho user.
 
-## Migration hien tai
+## Các bản migration hiện tại
 
-\\	ext
-V1__init_schema.sql                 # 24 bang
-V2__add_version_to_product_variants.sql  # Optimistic lock
-V3__create_images_table.sql         # Polymorphic image
-V4__drop_legacy_image_columns.sql   # Bo 5 cot anh cu
-\
-## Hibernate
+```text
+V1__init_schema.sql                      # Khởi tạo 24 bảng cốt lõi
+V2__add_version_to_product_variants.sql  # Thêm cột version hỗ trợ Optimistic Lock
+V3__create_images_table.sql              # Bảng lưu trữ hình ảnh đa hình (Polymorphic)
+V4__drop_legacy_image_columns.sql        # Loại bỏ 5 cột ảnh cũ không còn sử dụng
+```
 
-\\yaml
+## Cấu hình Hibernate
+
+```yaml
 spring:
   jpa:
     hibernate:
       ddl-auto: validate
-\
-- **Khong dung** create / create-drop / update lam co che quan ly schema chinh.
-- open-in-view: false (da cau hinh).
+```
 
-## Init data
+- **Không dùng** `create`, `create-drop`, hoặc `update` làm cơ chế quản lý schema chính thức.
+- Cấu hình `open-in-view: false` (đã kích hoạt).
 
-- Co the dung data.sql (Spring Boot) cho seed data **chi trong profile local**.
-- Khong commit seed data production vao repo.
+## Khởi tạo dữ liệu (Init data)
 
-## Phan biet 3 loai rule
+- Có thể dùng `data.sql` (Spring Boot) để chèn dữ liệu mẫu (seed data) **chỉ trong profile local**.
+- Tuyệt đối không commit dữ liệu seed production vào repo.
 
-**Database Constraint**: Dam bao data integrity o database. Constraint vi pham -> exception SQL, khong duoc nuot o service.
+## Phân biệt 3 loại quy tắc (Rules)
 
-**Service Business Rule**: Dam bao nghiep vu. Validation phuc tap (multi-table, multi-step) dat o Service.
-
-**Redis Concurrency Rule**: Dam bao atomicity/concurrency cua Flash Sale. Source of truth runtime cho stock / purchase limit.
+1. **Ràng buộc Cơ sở Dữ liệu (Database Constraint)**: Đảm bảo tính toàn vẹn dữ liệu ở cấp DB. Khi vi phạm constraint sẽ ném lỗi SQL, tuyệt đối không nuốt lỗi ở tầng Service.
+2. **Quy tắc Nghiệp vụ Service (Service Business Rule)**: Đảm bảo luồng nghiệp vụ. Các kiểm tra phức tạp (nhiều bảng, nhiều bước) phải được đặt ở tầng Service.
+3. **Quy tắc Xử lý Đồng thời Redis (Redis Concurrency Rule)**: Đảm bảo tính nguyên tử (atomicity) và xử lý đồng thời trong Flash Sale. Redis là nguồn chân lý tại thời gian chạy (runtime) cho tồn kho và giới hạn lượt mua.

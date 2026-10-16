@@ -1,63 +1,57 @@
 ---
-description: Cart, Order, Voucher, Banner endpoints - contract cho frontend.
+description: Hợp đồng API các module Giỏ hàng, Đơn hàng, Mã giảm giá và Banner quảng cáo (Cart, Order, Voucher, Banner).
 globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/{cart,order,voucher,banner}/**/controller/**/*.{java,kt}
 ---
 
-# Cart, Order, Voucher, Banner Endpoints
+# Hợp đồng API: Cart, Order, Voucher, Banner
 
-> Phan nay la **API contract** cho frontend. Moi thay doi endpoint phai cap nhat docs/api/api-document.md (sau khi user duyet) + muc nay.
+> Phần này là **Hợp đồng API (API Contract)** chuẩn dành cho phía Frontend.
 
-## 46.11 Cart (/api/v1/cart)
+## Giỏ hàng (Cart) - `/api/v1/cart`
 
-| Method | Endpoint | Access | Mo ta |
+| Phương thức | Đường dẫn | Quyền truy cập | Mô tả chi tiết |
 |---|---|---|---|
-| GET | /api/v1/cart | Buyer | Cart hien tai |
-| POST | /api/v1/cart/items | Buyer | Them item |
-| PUT | /api/v1/cart/items/{id} | Buyer | Cap nhat so luong |
-| DELETE | /api/v1/cart/items/{id} | Buyer | Xoa item |
-| DELETE | /api/v1/cart | Buyer | Clear cart |
-| POST | /api/v1/cart/checkout | Buyer | Split cart theo store -> tao Orders (xem multi-vendor-order.mdc) |
+| GET    | `/api/v1/cart` | Người mua | Lấy thông tin giỏ hàng hiện tại kèm chi tiết các món hàng |
+| POST   | `/api/v1/cart/items` | Người mua | Thêm biến thể sản phẩm vào giỏ hàng |
+| PUT    | `/api/v1/cart/items/{id}` | Người mua | Cập nhật số lượng sản phẩm trong giỏ |
+| DELETE | `/api/v1/cart/items/{id}` | Người mua | Xóa một mặt hàng khỏi giỏ |
+| DELETE | `/api/v1/cart` | Người mua | Xóa sạch toàn bộ giỏ hàng |
+| POST   | `/api/v1/cart/checkout` | Người mua | Tách giỏ theo từng Cửa hàng và tạo danh sách Đơn hàng |
 
-## 46.12 Order Buyer (/api/v1/orders) & Seller (/api/v1/seller/orders)
+## Đơn hàng (Order) - `/api/v1/orders` & `/api/v1/seller/orders`
 
-| Method | Endpoint | Access | Mo ta |
+| Phương thức | Đường dẫn | Quyền truy cập | Mô tả chi tiết |
 |---|---|---|---|
-| POST | /api/v1/orders | Buyer | Tao order (qua checkout flow) |
-| GET | /api/v1/orders/me | Buyer | List order cua toi, paging |
-| GET | /api/v1/orders/{id} | Buyer | Chi tiet (ownership check) |
-| PATCH | /api/v1/orders/{id}/cancel | Buyer | Cancel (chi khi PENDING_PAYMENT hoac CONFIRMED chua ship) |
-| GET | /api/v1/seller/orders | Seller | List order thuoc store minh |
-| GET | /api/v1/seller/orders/{id} | Seller | Chi tiet (ownership check store) |
-| PATCH | /api/v1/seller/orders/{id}/ship | Seller | Danh dau da giao hang |
-| PATCH | /api/v1/seller/orders/{id}/complete | Seller | Danh dau hoan thanh |
+| POST  | `/api/v1/orders` | Người mua | Tạo đơn hàng mới từ quy trình thanh toán |
+| GET   | `/api/v1/orders/me` | Người mua | Danh sách các đơn hàng của tôi (hỗ trợ phân trang) |
+| GET   | `/api/v1/orders/{id}` | Người mua | Chi tiết một đơn hàng cụ thể (kiểm tra quyền sở hữu) |
+| PATCH | `/api/v1/orders/{id}/cancel` | Người mua | Hủy đơn hàng (khi đang ở PENDING_PAYMENT hoặc CONFIRMED) |
+| GET   | `/api/v1/seller/orders` | Người bán | Danh sách đơn hàng thuộc cửa hàng của mình |
+| GET   | `/api/v1/seller/orders/{id}` | Người bán | Chi tiết đơn hàng thuộc cửa hàng quản lý |
+| PATCH | `/api/v1/seller/orders/{id}/ship` | Người bán | Xác nhận chuyển trạng thái đơn hàng sang Đang giao |
+| PATCH | `/api/v1/seller/orders/{id}/complete` | Người bán | Xác nhận đơn hàng đã giao thành công |
 
-## 46.13 Voucher (/api/v1/vouchers, /api/v1/seller/vouchers, /api/v1/admin/vouchers)
+## Mã giảm giá (Voucher) - `/api/v1/vouchers`
 
-Xem chi tiết voucher.mdc. Tom tat:
-
-| Method | Endpoint | Access | Mo ta |
+| Phương thức | Đường dẫn | Quyền truy cập | Mô tả chi tiết |
 |---|---|---|---|
-| GET | /api/v1/vouchers | Buyer | List voucher available |
-| POST | /api/v1/vouchers | Buyer | Claim voucher |
-| GET | /api/v1/seller/vouchers | Seller | List voucher store |
-| POST | /api/v1/seller/vouchers | Seller | Tao voucher store |
-| PUT | /api/v1/seller/vouchers/{id} | Seller | Cap nhat |
-| DELETE | /api/v1/seller/vouchers/{id} | Seller | Xoa |
-| GET | /api/v1/admin/vouchers | Admin | List platform voucher |
-| POST | /api/v1/admin/vouchers | Admin | Tao platform voucher |
+| GET    | `/api/v1/vouchers` | Người mua | Danh sách mã giảm giá khả dụng có thể lưu/áp dụng |
+| POST   | `/api/v1/vouchers` | Người mua | Thu thập (claim) mã giảm giá vào ví voucher |
+| GET    | `/api/v1/seller/vouchers` | Người bán | Danh sách mã giảm giá do cửa hàng phát hành |
+| POST   | `/api/v1/seller/vouchers` | Người bán | Tạo mới mã giảm giá áp dụng cho cửa hàng |
+| PUT    | `/api/v1/seller/vouchers/{id}` | Người bán | Cập nhật thông tin mã giảm giá cửa hàng |
+| DELETE | `/api/v1/seller/vouchers/{id}` | Người bán | Vô hiệu hóa hoặc xóa mã giảm giá |
+| GET    | `/api/v1/admin/vouchers` | Quản trị viên | Danh sách mã giảm giá áp dụng trên quy mô toàn sàn |
+| POST   | `/api/v1/admin/vouchers` | Quản trị viên | Tạo mới mã giảm giá cấp Sàn |
 
-## 46.13 Banner (/api/v1/banners, /api/v1/admin/banners)
+## Banner Quảng cáo (Banner) - `/api/v1/banners`
 
-Xem chi tiết image-module.mdc (Image Module). Tom tat:
-
-| Method | Endpoint | Access | Mo ta |
+| Phương thức | Đường dẫn | Quyền truy cập | Mô tả chi tiết |
 |---|---|---|---|
-| GET | /api/v1/banners/home | Public | Banner trang chu (mainSlides HERO + sideBanners) |
-| GET | /api/v1/banners/position/{position} | Public | Banner ACTIVE theo vi tri |
-| GET | /api/v1/admin/banners | Admin | List banner (paging, filter type/isActive) |
-| POST | /api/v1/admin/banners | Admin | Tao banner |
-| PUT | /api/v1/admin/banners/{id} | Admin | Cap nhat banner |
-| PATCH | /api/v1/admin/banners/{id}/status | Admin | Doi isActive (validate time window) |
-| DELETE | /api/v1/admin/banners/{id} | Admin | Soft delete (isActive=false) |
-
-Error codes: BANNER_NOT_FOUND, BANNER_INVALID_DATE_RANGE, BANNER_INVALID_STATUS, BANNER_IMAGE_URL_BLANK.
+| GET    | `/api/v1/banners/home` | Công khai | Lấy banner trang chủ (Hero Slider và Side Banners) |
+| GET    | `/api/v1/banners/position/{position}` | Công khai | Lấy banner đang hoạt động theo vị trí hiển thị |
+| GET    | `/api/v1/admin/banners` | Quản trị viên | Danh sách banner trong hệ thống (phân trang, lọc trạng thái) |
+| POST   | `/api/v1/admin/banners` | Quản trị viên | Tạo mới một banner quảng cáo |
+| PUT    | `/api/v1/admin/banners/{id}` | Quản trị viên | Cập nhật thông tin banner |
+| PATCH  | `/api/v1/admin/banners/{id}/status` | Quản trị viên | Bật/Tắt trạng thái hoạt động của banner |
+| DELETE | `/api/v1/admin/banners/{id}` | Quản trị viên | Xóa mềm banner quảng cáo |

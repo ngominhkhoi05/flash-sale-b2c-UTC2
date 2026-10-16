@@ -1,23 +1,24 @@
 ---
-description: Multi-vendor order rule - mot Order thuoc mot Store, split cart theo Store truoc khi tao Order.
+description: Quy tắc đơn hàng Multi-Vendor - mỗi đơn hàng thuộc về đúng một cửa hàng (Store).
 globs: order/**, cart/**
 ---
 
-# Multi-Vendor Order
+# Đơn hàng Đa Cửa hàng (Multi-Vendor Order)
 
-Mot **Order** thuoc ve **mot Store** (single-vendor per Order).
+Mỗi **Order** bắt buộc thuộc về **một Store duy nhất** (nguyên tắc single-vendor per Order).
 
-Neu Cart co nhieu Store:
+Nếu trong Giỏ hàng (Cart) chứa sản phẩm của nhiều Store:
 
-\\	ext
+```text
 Cart
- |-- Store A -> Order A
- |-- Store B -> Order B
- \-- Store C -> Order C
-\
-Checkout phai **split cart theo Store truoc khi tao Order**. Moi Order co store_id rieng, tinh phi ship / voucher / commission doc lap.
+ |-- Store A -> Tạo Order A
+ |-- Store B -> Tạo Order B
+ \-- Store C -> Tạo Order C
+```
 
-## Quy tac
+Khi tiến hành Checkout, hệ thống bắt buộc phải **tách giỏ hàng theo Store trước khi tạo các Order**. Mỗi Order có `store_id` riêng, đồng thời tính toán phí vận chuyển, áp dụng voucher và hoa hồng (commission) hoàn toàn độc lập.
 
-- Khong tao Parent Order / Seller Order chi de xu ly multi-vendor.
-- Moi Order co store_id rieng, ship/voucher/commission tinh doc lap.
+## Quy tắc
+
+- Tuyệt đối không tạo các bảng trung gian như Parent Order / Seller Order chỉ để xử lý đa cửa hàng.
+- Mỗi Order sở hữu `store_id` riêng; phí ship, voucher, hoa hồng được tính toán độc lập cho từng Order.

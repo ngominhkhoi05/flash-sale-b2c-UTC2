@@ -1,39 +1,47 @@
 ---
-description: ApiResponse, PageResponse, REST API conventions.
+description: Quy ước API - ApiResponse, PageResponse và chuẩn RESTful API.
 globs: **/controller/**, **/dto/**, **/api/**
 ---
 
-# API Conventions
+# Quy ước API (API Conventions)
 
-## Response wrapper
+## Vỏ bọc phản hồi chuẩn (Response Wrapper)
 
-Moi API (ke ca loi) deu wrap trong ApiResponse<T>:
+Mọi API (kể cả thành công hay thất bại) đều được bọc trong `ApiResponse<T>`:
 
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "Thao tác thành công",
+  "data": { ... },
+  "timestamp": "2026-10-16T15:00:00Z"
+}
+```
 
+## Phân trang (Pagination)
 
-## Pagination
+Sử dụng `PageResponse<T>` chuẩn cho mọi API danh sách có phân trang. Mặc định `page = 0`, `size = 20`, `MAX_PAGE_SIZE = 100`.
 
-PageResponse<T> chuan, dung cho moi list API co phan trang. Mac dinh page=0, size=20, MAX_PAGE_SIZE=100, sort createdAt DESC.
+## Ý nghĩa phương thức REST API (REST API Semantics)
 
-## REST API semantic
-
-| Method | Muc dich | Idempotent |
+| Phương thức | Mục đích | Idempotent |
 |---|---|---|
-| GET    | Doc resource           | Yes |
-| POST   | Tao moi / action khong idempotent | No  |
-| PUT    | Replace toan bo resource | Yes |
-| PATCH  | Partial update        | No* |
-| DELETE | Xoa resource          | Yes |
+| GET    | Đọc tài nguyên | Có |
+| POST   | Tạo mới / Thực hiện hành động không idempotent | Không |
+| PUT    | Thay thế toàn bộ tài nguyên | Có |
+| PATCH  | Cập nhật một phần tài nguyên | Không* |
+| DELETE | Xóa tài nguyên | Có |
 
-* PATCH idempotent neu field update khong phu thuoc state hien tai.
+* PATCH có tính idempotent nếu trường được cập nhật không phụ thuộc vào trạng thái hiện tại.
 
-## Quy tac
+## Quy tắc đặt tên và cấu trúc URL
 
-- **Khong dung POST** cho moi operation neu HTTP semantic co method phu hop.
-- URL resource dung danh tu so nhieu: /api/v1/orders, /api/v1/products.
-- Action dac biet dung sub-resource: /api/v1/orders/{id}/cancel.
-- Versioning qua URL prefix /api/v1/.
+- **Không lạm dụng POST** cho mọi thao tác nếu chuẩn HTTP có phương thức phù hợp hơn.
+- URL tài nguyên dùng danh từ số nhiều: `/api/v1/orders`, `/api/v1/products`.
+- Thao tác đặc biệt sử dụng sub-resource: `/api/v1/orders/{id}/cancel`.
+- Định phiên bản API qua tiền tố URL: `/api/v1/`.
 
-## Versioning
+## Quản lý phiên bản (Versioning)
 
-Moi endpoint thuoc /api/v1/. Khi co breaking change -> danh version moi /api/v2/..., giu endpoint cu 1 release cycle (1 thang) truoc khi xoa.
+Mọi endpoint đều thuộc `/api/v1/`. Khi có breaking change -> phát hành phiên bản mới `/api/v2/...`, duy trì endpoint cũ trong tối thiểu 1 chu kỳ phát hành (1 tháng) trước khi loại bỏ hoàn toàn.

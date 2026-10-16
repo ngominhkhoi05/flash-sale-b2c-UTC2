@@ -1,24 +1,24 @@
 ---
-description: N+1 detection, EntityGraph, JOIN FETCH, projection, batch size.
+description: Phát hiện và xử lý vấn đề N+1 truy vấn - EntityGraph, JOIN FETCH, DTO Projection và Batch Size.
 globs: **/repository/**, **/service/**
 ---
 
-# N+1
+# Vấn đề Truy vấn N+1 (N+1 Query Problem)
 
-## Phat hien
+## Cách phát hiện
 
-- Bat spring.jpa.show-sql: true (profile local) de quan sat query.
-- Test voi data lon (>1000 records).
+- Kích hoạt cấu hình `spring.jpa.show-sql: true` (ở profile `local`) để theo dõi các câu lệnh SQL được sinh ra.
+- Thực hiện kiểm thử tải với tập dữ liệu lớn (> 1.000 bản ghi).
 
-## Giai phap
+## Các giải pháp khắc phục
 
-- @EntityGraph(attributePaths = {...}).
-- JOIN FETCH trong JPQL.
-- Projection (interface-based DTO).
-- @BatchSize(size = 50) hoac hibernate.batch_size: 50 (da cau hinh).
-- 2 queries thay vi 1 join phuc tap (khi collection lon).
+- Sử dụng `@EntityGraph(attributePaths = {"..."})` trên các method của Spring Data JPA.
+- Sử dụng cú pháp `JOIN FETCH` trong các câu truy vấn JPQL tùy chỉnh.
+- Sử dụng DTO Projection (giao diện hoặc class DTO riêng biệt) để chỉ nạp đúng các trường cần thiết.
+- Thiết lập `@BatchSize(size = 50)` hoặc cấu hình toàn cục `hibernate.default_batch_fetch_size: 50` (đã kích hoạt).
+- Chia thành 2 câu truy vấn riêng biệt thay vì thực hiện một lệnh JOIN quá phức tạp (khi tập hợp collection liên quan quá lớn).
 
-## Quy tac
+## Quy tắc
 
-- **Khong dung** EAGER bua bai de che N+1.
-- Moi list API co quan he (Order -> Items, Product -> Variants, Cart -> Items) **phai** test khong N+1 truoc khi merge.
+- **Tuyệt đối không lạm dụng `FetchType.EAGER`** một cách bừa bãi chỉ để che giấu vấn đề N+1.
+- Mọi API trả về danh sách có chứa quan hệ (Order -> OrderItems, Product -> Variants, Cart -> CartItems) **bắt buộc** phải được kiểm tra không phát sinh N+1 truy vấn trước khi merge code.

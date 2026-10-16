@@ -1,49 +1,20 @@
 ---
-description: Cross-repo layout - 3 repo (backend, frontend, deploy) va quy tac rang buoc giua chung.
+description: Bố cục liên kết giữa 3 kho mã nguồn (Backend, Frontend, Deploy) và các quy tắc ràng buộc lẫn nhau.
 globs: always
 ---
 
-# Cross-Repo Layout
+# Bố cục Liên kết giữa các Kho Mã nguồn (Cross-Repo Layout)
 
-Workspace hien co 3 repo:
+Không gian làm việc hiện tại bao gồm 3 repository liên kết mật thiết:
 
-| Repo | Path | Vai tro |
+| Repository | Thư mục trên máy | Vai trò đảm nhiệm |
 |---|---|---|
-| flash-sale-b2c-UTC2 | d:\flash-sale-b2c-UTC2 | Spring Boot backend (repo nay) |
-| flash-sale-b2c | d:\flash-sale-b2c | Next.js frontend (consume API backend) |
-| deploy-b2c-utc2 | d:\deploy-b2c-utc2 | Docker compose, nginx, scripts deploy (multi-service orchestration) |
+| `flash-sale-b2c-UTC2` | `d:\flash-sale-b2c-UTC2` | **Spring Boot backend** (repo hiện tại) |
+| `flash-sale-b2c-fe` | `d:\flash-sale-b2c-fe` | Giao diện Next.js frontend (sử dụng API từ backend) |
+| `deploy-b2c-utc2` | `d:\deploy-b2c-utc2` | Cấu hình Docker compose, Nginx reverse proxy, scripts triển khai |
 
-## Quy tac
+## Quy tắc ràng buộc khi phát triển
 
-- Repo nay **chi chua** backend Java + config + SQL + lua script.
-- KHONG sua code frontend trong repo backend.
-- KHONG commit docker-compose / nginx vao repo backend (da co repo deploy).
-- File .env quan ly rieng o repo deploy.
-- Neu can thay doi API contract -> sua docs/api/api-document.md (sau khi user duyet) + bao team frontend.
-
-## Deploy repo (deploy-b2c-utc2)
-
-Cac file dang chu y:
-
-- docker-compose.yml - orchestrate backend, frontend, postgres, redis, nginx.
-- docker/backend.Dockerfile - build image backend.
-- docker/frontend.Dockerfile - build image frontend.
-- nginx/default.conf - reverse proxy /api -> backend, / -> frontend, /ws -> backend WS.
-- scripts/check-health.sh - health check sau deploy.
-- scripts/deploy.sh - entry point deploy.
-
-## Backend source code layout (nho)
-
-- src/main/java/com/b2c/flash_sale_b2c_UTC2/ - source code.
-- src/main/resources/db/migration/ - Flyway SQL.
-- src/main/resources/lua/ - Redis Lua scripts.
-- src/main/resources/application.yaml - config chinh.
-- src/main/resources/application-local.yaml.example - template env vars.
-- src/test/ - test code.
-- .cursor/rules/ - Cursor rules (rule cua agent).
-
-## Khi code Backend
-
-- Import path: com.b2c.flash_sale_b2c_UTC2.<module>.<layer>.<Class>.
-- Khi tao feature moi, tham chieu project-structure.mdc de xac dinh module + layer.
-- Khi thay doi API contract, xem response-format.mdc + endpoints-*.mdc.
+- Mọi thay đổi ở Backend làm thay đổi cấu trúc dữ liệu hoặc URL của API **bắt buộc phải đồng bộ** sang tài liệu `docs/api/api-document.md` để phía Frontend nắm được hợp đồng giao tiếp (Contract).
+- Không commit các cấu hình mang tính cục bộ của máy cá nhân làm ảnh hưởng đến kịch bản đóng gói trong repo `deploy-b2c-utc2`.
+- Luôn kiểm tra tính tương thích giữa phiên bản API của backend và mã nguồn tiêu thụ phía frontend.

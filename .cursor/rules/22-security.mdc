@@ -1,58 +1,57 @@
 ---
-description: Security - khong hard-code secret, JWT, CORS, public route, filter chain.
+description: Bảo mật - Không gán cứng thông tin nhạy cảm, xác thực JWT, CORS, danh sách endpoint công khai, chuỗi bộ lọc.
 globs: config/**, **/filter/**, application*.yaml
 ---
 
-# Security
+# Quy tắc Bảo mật (Security)
 
-## Khong hard-code
+## Không gán cứng thông tin nhạy cảm (No hardcoded secrets)
 
-- JWT secret, Database password, Redis password, Payment secret/API key, Cloudinary secret.
+- Tuyệt đối không gán cứng mã khóa bí mật JWT (secret key), mật khẩu Database, mật khẩu Redis, mã bí mật cổng thanh toán, API key của Cloudinary.
+- Bắt buộc đọc thông qua biến môi trường (Environment Variables) hoặc file cấu hình riêng (`application-{profile}.yaml`).
 
-Dung environment variables hoac secret configuration (qua application-{profile}.yaml).
+## Quy tắc chung
 
-## Quy tac
+- Xác thực và phân quyền JWT được xử lý tại tầng Security (`SecurityConfig` + `JwtAuthenticationFilter`).
+- Không được vô hiệu hóa hoặc vượt rào (bypass) Security chỉ để thử nghiệm tính năng.
+- Trả về mã lỗi 401 khi token không hợp lệ hoặc đã hết hạn; trả về 403 khi người dùng không đủ quyền hạn.
+- Mọi annotation `@PreAuthorize` phải tham chiếu đến mã quyền hạn cụ thể (ví dụ: `order:create`) hoặc vai trò (ví dụ: `hasRole('SELLER')`).
 
-- JWT authentication/authorization xu ly tai Security layer (SecurityConfig + JwtAuthenticationFilter).
-- Khong bypass Security chi de test feature.
-- 401 cho token invalid/expired; 403 cho thieu quyen.
-- Moi @PreAuthorize phai reference permission code (vd: order:create) hoac role (hasRole SELLER).
+## Phân quyền Endpoint
 
-## Auth endpoint
+- `/api/v1/auth/**`: Công khai (Public).
+- `/api/v1/admin/**`: Yêu cầu vai trò `hasRole('ADMIN')`.
+- `/api/v1/seller/**`: Yêu cầu vai trò `hasRole('SELLER')`.
+- Các endpoint `/api/v1/**` còn lại: Yêu cầu đã đăng nhập (`authenticated`).
+- WebSocket `/ws/**`: Cho phép truy cập mở `permitAll()` tại HTTP filter (quá trình xác thực được xử lý riêng tại `HandshakeAuthInterceptor`).
 
-- /api/v1/auth/** -> public.
-- /api/v1/admin/** -> hasRole ADMIN.
-- /api/v1/seller/** -> hasRole SELLER.
-- /api/v1/** con lai -> authenticated.
-- WebSocket /ws/** -> permitAll() (auth trong HandshakeAuthInterceptor).
+## Cấu hình CORS
 
-## CORS
+- `CorsConfig` ánh xạ `/ws/**` dành riêng cho kết nối WebSocket.
+- Các REST API `/api/v1/**` cũng cần CORS khi phía frontend gọi từ nguồn khác (cross-origin).
+- Danh sách trắng các tên miền được phép (whitelist origins) cấu hình qua `app.cors.allowed-origins` (mặc định là `http://localhost:3000`).
 
-- CorsConfig mapping /ws/** cho WebSocket.
-- API REST /api/v1/** cung can CORS neu frontend goi cross-origin.
-- Whitelist origin qua property app.cors.allowed-origins (mac dinh http://localhost:3000).
+## Danh sách Route công khai (Public Routes)
 
-## Public route
+- `/api/v1/auth/**`
+- `/api/v1/products/**` (các endpoint xem sản phẩm công khai)
+- `/api/v1/flash-sales/slots` (xem danh sách khung giờ công khai)
+- `/api/v1/categories/**` (xem danh mục)
+- `/api/v1/stores/{id}` (xem thông tin cửa hàng)
+- `/v3/api-docs/**`, `/swagger-ui/**`, `/swagger-ui.html`
+- `/actuator/health`
+- `/ws/**`
 
-- /api/v1/auth/**
-- /api/v1/products/** (public)
-- /api/v1/flash-sales/slots (public)
-- /api/v1/categories/** (public)
-- /api/v1/stores/{id} (public)
-- /v3/api-docs/**, /swagger-ui/**, /swagger-ui.html
-- /actuator/health
-- /ws/**
+## Mô hình Phi trạng thái (Stateless)
 
-## Stateless
+- Sử dụng chính sách: `SessionCreationPolicy.STATELESS`.
+- Đặt `JwtAuthenticationFilter` trước `UsernamePasswordAuthenticationFilter`.
+- Tùy chỉnh `AuthenticationEntryPoint` trả về cấu trúc `ApiResponse` chuẩn với HTTP status 401.
+- Tùy chỉnh `AccessDeniedHandler` trả về cấu trúc `ApiResponse` chuẩn với HTTP status 403.
 
-- SessionCreationPolicy.STATELESS.
-- JwtAuthenticationFilter dat truoc UsernamePasswordAuthenticationFilter.
-- Custom AuthenticationEntryPoint tra ApiResponse 401.
-- Custom AccessDeniedHandler tra ApiResponse 403.
+## Thứ tự các Filter trong Chuỗi Bảo mật (Filter Chain Order)
 
-## Filter chain order
-
-1. CorsFilter
-2. JwtAuthenticationFilter
-3. UsernamePasswordAuthenticationFilter (disabled)
-4. AuthorizationFilter
+1. `CorsFilter`
+2. `JwtAuthenticationFilter`
+3. `UsernamePasswordAuthenticationFilter` (đã vô hiệu hóa)
+4. `AuthorizationFilter`

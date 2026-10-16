@@ -1,86 +1,38 @@
 ---
-description: Migration impact matrix - bang tra cuu khi sua bang/cot X thi ra soat file docs nao.
+description: Ma trận tác động của Migration (Migration Impact Matrix) - Bảng tra cứu khi chỉnh sửa bảng/cột thì cần rà soát tài liệu nào.
 globs: always
 ---
 
-# Migration Impact Matrix
+# Ma trận Tác động của Migration (Migration Impact Matrix)
 
-Bang tra cuu nhanh: "Khi sua bang/cot X thi ra soat file nao".
+Bảng tra cứu nhanh: "Khi sửa đổi bảng hoặc cột dữ liệu X thì cần rà soát và cập nhật những tài liệu nào".
 
-## Ma tran theo bang
+## Ma trận theo Bảng Dữ liệu
 
-| Bang bi anh huong | docs/01 | docs/02 | docs/03 | docs/04 | api-doc (muc) | AGENTS.md (muc) |
+| Bảng dữ liệu bị tác động | docs/01 | docs/02 | docs/03 | docs/04 | api-doc (mục) | AGENTS.md / Rules liên quan |
 |---|---|---|---|---|---|---|
-| users / user_roles | - | US-001..010 | ERD, muc 1 (Users) | - | 6, 7 | #5, #46.4 |
-| auth_accounts | - | US-001 | ERD | - | 6 | #5, #46.3 |
-| addresses | - | BR-Address | ERD, muc 6 | - | 8 | #5, #12, #46.5, #46.6 |
-| stores | - | US-Store | ERD, muc 7 | - | 9, 10 | #5, #46.6 |
-| categories | - | US-006 | ERD | - | 11, 12 | #5, #46.7 |
-| products / product_variants | M1 | US-011..015 | ERD, muc 12-13 | - | 13, 14 | #5, #14, #46.8 |
-| flash_sale_slots / flash_sale_items | M2 | US-020..030 | ERD, muc 14-15, Redis keys, Lua | Kien truc Flash Sale | 15, 16, 17, 18 | #5, #13-19, #46.10 |
-| vouchers / voucher_usages | - | US-040 | ERD, muc 19 | - | 22, 23, 24 | #5, #22, #46.13 |
-| orders / order_items | M2 | US-035 | ERD, muc 16-17, Snapshots | Saga/compensation | 20, 21 | #5, #11, #23, #46.12 |
-| payments | - | US-038 | ERD, muc 18 | - | (chua co) | #5, #20 |
-| wallets / wallet_transactions | - | US-039 | ERD, muc 20 | - | (chua co) | #5, #21 |
-| carts / cart_items | - | US-033 | ERD | - | 19 | #5, #46.11 |
-| product_reviews | - | US-050 | ERD, muc 21 | - | (chua co) | #5, #24 |
-| images (V3+) | - | US-Image | ERD, muc 22 (Images) | - | 28, muc 1 | #5, #25, #46.9 |
-| permissions / permission_groups / group_permissions | - | US-002 | ERD | - | 27 | #5, #30, #46.2 |
-| roles | - | US-002 | ERD | - | 27 | #5, #30, #46.2 |
+| `users` / `user_roles` | - | US-001..010 | ERD, mục 1 (Users) | - | 6, 7 | `43-endpoints-auth-user-store.mdc` |
+| `auth_accounts` | - | US-001 | ERD | - | 6 | `43-endpoints-auth-user-store.mdc` |
+| `addresses` | - | BR-Address | ERD, mục 6 | - | 8 | `12-address-ownership.mdc`, `43-endpoints...` |
+| `stores` | - | US-Store | ERD, mục 7 | - | 9, 10 | `43-endpoints-auth-user-store.mdc` |
+| `categories` | - | US-006 | ERD | - | 11, 12 | `44-endpoints-product-image.mdc` |
+| `products` / `product_variants` | M1 | US-011..015 | ERD, mục 12-13 | - | 13, 14 | `14-flashsale-stock.mdc`, `44-endpoints...` |
+| `flash_sale_slots` / `flash_sale_items` | M2 | US-020..030 | ERD, mục 14-15, Redis keys, Lua | Kiến trúc Flash Sale | 15, 16, 17, 18 | `13-19-flashsale-*.mdc`, `45-endpoints...` |
+| `vouchers` / `voucher_usages` | - | US-040 | ERD, mục 19 | - | 22, 23, 24 | `37-voucher.mdc`, `46-endpoints...` |
+| `orders` / `order_items` | M2 | US-035 | ERD, mục 16-17, Snapshots | Luồng xử lý đơn hàng | 20, 21 | `11-multi-vendor.mdc`, `38-order-snapshots.mdc` |
+| `payments` | - | US-038 | ERD, mục 18 | - | Mục thanh toán | `35-payment.mdc`, `47-endpoints...` |
+| `wallets` / `wallet_transactions` | - | US-039 | ERD, mục 20 | - | Mục ví điện tử | `36-wallet.mdc`, `47-endpoints...` |
+| `carts` / `cart_items` | - | US-033 | ERD | - | 19 | `46-endpoints-cart-order-voucher-banner.mdc` |
+| `product_reviews` | - | US-050 | ERD, mục 21 | - | Mục đánh giá | `39-review.mdc`, `47-endpoints...` |
+| `images` (từ V3 trở đi) | - | US-Image | ERD, mục 22 (Images) | - | 28, mục 1 | `40-image-module.mdc`, `44-endpoints...` |
+| Phân quyền (`permissions`, `roles`, v.v.) | - | US-002 | ERD | - | 27 | `22-security.mdc` |
 
-> Ghi chu: cot "US-XXX" / "BR-XXX" la reference ID trong docs/02_requirement_analysis.md. Khi migration moi khong thuoc ID co san -> them ID moi truoc khi sua docs.
+## Quy trình Xử lý khi Thay đổi Migration
 
-## Ma tran theo file docs
-
-| File docs | Trigger phai sync | Lenh kiem tra nhanh |
-|---|---|---|
-| docs/01_project_planning.md | Doi milestone M1/M2/M3, thay doi pham vi | grep -n "M[123]\|Tuan" docs/01_project_planning.md |
-| docs/02_requirement_analysis.md | Them/sua US-XXX, BR-XXX | Review muc tuong ung |
-| docs/03_system_design.md | Them/sua migration, doi ERD, doi Redis key | grep -n "CREATE TABLE\|flash_sale:\|reserve_stock" docs/03_system_design.md |
-| docs/04_architecture_analysis.md | Doi kien truc lon (Saga, pattern moi) | Review toan file |
-| docs/api/api-document.md | Them/sua endpoint, doi response, doi error code | grep -n "/api/v1/\|status.*[0-9]{3}" docs/api/api-document.md |
-| docs/flashsale_order_contract.md | Doi FlashSaleOrderPort interface | So sanh voi flashsale/port/*.java |
-| AGENTS.md | Them rule, doi convention, mo rong API list | So sanh voi code moi nhat |
-
-## Quy trinh sync moi lan doi migration
-
-1. Tao V{n}__*.sql.
-2. Tra bang tren -> list file docs bi anh huong.
-3. grep noi dung lien quan trong tung file docs.
-4. Liet ke diff can sua (KHONG sua ngay).
-5. Bao user list file + diff preview.
-6. User duyet -> moi sua docs.
-7. Commit code + docs trong CUNG PR.
-   - Uu tien: 1 commit "feat: ..." + 1 commit "docs: sync ...".
-   - Co the gop 1 commit neu thay doi nho.
-8. Cap nhat PR description theo checklist docs-sync.mdc.
-
-## Anti-pattern
-
-- Sua migration + implement code NHUNG quen update docs.
-- Tao migration moi, hoi user "co can update docs khong?" - **PHAI** chu dong de xuat dua tren bang tren.
-- Sua docs ma khong reference code hien tai.
-- Commit docs rieng nhieu ngay sau commit code.
-- Copy-paste JSON example cu (vd co imageUrl cu) khi da migrate sang images (V3/V4).
-- Sua docs/ khong bao user -> vi pham source-of-truth.mdc.
-
-## Vi du cu the
-
-### Case 1: Migration V5 them cot orders.coupon_code VARCHAR(50)
-
-1. Tra bang -> orders / order_items anh huong: docs/03_system_design.md (muc 16), docs/api/api-document.md (muc 20), AGENTS.md (muc #11, #23, #46.12) + 38-order-snapshots.mdc.
-2. docs/02_requirement_analysis.md can them BR-Coupon.
-3. docs/01_project_planning.md khong lien quan -> N/A.
-4. Diff preview:
-   - 03_system_design.md: them dong trong bang orders.
-   - api-document.md: them field couponCode trong OrderResponse + them BR-XXX vao muc "Business Rule".
-   - 38-order-snapshots.mdc: cap nhat neu snapshot them field.
-5. Bao user -> user duyet -> commit.
-
-### Case 2: Migration V6 them bang notifications
-
-1. Tra bang -> bang moi khong co san -> **them row moi** vao bang.
-2. docs/03_system_design.md -> them ERD, them muc "Bang X".
-3. docs/api/api-document.md -> them endpoint muc moi (vd muc 29).
-4. AGENTS.md -> them module moi vao muc #5 (neu module moi) + endpoint vao muc #46.
-5. Bao user -> duyet -> commit.
+1. Tạo file migration mới: `V{n}__{mô_tả}.sql`.
+2. Tra cứu bảng ma trận ở trên -> lập danh sách các file tài liệu thiết kế bị ảnh hưởng.
+3. Chạy lệnh grep để rà soát toàn bộ các vị trí xuất hiện nội dung liên quan trong các tài liệu.
+4. Lập bản tóm tắt các điểm khác biệt cần chỉnh sửa (tuyệt đối KHÔNG sửa ngay vào tài liệu).
+5. Trình bày danh sách file và nội dung thay đổi dự kiến cho người dùng.
+6. Sau khi nhận được sự phê duyệt của người dùng -> tiến hành cập nhật tài liệu.
+7. Đưa cả file mã nguồn, file migration và file tài liệu vào chung một commit hoặc PR thống nhất.

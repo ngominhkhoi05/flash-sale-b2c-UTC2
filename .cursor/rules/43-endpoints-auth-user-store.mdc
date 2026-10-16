@@ -1,72 +1,48 @@
 ---
-description: Auth, User, Store endpoints - contract cho frontend (Auth/User/Address/Store/Warehouse).
+description: Hợp đồng API các module Xác thực, Người dùng, Địa chỉ và Cửa hàng (Auth, User, Address, Store).
 globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/{auth,user,store}/**/controller/**/*.{java,kt}
 ---
 
-# Auth, User, Store Endpoints
+# Hợp đồng API: Auth, User, Store
 
-> Phan nay la **API contract** cho frontend. Moi thay doi endpoint phai cap nhat docs/api/api-document.md (sau khi user duyet) + muc nay.
+> Phần này là **Hợp đồng API (API Contract)** chuẩn dành cho phía Frontend. Mọi thay đổi về URL hoặc cấu trúc dữ liệu đều phải được cập nhật vào `docs/api/api-document.md` và mục này.
 
-## 46.1 JWT Configuration & Security
+## Module Xác thực (Auth) - `/api/v1/auth`
 
-- Header format: Authorization: Bearer access_token.
-- Signing Algorithm: HMAC-SHA256 (HS256).
-- Secret requirements: Toi thieu 32 ky tu (256-bit). Cau hinh qua jwt.secret (env JWT_SECRET).
-- Profile local: secret 64 ky tu trong application-local.yaml.
-- Expiration:
-  - Access Token: jwt.expiration-ms (mac dinh 3,600,000 ms = 1 gio).
-  - Refresh Token: jwt.refresh-expiration-ms (mac dinh 604,800,000 ms = 7 ngay).
-- Stateless: JwtAuthenticationFilter, 401 invalid/expired, 403 thieu quyen.
-
-## 46.2 RBAC Authorities
-
-- Role Authority: ROLE_<ROLE_NAME> (vd ROLE_BUYER, ROLE_SELLER, ROLE_ADMIN).
-- Permission Authority: Atomic code (vd order:create, product:read).
-- Feature Flag: Chi cap permission neu permissions.is_active == true.
-- Principal: CustomUserDetails chua AuthAccount (id, username, email). Lay ID qua customUserDetails.getId().
-
-## 46.3 Auth Endpoints (/api/v1/auth)
-
-| Method | Endpoint | Access | Mo ta |
+| Phương thức | Đường dẫn | Quyền truy cập | Mô tả chi tiết |
 |---|---|---|---|
-| POST | /api/v1/auth/register | Public | Dang ky Buyer (username, email, password, fullName, phoneNumber) |
-| POST | /api/v1/auth/login | Public | Login (usernameOrEmail + password) -> access/refresh token + user info + roles |
-| POST | /api/v1/auth/refresh-token | Public | Cap lai accessToken tu refreshToken |
-| POST | /api/v1/auth/logout | Public | Logout client-side |
+| POST | `/api/v1/auth/register` | Công khai | Đăng ký tài khoản khách hàng mới |
+| POST | `/api/v1/auth/login` | Công khai | Đăng nhập bằng tài khoản và mật khẩu |
+| POST | `/api/v1/auth/refresh` | Công khai | Cấp lại Access Token mới từ Refresh Token |
+| POST | `/api/v1/auth/logout` | Đã xác thực | Đăng xuất, hủy bỏ phiên làm việc |
+| GET  | `/api/v1/auth/oauth2/google/url` | Công khai | Lấy đường dẫn URL chuyển hướng đăng nhập Google |
+| POST | `/api/v1/auth/oauth2/google/callback` | Công khai | Tiếp nhận mã ủy quyền từ Google OAuth2 và xử lý đăng nhập |
 
-## 46.4 User Profile (/api/v1/users)
+## Module Người dùng (User) - `/api/v1/users`
 
-| Method | Endpoint | Access | Mo ta |
+| Phương thức | Đường dẫn | Quyền truy cập | Mô tả chi tiết |
 |---|---|---|---|
-| GET | /api/v1/users/me | Authenticated | Profile hien tai |
-| PUT | /api/v1/users/me | Authenticated | Cap nhat profile (fullName, phoneNumber, avatarUrl) |
-| PUT | /api/v1/users/me/change-password | Authenticated | Doi mat khau (BCrypt check old) |
+| GET | `/api/v1/users/me` | Đã xác thực | Lấy thông tin hồ sơ của người dùng hiện tại |
+| PUT | `/api/v1/users/me` | Đã xác thực | Cập nhật thông tin hồ sơ cá nhân |
+| PUT | `/api/v1/users/me/password` | Đã xác thực | Đổi mật khẩu tài khoản |
 
-## 46.5 User Address (/api/v1/users/addresses)
+## Sổ Địa chỉ (Address) - `/api/v1/addresses`
 
-| Method | Endpoint | Access | Mo ta |
+| Phương thức | Đường dẫn | Quyền truy cập | Mô tả chi tiết |
 |---|---|---|---|
-| GET | /api/v1/users/addresses | Authenticated | List address cua toi |
-| POST | /api/v1/users/addresses | Authenticated | Tao address |
-| GET | /api/v1/users/addresses/{id} | Owner | Chi tiet (ownership check) |
-| PUT | /api/v1/users/addresses/{id} | Owner | Cap nhat (ownership check) |
-| DELETE | /api/v1/users/addresses/{id} | Owner | Xoa (ownership check) |
-| PATCH | /api/v1/users/addresses/{id}/default | Owner | Set default (reset cac cai khac) |
+| GET    | `/api/v1/addresses` | Đã xác thực | Danh sách địa chỉ của người dùng hiện tại |
+| POST   | `/api/v1/addresses` | Đã xác thực | Thêm mới địa chỉ nhận hàng |
+| PUT    | `/api/v1/addresses/{id}` | Đã xác thực | Cập nhật thông tin địa chỉ (kiểm tra quyền sở hữu) |
+| DELETE | `/api/v1/addresses/{id}` | Đã xác thực | Xóa địa chỉ (kiểm tra quyền sở hữu) |
+| PATCH  | `/api/v1/addresses/{id}/default` | Đã xác thực | Đặt làm địa chỉ giao hàng mặc định |
 
-## 46.6 Store & Warehouse Address (/api/v1/stores & /api/v1/admin/stores)
+## Module Cửa hàng (Store) - `/api/v1/stores`
 
-| Method | Endpoint | Access | Mo ta |
+| Phương thức | Đường dẫn | Quyền truy cập | Mô tả chi tiết |
 |---|---|---|---|
-| POST | /api/v1/stores | Authenticated | Tao Store (status PENDING, tier NORMAL, tao Wallet 1-1) |
-| GET | /api/v1/stores/me | Seller | Store cua toi |
-| PUT | /api/v1/stores/me | Seller | Cap nhat Store |
-| GET | /api/v1/stores/sidebar/summary | Seller | Tong hop metrics cho sidebar dashboard |
-| GET | /api/v1/stores/{id} | Public | Store public |
-| PATCH | /api/v1/admin/stores/{id}/status | Admin | Duyet/Khoa. APPROVED -> tu gan ROLE_SELLER |
-| GET | /api/v1/stores/me/addresses | Seller | List kho |
-| POST | /api/v1/stores/me/addresses | Seller | Tao kho (XOR: user=null) |
-| PUT | /api/v1/stores/me/addresses/{id} | Seller | Cap nhat kho |
-| DELETE | /api/v1/stores/me/addresses/{id} | Seller | Xoa kho |
-| PATCH | /api/v1/stores/me/addresses/{id}/default | Seller | Set kho mac dinh |
-
-> V8 fields: Store.tier (NORMAL, OFFICIAL_MALL, PREFERRED) + Store.lastActiveAt (Instant, nullable) - dung cho Store Extended Response (Subplan 5).
+| POST | `/api/v1/stores` | Đã xác thực | Đăng ký mở cửa hàng mới (chờ duyệt) |
+| GET  | `/api/v1/stores/{id}` | Công khai | Xem thông tin công khai của một cửa hàng |
+| GET  | `/api/v1/seller/stores/me` | Người bán | Lấy thông tin cửa hàng của người bán hiện tại |
+| PUT  | `/api/v1/seller/stores/me` | Người bán | Cập nhật thông tin cửa hàng |
+| GET  | `/api/v1/admin/stores` | Quản trị viên | Danh sách toàn bộ cửa hàng (phân trang, lọc trạng thái) |
+| PATCH| `/api/v1/admin/stores/{id}/status` | Quản trị viên | Phê duyệt hoặc khóa hoạt động của cửa hàng |

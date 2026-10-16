@@ -1,50 +1,34 @@
 ---
-description: Flash Sale endpoints - Admin/Seller/Public + reservation flow.
+description: Hợp đồng API module Flash Sale - Quản trị khung giờ, đăng ký mặt hàng của Người bán và luồng đặt chỗ của Người mua.
 globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/flashsale/**/controller/**/*.{java,kt}
 ---
 
-# Flash Sale Endpoints
+# Hợp đồng API: Flash Sale
 
-> Phan nay la **API contract** cho frontend. Moi thay doi endpoint phai cap nhat docs/api/api-document.md (sau khi user duyet) + muc nay.
+> Phần này là **Hợp đồng API (API Contract)** chuẩn dành cho phía Frontend.
 
-## Boundary rule
+## Phía Khách hàng (Buyer / Public)
 
-- Chi module flashsale ghi flash sale domain.
-- Tich hop order qua FlashSaleOrderPort (xem flashsale-architecture.mdc).
-
-## Concurrency Architecture
-
-- Lua script reserve_stock.lua - key flash_sale:stock:{itemId} + flash_sale:user_limit:{slotId}:{userId}:{itemId}.
-- Pluggable StockReservationStrategy (Lua mac dinh, Redisson optional) - xem concurrency.mdc.
-- Dual-write compensation: Redis rollback (INCRBY stock, DECRBY user_limit) + DB (replenishAvailableStockConditionally) - xem flashsale-rollback.mdc.
-
-## Admin (/api/v1/admin/flash-sales)
-
-| Method | Endpoint | Access | Mo ta |
+| Phương thức | Đường dẫn | Quyền truy cập | Mô tả chi tiết |
 |---|---|---|---|
-| POST | /api/v1/admin/flash-sales/slots | Admin | Tao slot (chong overlap) |
-| PUT | /api/v1/admin/flash-sales/slots/{id} | Admin | Cap nhat slot (chan neu ENDED, check overlap) |
-| GET | /api/v1/admin/flash-sales/slots/{id} | Admin | Chi tiet slot |
-| GET | /api/v1/admin/flash-sales/slots | Admin | List slot |
-| PATCH | /api/v1/admin/flash-sales/items/{id}/approve | Admin | Duyet SKU, tru kho goc atomic |
-| POST | /api/v1/admin/flash-sales/slots/{id}/pre-warm | Admin | Pre-warm Redis (SETNX, idempotent, tinh pending) |
+| GET  | `/api/v1/flash-sales/slots` | Công khai | Danh sách các khung giờ Flash Sale (hôm nay / sắp tới) |
+| GET  | `/api/v1/flash-sales/slots/{slotId}/items` | Công khai | Danh sách sản phẩm Flash Sale trong khung giờ (phân trang) |
+| GET  | `/api/v1/flash-sales/items/{itemId}` | Công khai | Chi tiết sản phẩm Flash Sale, giá ưu đãi và số lượng |
+| POST | `/api/v1/flash-sales/reservations` | Đã xác thực | Giữ chỗ tồn kho trước khi thanh toán (chạy qua Lua script) |
 
-## Seller (/api/v1/seller/flash-sales)
+## Phía Người bán (Seller) - Quản lý Mặt hàng Đăng ký
 
-| Method | Endpoint | Access | Mo ta |
+| Phương thức | Đường dẫn | Quyền truy cập | Mô tả chi tiết |
 |---|---|---|---|
-| POST | /api/v1/seller/flash-sales/items | Seller | Dang ky SKU (flash_sale_price < original_price, allocated_stock <= stock_quantity) |
+| GET    | `/api/v1/seller/flash-sales/items` | Người bán | Danh sách sản phẩm của cửa hàng đã đăng ký Flash Sale |
+| POST   | `/api/v1/seller/flash-sales/items` | Người bán | Đăng ký biến thể sản phẩm vào một khung giờ Flash Sale |
+| DELETE | `/api/v1/seller/flash-sales/items/{id}` | Người bán | Hủy đăng ký sản phẩm khỏi phiên (chỉ khi chưa kích hoạt) |
 
-## Public & Reservation (/api/v1/flash-sales)
+## Phía Quản trị viên (Admin) - Quản lý Phiên & Khung giờ
 
-| Method | Endpoint | Access | Mo ta |
+| Phương thức | Đường dẫn | Quyền truy cập | Mô tả chi tiết |
 |---|---|---|---|
-| GET | /api/v1/flash-sales/slots | Public | List slot dang/sap dien ra + stock realtime tu Redis |
-| POST | /api/v1/flash-sales/reservations | Authenticated | Reservation voi Idempotency-Key (xem idempotency.mdc). Lua atomic + tao Order PENDING_PAYMENT qua FlashSaleOrderPort |
-
-## Khi implement
-
-- Endpoint Contract phai duoc liet ke trong docs/api/api-document.md.
-- Tra migration-impact-matrix.mdc neu co migration moi.
-- Viet test cho service (Lua atomic, rollback idempotent, oversell prevention).
-- WebSocket event: xem websocket.mdc.
+| POST | `/api/v1/admin/flash-sales/slots` | Quản trị viên | Tạo mới một khung giờ Flash Sale |
+| PUT  | `/api/v1/admin/flash-sales/slots/{id}` | Quản trị viên | Điều chỉnh khung giờ Flash Sale |
+| PATCH| `/api/v1/admin/flash-sales/items/{id}/status` | Quản trị viên | Phê duyệt hoặc từ chối sản phẩm đăng ký tham gia |
+| POST | `/api/v1/admin/flash-sales/slots/{id}/pre-warm` | Quản trị viên | Kích hoạt nạp dữ liệu tồn kho trước lên Redis (Pre-warm) |

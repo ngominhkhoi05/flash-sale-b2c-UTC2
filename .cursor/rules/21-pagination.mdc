@@ -1,13 +1,13 @@
 ---
-description: PageResponse chuan, mac dinh page=0 size=20 MAX=100, khong load toan bo bang.
+description: Phân trang chuẩn với PageResponse, mặc định page=0, size=20, MAX=100, cấm nạp toàn bộ bảng vào bộ nhớ.
 globs: **/controller/**, **/repository/**
 ---
 
-# Pagination
+# Quy tắc Phân trang (Pagination)
 
-- List API co du lieu lon **phai** ho tro pagination.
-- Dung PageResponse<T> chuan (xem api-conventions.mdc).
-- Mac dinh: page=0, size=20, MAX_PAGE_SIZE=100.
-- Sort mac dinh: createdAt DESC (hoac theo nghiep vu tung entity).
-- **Khong load** toan bo bang vao memory neu khong can.
-- Aggregate (count, sum) dung DB function, khong load + sum o Java.
+- Mọi API trả về danh sách có khả năng chứa tập dữ liệu lớn **bắt buộc phải** hỗ trợ phân trang.
+- Sử dụng class `PageResponse<T>` chuẩn của dự án (xem `07-api-conventions.mdc`).
+- Giá trị mặc định: `page = 0`, `size = 20`, giới hạn tối đa `MAX_PAGE_SIZE = 100`.
+- Thứ tự sắp xếp mặc định: `createdAt DESC` (hoặc theo đặc thù nghiệp vụ của từng thực thể).
+- **Tuyệt đối không nạp toàn bộ dữ liệu của một bảng** vào bộ nhớ nếu không có lý do bất khả kháng.
+- Các phép tính toán tổng hợp (như `count`, `sum`) bắt buộc phải dùng hàm tổng hợp của DB, không được nạp toàn bộ danh sách lên Java để tính toán.

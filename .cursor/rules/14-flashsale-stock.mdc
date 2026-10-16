@@ -1,24 +1,26 @@
 ---
-description: Flash Sale 3 muc stock, invariants, optimistic lock.
+description: Mô hình 3 mức tồn kho trong Flash Sale, bất biến dữ liệu (invariants) và khóa lạc quan.
 globs: flashsale/**, product/**
 ---
 
-# Flash Sale Stock Model
+# Mô hình Tồn kho Flash Sale (Flash Sale Stock Model)
 
-Co the ton tai 3 muc stock:
+Hệ thống tồn tại đồng thời 3 mức tồn kho:
 
-\\	ext
-product_variants.stock_quantity     # base stock (seller quan ly)
-flash_sale_items.allocated_stock    # da allocate cho slot
-flash_sale_items.available_stock    # con ban duoc trong slot (Redis mirror)
-\
-Day la **operational/materialized state** phuc vu Flash Sale va khong tu dong duoc xem la vi pham 3NF.
+```text
+product_variants.stock_quantity     # Tồn kho gốc của sản phẩm (Người bán quản lý)
+flash_sale_items.allocated_stock    # Số lượng phân bổ cho phiên Flash Sale
+flash_sale_items.available_stock    # Số lượng còn có thể bán trong phiên (đồng bộ với Redis)
+```
 
-## Invariants
+Đây là **trạng thái vận hành được vật chất hóa (operational/materialized state)** phục vụ riêng cho Flash Sale và không bị xem là vi phạm chuẩn 3NF.
 
-\\	ext
+## Các bất biến dữ liệu (Invariants)
+
+```text
 0 <= available_stock <= allocated_stock
-allocated_stock <= product_variants.stock_quantity (tai thoi diem approve)
-\
-- Seller **khong duoc giam** base stock xuong duoi phan stock dang allocate cho Flash Sale dang ACTIVE.
-- Optimistic lock @Version tren ProductVariant bao ve update dong thoi.
+allocated_stock <= product_variants.stock_quantity (tại thời điểm phê duyệt)
+```
+
+- Người bán (Seller) **không được phép giảm** tồn kho gốc của sản phẩm xuống thấp hơn phần tồn kho đang phân bổ cho các phiên Flash Sale đang ở trạng thái `ACTIVE`.
+- Sử dụng Khóa lạc quan (Optimistic Lock) `@Version` trên `ProductVariant` để bảo vệ chống cập nhật đồng thời gây xung đột dữ liệu.

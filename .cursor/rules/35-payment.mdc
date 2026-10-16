@@ -1,14 +1,14 @@
 ---
-description: Payment module rules - invariant, callback idempotency, endpoints placeholder.
+description: Quy tắc module Thanh toán (Payment) - Bất biến dữ liệu, tính idempotent của webhook callback và danh sách endpoint.
 globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/payment/**/*.{java,kt}
 ---
 
-# Payment
+# Module Thanh toán (Payment)
 
-## Invariant
+## Các bất biến dữ liệu (Invariants)
 
-- Mot Order **KHONG duoc co nhieu payment SUCCESS**.
-- Partial unique index:
+- Một Đơn hàng (Order) **TUYỆT ĐỐI KHÔNG được có nhiều hơn một giao dịch thanh toán thành công (SUCCESS)**.
+- Ràng buộc Partial Unique Index trong cơ sở dữ liệu:
 
 ```sql
 CREATE UNIQUE INDEX uq_one_success_payment_per_order
@@ -16,32 +16,32 @@ ON payments(order_id)
 WHERE status = 'SUCCESS';
 ```
 
-- transaction_code phai **UNIQUE** (constraint DB).
+- Mã giao dịch từ cổng thanh toán `transaction_code` bắt buộc phải là **UNIQUE** trong toàn hệ thống.
 
-## Quy tac
+## Quy tắc xử lý Callback / Webhook
 
-- Payment callback **phai idempotent** (xem idempotency.mdc).
-- Service nhan callback -> check payment.status hien tai:
-  - Neu da SUCCESS -> return ngay, KHONG xu ly lai.
-  - Neu PENDING -> chuyen SUCCESS + trigger cong wallet/giai phong stock (neu co).
-- Tat ca transition status deu ghi log + audit.
-- Su dung Redis marker de tranh double processing khi retry.
+- Endpoint tiếp nhận callback từ cổng thanh toán **bắt buộc phải có tính Idempotent** (xem chi tiết tại `25-idempotency.mdc`).
+- Khi Service nhận webhook callback -> kiểm tra trạng thái hiện tại của bản ghi `Payment`:
+  - Nếu trạng thái đã là `SUCCESS` -> trả về kết quả thành công ngay lập tức, **tuyệt đối không xử lý lại**.
+  - Nếu trạng thái là `PENDING` -> cập nhật sang `SUCCESS`, đồng thời kích hoạt luồng cộng tiền ví / cập nhật trạng thái đơn hàng.
+- Mọi lần chuyển đổi trạng thái giao dịch đều phải ghi log chi tiết để phục vụ đối soát và kiểm toán (audit).
+- Sử dụng Redis marker để ngăn chặn việc xử lý đồng thời khi cổng thanh toán gọi lại nhiều lần liên tiếp.
 
-## Transaction boundary
+## Ranh giới Giao dịch (Transaction Boundary)
 
-- @Transactional o service method xu ly callback.
-- KHONG de callback chay nhieu lan trong cung request (idempotency-key + status check).
+- Sử dụng `@Transactional` tại phương thức service xử lý webhook callback.
+- Không để callback chạy lặp lại nhiều lần trong cùng một khoảng thời gian ngắn (kết hợp `Idempotency-Key` và kiểm tra trạng thái hiện tại).
 
-## Endpoint (placeholder, se cap nhat khi implement)
+## Danh sách Endpoint (Khung dự thảo, sẽ cập nhật khi hoàn thiện)
 
-- POST /api/v1/payments/{orderCode} - Buyer tao payment intent.
-- POST /api/v1/payments/callback - Gateway callback (public, signed).
-- GET /api/v1/payments/{id} - Buyer xem payment.
+- `POST /api/v1/payments/{orderCode}`: Người mua tạo yêu cầu thanh toán (Payment Intent).
+- `POST /api/v1/payments/callback`: Tiếp nhận webhook callback từ cổng thanh toán (công khai, xác thực bằng chữ ký HMAC).
+- `GET /api/v1/payments/{id}`: Người mua xem chi tiết giao dịch thanh toán.
 
-> Hien chua co PaymentController - module payment/controller/ chi co .gitkeep. Khi implement phai tuan thu rule tren va bo sung API list vao endpoints-payment-wallet-review.mdc.
+> Lưu ý: Hiện tại `PaymentController` đang ở dạng khung dự thảo. Khi triển khai chính thức, bắt buộc phải tuân thủ nghiêm ngặt các quy tắc trên và cập nhật danh sách API vào `47-endpoints-payment-wallet-review.mdc`.
 
-## Khi implement
+## Khi triển khai mã nguồn
 
-- Endpoint Contract phai duoc liet ke trong docs/api/api-document.md.
-- Tra migration-impact-matrix.mdc neu co migration moi.
-- Viet test cho service (callback handler, idempotency).
+- Hợp đồng giao tiếp (Contract) của endpoint phải được đồng bộ vào file `docs/api/api-document.md`.
+- Tra cứu bảng `42-migration-impact-matrix.mdc` nếu có tạo bản migration mới cho cơ sở dữ liệu.
+- Bắt buộc viết bài kiểm thử cho tầng Service (xử lý callback, tính idempotent, chống cộng tiền trùng lặp).

@@ -1,67 +1,42 @@
 ---
-description: Cascade delete - quy tac xoa cascade giua cac entity (Owner + Image, Cart + CartItem, Order + OrderItem).
+description: Quy tắc xóa liên hoàn (Cascade Delete) - Đảm bảo tính toàn vẹn giữa các thực thể liên quan và dọn dẹp tài nguyên rác.
 globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/**/entity/**/*.{java,kt}
 ---
 
-# Cascade Delete
+# Quy tắc Xóa Liên hoàn (Cascade Delete)
 
-Khi 1 entity owner bi xoa, cac entity lien quan phai duoc xoa theo cascade.
+Khi một thực thể chủ quản (Owner Entity) bị xóa bỏ khỏi hệ thống, toàn bộ các thực thể con phụ thuộc bắt buộc phải được xử lý xóa theo cơ chế liên hoàn (Cascade) nhằm tránh sinh ra các bản ghi mồ côi (orphan records).
 
-## Pattern
+## Mô hình Thiết kế
 
-- Su dung JPA cascade + database FK ON DELETE CASCADE.
-- Tranh orphan record bang cach:
-  - Set orphanRemoval = true cho quan he parent-child (vd Cart -> CartItem).
-  - Dung database FK constraint voi ON DELETE CASCADE.
-  - Su dung Spring Event (@PreRemove, ApplicationEvent) de xoa resource ngoai DB (vd Cloudinary image).
+- Kết hợp cả hai tầng bảo vệ: Cơ chế JPA Cascade kết hợp với ràng buộc khóa ngoại cơ sở dữ liệu `ON DELETE CASCADE`.
+- Ngăn ngừa bản ghi mồ côi bằng các biện pháp:
+  - Thiết lập thuộc tính `orphanRemoval = true` cho các quan hệ cha - con một - nhiều (ví dụ: `Cart` -> `CartItem`).
+  - Thiết lập ràng buộc khóa ngoại cấp Database với thuộc tính `ON DELETE CASCADE`.
+  - Sử dụng Sự kiện Spring (`@PreRemove`, `ApplicationEvent`) để tiến hành giải phóng các tài nguyên bên ngoài DB (ví dụ: xóa file ảnh vật lý trên Cloudinary).
 
-## Cac quan he cascade
+## Các mối quan hệ Cascade Cốt lõi
 
-### User -> Address, Cart, Image (USER)
+### 1. User -> Address, Cart, Image (USER)
+- Khi Người dùng (User) bị xóa: Toàn bộ địa chỉ liên kết (`addresses.user_id`), giỏ hàng (`carts.user_id`) và hình ảnh (`owner_type = USER`) bắt buộc phải bị xóa theo cascade.
+- Ví điện tử (`Wallet`) chỉ được xóa nếu chưa từng phát sinh bất kỳ giao dịch nào. Nếu đã có lịch sử dòng tiền -> áp dụng cơ chế Xóa mềm (Soft Delete) đối với User, tuyệt đối không xóa cứng ví.
 
-- Khi user bi xoa: addresses (user_id), carts (user_id), images (owner_type=USER, owner_id) phai bi xoa cascade.
-- Wallet bi xoa theo (neu khong con lich su giao dich). Neu con lich su -> soft delete user, khong xoa cung.
+### 2. Store -> Product, WarehouseAddress, Image (STORE), Voucher, Wallet
+- Khi Cửa hàng (Store) bị đóng hoặc xóa: Sản phẩm, địa chỉ kho hàng, hình ảnh đại diện cửa hàng và voucher cửa hàng phải bị xóa theo cascade.
+- Sản phẩm -> FlashSaleItem: Chỉ cascade khi chưa từng có đơn hàng nào tham chiếu tới.
+- Sản phẩm -> Image (PRODUCT, VARIANT): Tự động xóa liên hoàn toàn bộ hình ảnh.
 
-### Store -> Product, WarehouseAddress, Image (STORE), Voucher (store), Wallet
+### 3. Cart -> CartItem
+- Khi Giỏ hàng bị xóa: Toàn bộ các món hàng bên trong (`cart_items`) phải tự động bị xóa theo (`orphanRemoval = true`).
 
-- Khi store bi xoa (hoac soft delete): products, addresses (store_id), images, vouchers phai bi xoa cascade.
-- Product -> FlashSaleItem: chi cascade neu chua co order tham chieu.
-- Product -> Image (PRODUCT, VARIANT): cascade.
+### 4. Order -> OrderItem, Payment, VoucherUsage, WalletTransaction
+- Khi Đơn hàng bị xóa: Các chi tiết đơn hàng (`order_items`), bản ghi thanh toán (`payments`) và lịch sử dùng voucher (`voucher_usages`) phải được xử lý cascade.
+- Lưu ý: Bản ghi `WalletTransaction` **KHÔNG ĐƯỢC XÓA** để phục vụ kiểm toán tài chính - chỉ đặt `order_id = NULL` hoặc giữ nguyên làm dữ liệu lịch sử.
 
-### Cart -> CartItem
+### 5. FlashSaleSlot -> FlashSaleItem
+- Khi một khung giờ Flash Sale bị xóa: Toàn bộ các đăng ký mặt hàng bên trong (`flash_sale_items`) phải bị xóa theo cascade.
+- `FlashSaleItem` tuyệt đối không được xóa cứng nếu đã phát sinh đơn hàng tham chiếu.
 
-- Khi cart bi xoa: cart_items phai bi xoa (orphanRemoval = true).
-- Khi xoa user: cart cua user cung bi xoa cascade.
-
-### Order -> OrderItem, Payment, VoucherUsage, WalletTransaction
-
-- Khi order bi xoa: order_items, payments, voucher_usages phai bi xoa cascade.
-- WalletTransaction KHONG nen xoa (audit) - chi set order_id = NULL hoac giu lai.
-
-### FlashSaleSlot -> FlashSaleItem
-
-- Khi slot bi xoa: items phai bi xoa cascade.
-- FlashSaleItem KHONG cascade xoa neu da co order tham chieu.
-
-### Image cleanup (orphaned)
-
-- Khi owner bi xoa, image phai bi xoa ca record trong DB + file tren Cloudinary.
-- Su dung Spring Event:
-  - User/Store/Product/Variant/Review bi xoa -> publish event ImageCleanupEvent.
-  - ImageEventListener nhan event -> xoa file Cloudinary + record trong images.
-
-## Quy tac
-
-- Moi cascade deu phai duoc kiem tra 2 lop:
-  - DB level: FK ON DELETE CASCADE hoac trigger.
-  - JPA level: cascade = CascadeType.REMOVE hoac orphanRemoval = true.
-- Soft delete (status = INACTIVE) khong cascade xoa - chi an giao dien.
-- Khi hard delete, dam bao cleanup resource ngoai (Cloudinary, Redis, file).
-- Test cascade bang integration test voi Testcontainers.
-
-## Khi them entity moi
-
-- Xac dinh cac quan he cascade (vd Category -> Product khong nen cascade neu con product).
-- Cap nhat migration voi FK constraint phu hop.
-- Cap nhat Entity voi cascade attribute.
-- Viet test cascade.
+### 6. Dọn dẹp Tài nguyên Hình ảnh (Image Cleanup)
+- Khi thực thể chủ quản bị xóa, hình ảnh bắt buộc phải bị xóa đồng thời ở 2 nơi: Bản ghi trong cơ sở dữ liệu và file vật lý lưu trên đám mây Cloudinary.
+- Triển khai thông qua sự kiện Spring: Khi đối tượng bị xóa -> phát sự kiện `ImageCleanupEvent` -> `ImageEventListener` lắng nghe và gọi Cloudinary API để tiêu hủy file.

@@ -1,50 +1,50 @@
 ---
-description: Architecture layered - Controller/Service/Repository/Entity/DTO/Mapper.
+description: Quy tắc kiến trúc phân tầng - Controller / Service / Repository / Entity / DTO / Mapper.
 globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/**
 ---
 
-# Architecture Rules
+# Quy tắc Kiến trúc Phân tầng (Architecture Rules)
 
-Project su dung kien truc phan tang (layered).
+Dự án sử dụng kiến trúc phân tầng (layered architecture).
 
 ## Controller
 
-- Nhan HTTP request.
-- Validate input (Jakarta Validation).
-- Goi Service.
-- Tra HTTP response (wrap trong ApiResponse<T>).
-- **Khong chua business logic phuc tap.**
+- Tiếp nhận HTTP request.
+- Xác thực dữ liệu đầu vào (Jakarta Validation).
+- Gọi Service xử lý nghiệp vụ.
+- Trả về HTTP response (được bọc trong `ApiResponse<T>`).
+- **Tuyệt đối không chứa logic nghiệp vụ phức tạp.**
 
 ## Service
 
-- Business logic.
-- @Transactional boundary.
-- Ownership check.
-- State validation.
-- Dieu phoi Repository, Redis, external client.
-- Chi goi WS thong qua FlashSaleWsBroadcaster, **khong** goi SimpMessagingTemplate truc tiep.
+- Xử lý toàn bộ logic nghiệp vụ (business logic).
+- Ranh giới giao dịch `@Transactional`.
+- Kiểm tra quyền sở hữu tài nguyên (ownership check).
+- Xác thực trạng thái nghiệp vụ (state validation).
+- Điều phối các Repository, Redis và các client bên ngoài.
+- Chỉ gửi thông điệp WebSocket thông qua `FlashSaleWsBroadcaster`, **không** gọi trực tiếp `SimpMessagingTemplate`.
 
 ## Repository
 
-- Database access.
-- Query.
-- Lock khi thuc su can (@Lock(PESSIMISTIC_WRITE) chi cho flow can).
-- **Khong chua business logic.**
+- Truy cập cơ sở dữ liệu.
+- Truy vấn dữ liệu (query methods, JPQL).
+- Khóa dữ liệu khi thực sự cần thiết (`@Lock(LockModeType.PESSIMISTIC_WRITE)` chỉ dùng cho luồng cần thiết).
+- **Tuyệt đối không chứa logic nghiệp vụ.**
 
 ## Entity
 
-- Mapping database.
-- Quan he JPA.
-- Constraint mapping khi phu hop (@Column(nullable = false), @Enumerated).
-- **Khong dat business workflow phuc tap vao Entity.**
+- Ánh xạ bảng cơ sở dữ liệu (ORM).
+- Thiết lập các quan hệ JPA.
+- Ánh xạ ràng buộc dữ liệu phù hợp (`@Column(nullable = false)`, `@Enumerated`).
+- **Không đặt luồng xử lý nghiệp vụ phức tạp vào Entity.**
 
 ## DTO
 
-- API input/output.
-- **Khong expose Entity truc tiep** neu khong co ly do ro rang.
+- Đại diện cho dữ liệu đầu vào / đầu ra của API (Request / Response).
+- **Không để lộ trực tiếp Entity ra API** nếu không có lý do đặc biệt chính đáng.
 
 ## Mapper
 
-- MapStruct: @Mapper(componentModel = spring).
-- Mapper **phai duoc Spring quan ly** (injection qua constructor).
-- **Khong commit generated files** (*/target/generated-sources/ da co trong .gitignore).
+- Sử dụng MapStruct: `@Mapper(componentModel = "spring")`.
+- Mapper **phải do Spring quản lý** (tiêm phụ thuộc qua constructor).
+- **Không commit mã sinh tự động** (các thư mục `target/generated-sources/` hoặc `build/` đã nằm trong `.gitignore`).

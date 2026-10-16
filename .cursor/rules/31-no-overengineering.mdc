@@ -1,42 +1,21 @@
 ---
-description: No premature over-engineering - khong them microservices, kafka, saga, 2PC, CQRS, Kubernetes, message broker neu chua co yeu cau.
+description: Không thiết kế vượt quá nhu cầu (No premature over-engineering) - Cấm thêm Microservices, Kafka, Saga, 2PC, CQRS khi chưa có yêu cầu.
 globs: always
 ---
 
-# No Premature Over-Engineering
+# Không Thiết kế Vượt Nhu cầu (No Premature Over-Engineering)
 
-Khong tu y them:
+Tuyệt đối **KHÔNG** tự ý đưa vào hệ thống các thành phần sau nếu không có yêu cầu bằng văn bản cụ thể từ người dùng:
 
-- Microservices
-- Kafka
-- Saga
-- 2PC
-- CQRS
-- Event Sourcing
-- Kubernetes
-- Distributed Lock phuc tap (ngoai Redisson neu da co)
-- Message broker
-- Parent Order
-- Seller Order
-- Service mesh
+- Không phân tách thành Microservices (dự án hiện tại là kiến trúc Monolith chuẩn mực).
+- Không thêm Message Broker nặng (Kafka, RabbitMQ, ActiveMQ).
+- Không triển khai Saga Pattern hoặc Two-Phase Commit (2PC).
+- Không áp dụng kiến trúc phức tạp như CQRS hoặc Event Sourcing.
+- Không đưa vào Kubernetes, Service Mesh (Istio).
+- Không thêm các tầng trừu tượng không cần thiết chỉ vì suy đoán tương lai có thể cần.
 
-neu chua co requirement ro rang.
+## Triết lý thiết kế cốt lõi
 
-Muc tieu la he thong Flash Sale B2C co kien truc ro rang, dung nghiep vu va trien khai/test duoc trong scope do an.
-
-Khi phat hien rule nao da co trong nghiep vu, xu ly theo rule tuong ung:
-
-- Multi-vendor Order: xem multi-vendor-order.mdc (single-vendor per Order).
-- Flash Sale concurrency: xem flashsale-architecture.mdc + concurrency.mdc.
-- Image storage: xem image-module.mdc (Cloudinary, polymorphic).
-
-## Khi can them dependency moi
-
-- Them lib/dep moi -> bao user, list ly do + alternative da xet.
-- KHONG tu y bump version neu khong co ly do (xem build-toolchain.mdc).
-
-## Reference
-
-- Module structure: project-structure.mdc (15 modules + 2 common).
-- API design: api-conventions.mdc.
-- Concurrency: concurrency.mdc.
+1. **Đơn giản là trên hết (Keep It Simple)**: Một giải pháp đơn giản chạy ổn định luôn tốt hơn một giải pháp phức tạp dễ phát sinh lỗi ngầm.
+2. **Giải quyết đúng bài toán hiện tại**: Tập trung giải quyết trọn vẹn bài toán Flash Sale đồng thời cao bằng PostgreSQL + Redis + Lua Script.
+3. **Mã nguồn rõ ràng, dễ bảo trì**: Phục vụ mục đích đồ án và thực hành kỹ thuật, ưu tiên tính trong sáng và độ tin cậy của mã nguồn.

@@ -1,44 +1,46 @@
 ---
-description: Flash Sale architecture - PostgreSQL + Redis + Lua + Redisson, boundary rule giua cac module.
+description: Kiến trúc Flash Sale - PostgreSQL + Redis + Lua Script + Redisson, quy tắc ranh giới giữa các module.
 globs: flashsale/**, docs/03_system_design.md
 ---
 
-# Flash Sale Architecture
+# Kiến trúc Flash Sale (Flash Sale Architecture)
 
-Flash Sale su dung:
+Hệ thống Flash Sale kết hợp:
 
-\\	ext
-PostgreSQL    # nguon ben vung (durable source of truth)
+```text
+PostgreSQL    # Nguồn dữ liệu bền vững (durable source of truth)
 +
-Redis         # runtime stock / purchase limit
+Redis         # Nguồn dữ liệu runtime kiểm soát tồn kho / giới hạn mua
 +
-Lua Script    # atomic reservation
+Lua Script    # Đảm bảo tính nguyên tử (atomic reservation)
 +
-Redisson      # strategy du phong (so sanh/benchmark)
-\
-- Redis xu ly stock/concurrency trong thoi diem Flash Sale.
-- PostgreSQL la nguon du lieu ben vung.
-- **Khong coi Redis la database chinh** thay the PostgreSQL.
-- **Khong coi WS la source of truth** - chi la notification (xem websocket.mdc).
+Redisson      # Chiến lược phân tán dự phòng (dùng để so sánh / benchmark)
+```
 
-## Boundary rule
+- Redis chịu trách nhiệm xử lý tồn kho và đồng thời cực nhanh trong khung giờ diễn ra Flash Sale.
+- PostgreSQL là nguồn lưu trữ dữ liệu bền vững cuối cùng.
+- **Không coi Redis là cơ sở dữ liệu chính** thay thế cho PostgreSQL.
+- **Không coi WebSocket là nguồn chân lý** - WebSocket chỉ đóng vai trò kênh thông báo tức thời (xem `28-websocket.mdc`).
 
-- Module flashsale duoc phep **doc + ghi** flash sale domain tables + Redis.
-- Cac module order, store, voucher, cart, payment, wallet la **read-only** doi voi flash sale domain.
-- Tich hop giua flashsale va order thong qua interface FlashSaleOrderPort (in-module port, default impl InMemoryFlashSaleOrderPort).
+## Quy tắc ranh giới giữa các Module (Boundary Rule)
 
-## Flash Sale Item -> Order Item consistency
+- Chỉ duy nhất module `flashsale` được phép **đọc + ghi** vào các bảng thuộc domain Flash Sale và Redis keys liên quan.
+- Các module khác như `order`, `store`, `voucher`, `cart`, `payment`, `wallet` chỉ có quyền **đọc (read-only)** đối với domain Flash Sale.
+- Việc tích hợp giữa module `flashsale` và module `order` bắt buộc phải thông qua interface `FlashSaleOrderPort` (in-module port, triển khai mặc định là `InMemoryFlashSaleOrderPort`).
 
-**Khong tin tuong hoan toan cac ID Flash Sale do client gui.** Service nen load FlashSaleItem tu database roi derive:
+## Tính nhất quán giữa Flash Sale Item và Order Item
 
-\\	ext
+**Không tin tưởng hoàn toàn các ID Flash Sale do client gửi lên.** Tầng Service bắt buộc phải tải `FlashSaleItem` từ cơ sở dữ liệu và tự suy ra các thông tin:
+
+```text
 slot_id, variant_id, product_id, price (flash_sale_price)
-\
-tu FlashSaleItem (khong tu client).
+```
 
-### Quy tac
+từ `FlashSaleItem` (tuyệt đối không lấy trực tiếp từ client).
 
-- Client chi gui flash_sale_item_id (hoac slot_id + item_id).
-- Service load FlashSaleItem roi lay variant_id tu do.
-- Validate slot dang ACTIVE va nam trong [start_time, end_time].
-- Khong over-engineer bang composite FK neu Service validation du cho scope.
+### Quy tắc
+
+- Phía Client chỉ gửi `flash_sale_item_id` (hoặc `slot_id` + `item_id`).
+- Service nạp entity `FlashSaleItem` từ cơ sở dữ liệu rồi trích xuất `variant_id` từ đó.
+- Kiểm tra khung giờ (slot) đang ở trạng thái `ACTIVE` và thời gian hiện tại nằm trong khoảng `[start_time, end_time]`.
+- Tránh over-engineering bằng composite Foreign Key nếu việc kiểm tra ở tầng Service đã đáp ứng đầy đủ yêu cầu.

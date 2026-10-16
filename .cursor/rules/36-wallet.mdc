@@ -1,45 +1,45 @@
 ---
-description: Wallet module rules - audit, single entry point, balance check.
+description: Quy tắc module Ví điện tử (Wallet) - Kiểm toán dòng tiền, điểm truy cập duy nhất, kiểm tra số dư và xử lý tương tranh.
 globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/wallet/**/*.{java,kt}
 ---
 
-# Wallet
+# Module Ví điện tử (Wallet)
 
-## Audit
+## Khả năng Kiểm toán (Auditability)
 
-- Wallet transaction phai co kha nang audit.
-- KHONG sua/xoa lich su giao dich tuy tien.
+- Mọi biến động số dư trong ví đều bắt buộc phải lưu vết giao dịch đầy đủ để phục vụ kiểm toán tài chính.
+- Tuyệt đối không được phép chỉnh sửa hoặc xóa bỏ lịch sử các giao dịch ví đã diễn ra.
 
-## Field nhat quan
+## Tính nhất quán của bản ghi giao dịch (WalletTransaction)
 
-Moi WalletTransaction phai co:
+Mỗi bản ghi `WalletTransaction` bắt buộc phải lưu trữ đầy đủ các thông tin sau:
 
-- balance_after - BigDecimal, snapshot sau khi cong/tru.
-- amount - BigDecimal, duong = cong, am = tru.
-- transaction_type - enum: TOPUP, WITHDRAW, ORDER_PAYMENT, ORDER_REFUND, COMMISSION, ...
-- order_id - nullable, FK orders.
-- payment_id - nullable, FK payments.
-- status - SUCCESS / PENDING / FAILED.
-- created_at - timestamp.
+- `balance_after`: Kiểu `BigDecimal`, lưu lại ảnh chụp số dư ngay sau khi cộng hoặc trừ tiền.
+- `amount`: Kiểu `BigDecimal`, số dương đại diện cho giao dịch cộng tiền, số âm đại diện cho giao dịch trừ tiền.
+- `transaction_type`: Enum xác định loại giao dịch (`TOPUP`, `WITHDRAW`, `ORDER_PAYMENT`, `ORDER_REFUND`, `COMMISSION`, v.v.).
+- `order_id`: Có thể null, khóa ngoại tham chiếu đến bảng `orders`.
+- `payment_id`: Có thể null, khóa ngoại tham chiếu đến bảng `payments`.
+- `status`: Trạng thái xử lý (`SUCCESS`, `PENDING`, `FAILED`).
+- `created_at`: Dấu thời gian ghi nhận giao dịch.
 
-## Quy tac
+## Quy tắc vận hành
 
-- Moi transaction phai di qua 1 WalletService method duy nhat (single entry point).
-- @Transactional dam bao wallet.balance update + wallet_transactions insert atomic.
-- Kiem tra balance >= amount truoc khi tru.
-- Khi can dong bo nhieu user (vi du: 2 user settle wallet cung luc) -> su dung PESSIMISTIC_WRITE o repository.
+- Mọi biến động số dư bắt buộc phải đi qua một phương thức duy nhất tại `WalletService` (nguyên tắc điểm truy cập duy nhất - single entry point).
+- Sử dụng `@Transactional` để đảm bảo thao tác cập nhật `wallet.balance` và chèn bản ghi `wallet_transactions` diễn ra hoàn toàn nguyên tử.
+- Luôn kiểm tra điều kiện `balance >= amount` trước khi thực hiện thao tác trừ tiền trong ví.
+- Khi cần quyết toán hoặc xử lý giao dịch đồng thời giữa các người dùng -> áp dụng khóa bi quan `@Lock(LockModeType.PESSIMISTIC_WRITE)` tại Repository.
 
-## Endpoint (placeholder)
+## Danh sách Endpoint (Khung dự thảo)
 
-- GET /api/v1/wallets/me - Xem vi cua toi.
-- GET /api/v1/wallets/me/transactions - Lich su (paging).
-- POST /api/v1/wallets/me/topup - Tao yeu cau nap.
-- POST /api/v1/wallets/me/withdraw - Tao yeu cau rut.
+- `GET /api/v1/wallets/me`: Người dùng xem thông tin số dư ví cá nhân.
+- `GET /api/v1/wallets/me/transactions`: Xem lịch sử biến động số dư ví (hỗ trợ phân trang).
+- `POST /api/v1/wallets/me/topup`: Tạo yêu cầu nạp tiền vào ví.
+- `POST /api/v1/wallets/me/withdraw`: Tạo yêu cầu rút tiền từ ví.
 
-> Hien chua co WalletController - module wallet/controller/ chi co .gitkeep. Khi implement phai tuan thu rule tren va bo sung API list vao endpoints-payment-wallet-review.mdc.
+> Lưu ý: Hiện tại `WalletController` đang ở dạng khung dự thảo. Khi triển khai chính thức, bắt buộc phải tuân thủ nghiêm ngặt các quy tắc trên và cập nhật danh sách API vào `47-endpoints-payment-wallet-review.mdc`.
 
-## Khi implement
+## Khi triển khai mã nguồn
 
-- Endpoint Contract phai duoc liet ke trong docs/api/api-document.md.
-- Tra migration-impact-matrix.mdc neu co migration moi.
-- Viet test cho service (topup, withdraw, balance check, concurrent settle).
+- Hợp đồng giao tiếp (Contract) của endpoint phải được đồng bộ vào `docs/api/api-document.md`.
+- Tra cứu bảng `42-migration-impact-matrix.mdc` nếu có tạo bản migration mới.
+- Viết đầy đủ bài kiểm thử tích hợp cho tầng Service (nạp tiền, rút tiền, kiểm tra số dư, xử lý quyết toán đồng thời).

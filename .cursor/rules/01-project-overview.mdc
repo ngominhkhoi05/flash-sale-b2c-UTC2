@@ -1,46 +1,46 @@
 ---
-description: Project overview, technology stack, and current development phase.
+description: Tổng quan dự án, công nghệ sử dụng và giai đoạn phát triển hiện tại.
 globs: always
 ---
 
-# Project Overview
+# Tổng quan Dự án (Project Overview)
 
-## Project
+## Dự án
 
-**Flash Sale B2C - UTC2** - Spring Boot backend cho he thong B2C Multi-Vendor Marketplace ket hop Flash Sale, phuc vu muc dich do an.
+**Flash Sale B2C - UTC2** - Spring Boot backend cho hệ thống B2C Multi-Vendor Marketplace kết hợp Flash Sale, phục vụ mục đích đồ án.
 
-## Workspace layout
+## Bố cục Workspace (Workspace Layout)
 
-| Repo | Path | Vai tro |
+| Repo | Đường dẫn | Vai trò |
 |---|---|---|
-| flash-sale-b2c-UTC2 | d:\\flash-sale-b2c-UTC2 | **Spring Boot backend** (repo nay) |
-| flash-sale-b2c-fe | d:\\flash-sale-b2c-fe | Next.js frontend (consume API backend) |
-| deploy-b2c-utc2 | d:\\deploy-b2c-utc2 | Docker compose, nginx, scripts deploy |
+| flash-sale-b2c-UTC2 | d:\flash-sale-b2c-UTC2 | **Spring Boot backend** (repo này) |
+| flash-sale-b2c-fe | d:\flash-sale-b2c-fe | Next.js frontend (consume API backend) |
+| deploy-b2c-utc2 | d:\deploy-b2c-utc2 | Docker compose, Nginx, scripts deploy |
 
-## Technology Stack
+## Công nghệ sử dụng (Technology Stack)
 
 - Java 25
 - Spring Boot
-- Gradle (Kotlin DSL build.gradle.kts)
+- Gradle (Kotlin DSL `build.gradle.kts`)
 - PostgreSQL
-- Spring Data JPA / Hibernate (ddl-auto: validate)
+- Spring Data JPA / Hibernate (`ddl-auto: validate`)
 - Flyway
 - Spring Security
 - JWT (HS256)
 - Redis
-- Redis Lua Script + Redisson (optional strategy)
+- Redis Lua Script + Redisson (chiến lược tùy chọn)
 - MapStruct
 - Lombok
 - Springdoc OpenAPI / Swagger
-- Spring WebSocket + STOMP + SockJS (realtime)
-- Cloudinary (image storage, polymorphic)
+- Spring WebSocket + STOMP + SockJS (thời gian thực)
+- Cloudinary (lưu trữ hình ảnh, đa hình)
 
-## Current Development Phase
+## Giai đoạn phát triển hiện tại (Current Development Phase)
 
-Da hoan thanh:
-1. Planning
-2. Requirement
-3. Design
+Đã hoàn thành:
+1. Planning (Lập kế hoạch)
+2. Requirement (Phân tích yêu cầu)
+3. Design (Thiết kế hệ thống & CSDL)
 
-Dang buoc vao:
-4. Implementation
+Đang bước vào:
+4. Implementation (Triển khai mã nguồn)

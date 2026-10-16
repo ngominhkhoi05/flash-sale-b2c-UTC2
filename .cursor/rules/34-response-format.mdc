@@ -1,57 +1,56 @@
 ---
-description: Required final response format sau khi hoan thanh task (Changes/Implementation/Database/Tests/Notes/Issues).
+description: Định dạng báo cáo kết quả bắt buộc sau khi hoàn thành công việc (Changes / Implementation / Database / Tests / Notes / Issues).
 globs: always
 ---
 
-# Required Final Response Format
+# Định dạng Báo cáo Kết quả (Required Final Response Format)
 
-Sau khi hoan thanh task, bao cao theo format:
+Sau khi hoàn tất công việc, agent bắt buộc phải trình bày báo cáo theo cấu trúc chuẩn sau:
 
-## Changes
+## 1. Thay đổi Mã nguồn (Changes)
 
-- Liet ke file da tao/sua/xoa voi loai thay doi.
+- Liệt kê danh sách các file đã tạo mới, chỉnh sửa hoặc xóa bỏ kèm theo kiểu thay đổi.
 
-## Implementation
+## 2. Chi tiết Triển khai (Implementation)
 
-- Mo ta ngan gon logic / thiet ke chinh da ap dung.
-- Reference den rule lien quan neu co (vd: xem flashsale-rollback.mdc).
+- Tóm tắt ngắn gọn các giải pháp logic và quyết định thiết kế chính đã áp dụng.
+- Dẫn nguồn liên kết đến các rule liên quan nếu có (ví dụ: xem `16-flashsale-rollback.mdc`).
 
-## Database
+## 3. Cơ sở Dữ liệu (Database)
 
-- Liet ke migration moi (neu co): V{n}__description.sql, noi dung tom tat.
-- Liet ke file docs can sync (theo migration-impact-matrix.mdc).
+- Liệt kê các bản migration mới được bổ sung: `V{n}__{mô_tả}.sql` kèm tóm tắt nội dung.
+- Nêu rõ danh sách các tài liệu docs cần đồng bộ (theo bảng `42-migration-impact-matrix.mdc`).
 
-## API / WS
+## 4. Giao diện Lập trình & Sự kiện (API / WebSocket)
 
-- Endpoint moi/sua.
-- WS event moi/sua (neu co).
-- Breaking change (neu co).
+- Các endpoint API mới tạo hoặc có sửa đổi.
+- Các sự kiện WebSocket mới bổ sung (nếu có).
+- Cảnh báo về các thay đổi gây phá vỡ tương thích (breaking changes) nếu có.
 
-## Tests
+## 5. Kết quả Kiểm thử (Tests)
 
-- Java version: java -version output.
-- Command: gradlew compileJava / gradlew test / gradlew build.
-- Result: passed/failed + tong so.
-- Coverage delta (neu co cong cu do).
+- Phiên bản Java xác nhận từ lệnh `java -version`.
+- Các câu lệnh kiểm thử đã chạy: `gradlew compileJava`, `gradlew test`, `gradlew build`.
+- Kết quả thực tế: Số lượng bài test passed, failed trên tổng số test.
+- Thay đổi độ bao phủ kiểm thử (Coverage delta) nếu có công cụ đo lường.
 
-## Notes
+## 6. Ghi chú Bổ sung (Notes)
 
-- Limitation con lai.
-- Issue phat hien trong qua trinh (khong sua).
-- Tham chieu den docs can sync (theo migration-impact-matrix.mdc).
+- Các điểm hạn chế kỹ thuật hiện tại còn tồn đọng (nếu có).
+- Các vấn đề phát hiện thêm trong quá trình làm việc nhưng chưa nằm trong phạm vi xử lý.
+- Danh mục tài liệu cần cập nhật tiếp theo.
 
-## Issues
+## 7. Các lỗi phát sinh chưa giải quyết (Issues)
 
-- Neu co loi: liet ke loi cu the + file/line + ly do.
+- Nếu có lỗi phát sinh: Nêu rõ vị trí file, số dòng và nguyên nhân kỹ thuật cụ thể.
 
-## Quy tac bao cao
+## Quy tắc khi lập báo cáo
 
-- KHONG tuyen bo:
-  - "perfect"
-  - "100% safe"
-  - "0% overselling"
-  - "guaranteed"
-  - "10/10"
-- Phai mo ta chinh xac pham vi da kiem tra, ket qua test va limitation con lai.
-- Neu co thay doi docs, ghi ro file nao va ly do.
-- Trinh bay ro rang, su dung markdown structure, code block neu can.
+- **Tuyệt đối KHÔNG sử dụng các từ ngữ phóng đại** như:
+  - "Hoàn hảo tuyệt đối" (perfect)
+  - "An toàn 100%" (100% safe)
+  - "Không bao giờ bán lố 0%" (0% overselling)
+  - "Đảm bảo tuyệt đối" (guaranteed)
+  - "Đạt điểm 10/10" (10/10)
+- Phải mô tả trung thực và khách quan phạm vi đã kiểm thử, kết quả đo đạc thực tế và những giới hạn còn tồn tại.
+- Trình bày mạch lạc, sử dụng đúng cú pháp định dạng Markdown, bảng biểu và khối code khi cần thiết.

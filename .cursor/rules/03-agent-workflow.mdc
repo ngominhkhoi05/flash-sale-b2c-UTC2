@@ -1,23 +1,23 @@
 ---
-description: Agent workflow 8 buoc bat buoc khi nhan task. Applies every response.
+description: Quy trình làm việc của Agent gồm 8 bước bắt buộc khi nhận task. Áp dụng cho mọi phản hồi.
 globs: always
 ---
 
-# Agent Workflow
+# Quy trình làm việc của Agent (Agent Workflow)
 
-Moi task **NEN** thuc hien theo 8 buoc:
+Mỗi task **NÊN** thực hiện theo 8 bước:
 
-1. **Understand** - doc lai yeu cau, xac nhan pham vi (module nao, layer nao, co dung DB / Redis / WS khong).
-2. **Inspect** - doc code hien tai cua module lien quan + rule tuong ung trong .cursor/rules/ + muc docs lien quan.
-3. **Read relevant docs** - chi doc phan docs thuc su lien quan.
-4. **Plan** - liet ke file se tao/sua, migration (neu co), side-effect (Redis key, WS event, scheduled job).
-5. **Implement** - dung layer, dung convention.
-6. **Validate** - gradlew compileJava (nhanh), roi gradlew test (module lien quan), gradlew build (cuoi).
-7. **Review diff** - tu review lai cac thay doi.
-8. **Report** - bao cao theo format rule response-format.mdc.
+1. **Understand** - Đọc lại yêu cầu, xác nhận phạm vi (module nào, tầng kiến trúc nào, có đụng DB / Redis / WebSocket không).
+2. **Inspect** - Đọc code hiện tại của module liên quan + rule tương ứng trong `.cursor/rules/` + mục docs liên quan.
+3. **Read relevant docs** - Chỉ đọc phần docs thực sự liên quan.
+4. **Plan** - Liệt kê file sẽ tạo/sửa, migration (nếu có), tác dụng phụ (Redis key, WebSocket event, scheduled job).
+5. **Implement** - Đúng layer, đúng quy ước (convention).
+6. **Validate** - `gradlew compileJava` (nhanh), rồi `gradlew test` (module liên quan), `gradlew build` (cuối cùng).
+7. **Review diff** - Tự rà soát lại các thay đổi (`git diff`).
+8. **Report** - Báo cáo theo đúng định dạng tại rule `34-response-format.mdc`.
 
-## Quy tac cung
+## Quy tắc cứng
 
-- **Khong nhay truc tiep vao code** neu task lien quan architecture, database, concurrency hoac business flow.
-- Luon load rule lien quan (xem bang Rule Index trong AGENTS.md root) **TRUOC** khi sua file trong concern tuong ung.
-- Neu user yeu cau task lon (>= 5 file hoac dung nhieu module) -> lap plan tuong minh va bao user.
+- **Không nhảy trực tiếp vào viết code** nếu task liên quan đến kiến trúc (architecture), cơ sở dữ liệu (database), xử lý đồng thời (concurrency) hoặc luồng nghiệp vụ (business flow).
+- Luôn tải các rule liên quan (xem bảng Rule Index trong `AGENTS.md` gốc) **TRƯỚC** khi sửa file trong phạm vi tương ứng.
+- Nếu user yêu cầu task lớn (>= 5 file hoặc đụng chạm nhiều module) -> lập kế hoạch (plan) rõ ràng và báo user xác nhận.

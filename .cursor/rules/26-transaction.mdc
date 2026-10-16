@@ -1,24 +1,19 @@
 ---
-description: Transaction - @Transactional boundary, Redis khac DB transaction, khong transactional o Controller.
+description: Quy tắc quản lý giao dịch - Ranh giới @Transactional, phân biệt giao dịch Redis và DB, cấm đặt @Transactional ở Controller.
 globs: **/service/**, **/repository/**
 ---
 
-# Transaction
+# Quy tắc Quản lý Giao dịch (Transaction)
 
-## Database
+## Giao dịch Cơ sở Dữ liệu
 
-- Dung @Transactional cho business operation can atomicity o database.
-- Default propagation: REQUIRED.
-- Read-only query method: @Transactional/readOnly = true/.
-- Khong dat @Transactional o Controller.
+- Sử dụng annotation `@Transactional` tại tầng **Service**, tuyệt đối không đặt tại tầng Controller.
+- Thiết lập ranh giới giao dịch (transaction boundary) ở mức tối thiểu cần thiết để giải phóng kết nối cơ sở dữ liệu sớm nhất.
+- Hạn chế tối đa các tác vụ gọi mạng (network I/O), gọi API bên thứ ba (ZaloPay, Cloudinary, v.v.) bên trong khối `@Transactional`.
+- Sử dụng `readOnly = true` cho tất cả các method chỉ thực hiện truy vấn đọc dữ liệu để tối ưu hóa hiệu năng Hibernate và cơ sở dữ liệu.
 
-## Redis khac DB
+## Phân biệt Giao dịch Redis và Database
 
-\\	ext
-PostgreSQL transaction
- != 
-Redis transaction
-\
-- @Transactional **khong rollback duoc Redis**.
-- Neu operation lien quan PostgreSQL + Redis, phai co compensation/retry/idempotency /xem flashsale-rollback.mdc, idempotency.mdc/.
-- Redis Lua script cung cap atomicity cho phia Redis.
+- Lưu ý đặc biệt: **Giao dịch Redis hoàn toàn độc lập với giao dịch Database**.
+- Khi một phương thức có `@Transactional` bị lỗi và rollback dữ liệu trong DB, các thao tác đã ghi vào Redis **KHÔNG** tự động rollback theo.
+- Bắt buộc phải có cơ chế bù trừ (compensation logic) hoặc đánh dấu trạng thái để đồng bộ lại dữ liệu khi phát sinh lỗi ngoại lệ.

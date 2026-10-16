@@ -1,28 +1,32 @@
 ---
-description: MapStruct + Lombok - annotation processor, mapper Spring-managed.
+description: Quy ước sử dụng MapStruct và Lombok - Cấu hình Annotation Processor, mapper do Spring quản lý.
 globs: **/mapper/**, **/entity/**, build.gradle.kts
 ---
 
-# MapStruct + Lombok
+# Quy ước MapStruct & Lombok
 
 ## MapStruct
 
-- Mapper phai duoc Spring quan ly: @Mapper/componentModel = spring/.
-- Dung @Mapping/target = x, source = y/ cho field khac ten.
-- Dung nullValuePropertyMappingStrategy = IGNORE cho update DTO.
+- Mọi mapper bắt buộc phải do Spring quản lý: `@Mapper(componentModel = "spring")`.
+- Sử dụng `@Mapping(target = "x", source = "y")` cho các trường khác tên giữa Entity và DTO.
+- Sử dụng `nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE` đối với các DTO cập nhật dữ liệu từng phần.
 
 ## Lombok
 
-- @Getter, @Setter, @Builder, @NoArgsConstructor, @AllArgsConstructor, @RequiredArgsConstructor, @Slf4j.
-- Khong dung @Data cho entity JPA /gay van de voi @EqualsAndHashCode + lazy loading/.
-- Entity dung @Getter rieng + @Setter/AccessLevel.PROTECTED/ cho field co the thay doi.
+- Các annotation thông dụng: `@Getter`, `@Setter`, `@Builder`, `@NoArgsConstructor`, `@AllArgsConstructor`, `@RequiredArgsConstructor`, `@Slf4j`.
+- **Tuyệt đối không dùng `@Data` cho các Entity JPA** (vì tiềm ẩn xung đột vòng lặp vô hạn với `@EqualsAndHashCode` và cơ chế Lazy Loading của Hibernate).
+- Đối với Entity: Sử dụng `@Getter` riêng biệt, kết hợp `@Setter(AccessLevel.PROTECTED)` hoặc chỉ mở setter cho những trường được phép thay đổi giá trị.
 
-## Annotation processing
+## Cấu hình Annotation Processing
 
-Lombok + MapStruct annotation processor phai cau hinh dung trong build.gradle.kts:
+Bộ xử lý chú thích Lombok + MapStruct phải được cấu hình chính xác trong file `build.gradle.kts`:
 
-- plugins: java + org.springframework.boot + io.spring.dependency-management + org.mapstruct
-- annotationProcessor: org.mapstruct:mapstruct-processor + org.projectlombok:lombok + org.projectlombok:lombok-mapstruct-binding
-- implementation: org.mapstruct:mapstruct
+- plugins: `java`, `org.springframework.boot`, `io.spring.dependency-management`
+- dependencies:
+  - `compileOnly("org.projectlombok:lombok")`
+  - `annotationProcessor("org.projectlombok:lombok")`
+  - `annotationProcessor("org.mapstruct:mapstruct-processor:1.6.3")`
+  - `annotationProcessor("org.projectlombok:lombok-mapstruct-binding:0.2.0")`
+  - `implementation("org.mapstruct:mapstruct:1.6.3")`
 
-- Khong commit generated files /target/ da co trong .gitignore/.
+- Không commit các file sinh tự động (`build/` hoặc `target/` đã có trong `.gitignore`).
