@@ -59,35 +59,49 @@ public class ProductSpecifications {
 
     /**
      * Filter: at least one variant with price >= minPrice.
+     *
+     * NOTE: Cannot use root.join("variants") because the Product entity has
+     * no @OneToMany back-reference to ProductVariant (we own the relationship
+     * from the variant side via ProductVariant.product). The implementation
+     * uses an EXISTS subquery against ProductVariant instead, which is the
+     * same pattern used by hasActiveFlashSale() and hasDiscount() in this class.
      */
     public static Specification<Product> hasVariantWithPriceGte(BigDecimal minPrice) {
         return (root, query, cb) -> {
             if (minPrice == null || minPrice.compareTo(BigDecimal.ZERO) < 0) {
                 return cb.conjunction();
             }
-            query.distinct(true);
-            Join<Product, Object> variant = root.join("variants");
-            return cb.and(
-                    cb.equal(variant.get("status"), "ACTIVE"),
-                    cb.greaterThanOrEqualTo(variant.get("originalPrice"), minPrice)
-            );
+            Subquery<Long> sq = query.subquery(Long.class);
+            var v = sq.from(ProductVariant.class);
+            sq.select(v.get("id"));
+            sq.where(cb.and(
+                    cb.equal(v.get("product"), root),
+                    cb.equal(v.get("status"), "ACTIVE"),
+                    cb.greaterThanOrEqualTo(v.get("originalPrice"), minPrice)
+            ));
+            return cb.exists(sq);
         };
     }
 
     /**
      * Filter: at least one variant with price <= maxPrice.
+     *
+     * See hasVariantWithPriceGte for why this uses a subquery instead of a join.
      */
     public static Specification<Product> hasVariantWithPriceLte(BigDecimal maxPrice) {
         return (root, query, cb) -> {
             if (maxPrice == null || maxPrice.compareTo(BigDecimal.ZERO) < 0) {
                 return cb.conjunction();
             }
-            query.distinct(true);
-            Join<Product, Object> variant = root.join("variants");
-            return cb.and(
-                    cb.equal(variant.get("status"), "ACTIVE"),
-                    cb.lessThanOrEqualTo(variant.get("originalPrice"), maxPrice)
-            );
+            Subquery<Long> sq = query.subquery(Long.class);
+            var v = sq.from(ProductVariant.class);
+            sq.select(v.get("id"));
+            sq.where(cb.and(
+                    cb.equal(v.get("product"), root),
+                    cb.equal(v.get("status"), "ACTIVE"),
+                    cb.lessThanOrEqualTo(v.get("originalPrice"), maxPrice)
+            ));
+            return cb.exists(sq);
         };
     }
 
