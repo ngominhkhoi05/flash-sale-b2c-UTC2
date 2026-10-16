@@ -1209,7 +1209,22 @@
               ]
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
+                  "var j=pm.response.json();",
+                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });",
+                  "pm.test(\"data.storeGroups la array\", function () { pm.expect(j.data.storeGroups).to.be.an('array'); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "POST Add to Cart",
@@ -1253,7 +1268,26 @@
               }
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 2xx (201)\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
+                  "var j=pm.response.json();",
+                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });",
+                  "pm.test(\"data.totalItems >= 1\", function () { pm.expect(j.data.totalItems).to.be.at.least(1); });",
+                  "if (j.success && j.data && j.data.storeGroups && j.data.storeGroups.length>0) {",
+                  "  var items = j.data.storeGroups[0].items;",
+                  "  if (items && items.length>0) { pm.environment.set(\"cartItemId\", items[items.length-1].id); }",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "PUT Update Cart Item",
@@ -1298,7 +1332,21 @@
               }
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
+                  "var j=pm.response.json();",
+                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "DELETE Cart Item",
@@ -1329,7 +1377,21 @@
               ]
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
+                  "var j=pm.response.json();",
+                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "DELETE Clear Cart",
@@ -1358,7 +1420,21 @@
               ]
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
+                  "var j=pm.response.json();",
+                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });"
+                ]
+              }
+            }
+          ]
         }
       ],
       "auth": {
@@ -3903,7 +3979,22 @@
               ]
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
+                  "var j=pm.response.json();",
+                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test(\"data.items la array\", function () { pm.expect(j.data.items).to.be.an('array'); });",
+                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "POST Create Banner",
@@ -4005,7 +4096,22 @@
               }
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
+                  "var j=pm.response.json();",
+                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test(\"data.id trung bannerId\", function () { pm.expect(String(j.data.id)).to.equal(pm.environment.get(\"bannerId\")); });",
+                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "PATCH Change Status",
@@ -4018,7 +4124,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/admin/banners/{{bannerId}}/status",
+              "raw": "{{baseUrl}}/api/v1/admin/banners/{{bannerId}}/status?isActive=false",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -4048,7 +4154,22 @@
               ]
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
+                  "var j=pm.response.json();",
+                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test(\"data.isActive == false\", function () { pm.expect(j.data.isActive).to.equal(false); });",
+                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "DELETE Banner",
@@ -4079,7 +4200,22 @@
               ]
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
+                  "var j=pm.response.json();",
+                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test(\"data == null (soft delete)\", function () { pm.expect(j.data).to.equal(null); });",
+                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });"
+                ]
+              }
+            }
+          ]
         }
       ],
       "auth": {

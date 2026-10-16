@@ -1810,84 +1810,216 @@ Pre-warm nạp tồn kho ban đầu lên Redis bằng `SETNX` (idempotent, tính
 ---
 ## 19. Cart Module `/api/v1/cart`
 
-> Yêu cầu: **Authentication** · **Tag Swagger**: `Cart`
+> Yêu cầu: **Authentication** (Bearer JWT) · **Tag Swagger**: `Cart` · **Phân quyền thực tế**: `ROLE_BUYER` (filter chỉ cho phép buyer/seller có quyền tạo đơn; user chưa đăng nhập → `401 AUTH_401`)
 
-| Method | Endpoint | Access | Mô tả |
-|---|---|---|---|
-| `GET` | `/api/v1/cart` | Authenticated | Xem giỏ hàng (gom nhóm theo store) |
-| `POST` | `/api/v1/cart/items` | Authenticated | Thêm sản phẩm vào giỏ |
-| `PUT` | `/api/v1/cart/items/{itemId}` | Authenticated | Cập nhật số lượng |
-| `DELETE` | `/api/v1/cart/items/{itemId}` | Authenticated | Xóa 1 sản phẩm |
-| `DELETE` | `/api/v1/cart` | Authenticated | Xóa toàn bộ giỏ |
+| Method | Endpoint | Access | HTTP Status | Mô tả | FE cần gửi |
+|---|---|---|---|---|---|
+| `GET` | `/api/v1/cart` | `ROLE_BUYER` | `200 OK` | Xem giỏ hàng hiện tại (gom nhóm theo `storeId`, tính `subtotal`/`totalItems`/`grandTotal`) | `Authorization: Bearer <accessToken>` |
+| `POST` | `/api/v1/cart/items` | `ROLE_BUYER` | `201 Created` | Thêm 1 biến thể sản phẩm vào giỏ. Nếu variant đã có → cộng dồn `quantity`. Trả về `CartResponse` mới nhất. | `Authorization` + JSON `AddToCartRequest` (xem 19.2) |
+| `PUT` | `/api/v1/cart/items/{itemId}` | `ROLE_BUYER` | `200 OK` | Cập nhật số lượng tuyệt đối của 1 item trong giỏ. Trả về `CartResponse` mới nhất. | `Authorization` + path `itemId` + JSON `UpdateCartItemRequest` (xem 19.3) |
+| `DELETE` | `/api/v1/cart/items/{itemId}` | `ROLE_BUYER` | `200 OK` | Xóa 1 item khỏi giỏ | `Authorization` + path `itemId` |
+| `DELETE` | `/api/v1/cart` | `ROLE_BUYER` | `200 OK` | Xóa toàn bộ item trong giỏ (giữ lại bản ghi `Cart`) | `Authorization` |
+
+> **Lưu ý FE**: Mỗi lần add / update / remove / clear, server trả về `CartResponse` đầy đủ → FE nên dùng luôn `response.data` để re-render, không cần gọi lại `GET /api/v1/cart`.
 
 ### 19.1 `GET /api/v1/cart`
 
-**Response (`CartResponse`):**
+Lấy giỏ hàng hiện tại của user đang đăng nhập. Service sẽ tự tạo `Cart` rỗng nếu user chưa có. Kết quả được nhóm theo từng `storeId` để chuẩn bị cho flow checkout đa cửa hàng.
+
+**Request:** Không có body, không có query param.
+
+**Response (`ApiResponse<CartResponse>`, HTTP `200`):**
 
 ```json
 {
-  "id": 1,
-  "userId": 5,
-  "storeGroups": [
-    {
-      "storeId": 2,
-      "storeName": "Shop ABC",
-      "items": [
-        {
-          "id": 11,
-          "variantId": 42,
-          "sku": "AT-DEN-M",
-          "productName": "Áo thun nam",
-          "variantName": "Đen, Size M",
-          "imageUrl": null,
-          "price": 99000,
-          "stockQuantity": 25,
-          "quantity": 2,
-          "itemSubtotal": 198000,
-          "storeId": 2,
-          "storeName": "Shop ABC"
-        }
-      ],
-      "storeSubtotal": 198000
-    }
-  ],
-  "totalItems": 2,
-  "grandTotal": 198000
+  "success": true,
+  "code": 200,
+  "message": "Lấy thông tin giỏ hàng thành công",
+  "data": {
+    "id": 1,
+    "userId": 5,
+    "storeGroups": [
+      {
+        "storeId": 2,
+        "storeName": "Shop ABC",
+        "storeBadge": "Mall",
+        "estimatedDeliveryLabel": "Giao vào 18 Th10 - 20 Th10",
+        "shippingMethodLabel": "Tiêu chuẩn",
+        "shippingFee": 0,
+        "storeSubtotal": 198000,
+        "items": [
+          {
+            "id": 11,
+            "productId": 42,
+            "variantId": 42,
+            "sku": "AT-DEN-M",
+            "productName": "Áo thun nam",
+            "variantName": "Đen, Size M",
+            "imageUrl": "https://res.cloudinary.com/.../variant-42.jpg",
+            "price": 99000,
+            "stockQuantity": 25,
+            "quantity": 2,
+            "itemSubtotal": 198000,
+            "storeId": 2,
+            "storeName": "Shop ABC"
+          }
+        ]
+      }
+    ],
+    "totalItems": 2,
+    "subtotal": 198000,
+    "totalShippingFee": 0,
+    "totalAmount": 198000,
+    "grandTotal": 198000
+  },
+  "timestamp": "2026-10-16T..."
 }
 ```
 
-### 19.2 `POST /api/v1/cart/items`
+**Schema `CartResponse` (8 field, tham chiếu `cart/dto/CartResponse.java`):**
 
-**Request Body (`AddToCartRequest`):**
+| Field | Type | Mô tả |
+|---|---|---|
+| `id` | `Long` | ID bản ghi `Cart` |
+| `userId` | `Long` | ID chủ sở hữu giỏ |
+| `storeGroups` | `List<CartStoreGroupResponse>` | DS nhóm sản phẩm theo cửa hàng |
+| `totalItems` | `Integer` | Tổng số lượng sản phẩm (cộng tất cả `quantity`) |
+| `subtotal` | `BigDecimal` | Tổng tiền hàng (sum `itemSubtotal`) |
+| `totalShippingFee` | `BigDecimal` | Tổng phí ship (hiện mặc định `0` vì `shippingFee` hard-code) |
+| `totalAmount` | `BigDecimal` | `subtotal + totalShippingFee` |
+| `grandTotal` | `BigDecimal` | Bằng `subtotal` (giữ để tương thích flow UI cũ) |
 
-| Field | Type | Required | Validation |
-|---|---|---|---|
-| `variantId` | `long` | Có | không null |
-| `quantity` | `integer` | Có | > 0 |
+**Schema `CartStoreGroupResponse` (8 field):**
+
+| Field | Type | Mô tả |
+|---|---|---|
+| `storeId` | `Long` | ID cửa hàng |
+| `storeName` | `String` | Tên cửa hàng |
+| `storeBadge` | `String` | `"OfficialMall"` (Mall chính hãng) / `"Mall"` (Mall ưu tiên) / `""` (còn lại) |
+| `estimatedDeliveryLabel` | `String` | Hard-code: `"Giao vào <dd ThM> - <dd ThM>"` (today + 2 → today + 4) |
+| `shippingMethodLabel` | `String` | Hard-code: `"Tiêu chuẩn"` |
+| `shippingFee` | `BigDecimal` | Mặc định `0` (chưa tính phí theo khu vực) |
+| `storeSubtotal` | `BigDecimal` | Tổng tiền hàng của riêng store này |
+| `items` | `List<CartItemResponse>` | DS sản phẩm thuộc store |
+
+**Schema `CartItemResponse` (13 field):**
+
+| Field | Type | Mô tả |
+|---|---|---|
+| `id` | `Long` | ID `CartItem` |
+| `productId` | `Long` | ID `Product` |
+| `variantId` | `Long` | ID `ProductVariant` |
+| `sku` | `String` | SKU biến thể |
+| `productName` | `String` | Tên sản phẩm |
+| `variantName` | `String` | Tên biến thể (vd "Đen, Size M") |
+| `imageUrl` | `String` | Ảnh variant (ưu tiên) → fallback ảnh product → `null` |
+| `price` | `BigDecimal` | Đơn giá hiện tại (`variant.originalPrice`) |
+| `stockQuantity` | `Integer` | Tồn kho hiện tại của variant |
+| `quantity` | `Integer` | Số lượng trong giỏ |
+| `itemSubtotal` | `BigDecimal` | `price * quantity` |
+| `storeId` | `Long` | ID cửa hàng (trùng với group) |
+| `storeName` | `String` | Tên cửa hàng (trùng với group) |
 
 **Lỗi:**
 
-| Code | ErrorCode | Message |
-|---|---|---|
-| 400 | `CART_400_1` (`INSUFFICIENT_STOCK`) | Số lượng tồn kho sản phẩm không đủ |
-| 400 | `CART_400_2` (`INVALID_QUANTITY`) | Số lượng sản phẩm thêm vào giỏ phải lớn hơn 0 |
+| HTTP | ErrorCode | Message | Nguyên nhân |
+|---|---|---|---|
+| 401 | `AUTH_401` | Chưa xác thực hoặc token không hợp lệ | Thiếu/sai `Authorization` header |
+| 404 | `USER_404_NOT_FOUND` | Không tìm thấy thông tin người dùng | `userId` từ JWT không tồn tại trong DB |
+
+### 19.2 `POST /api/v1/cart/items`
+
+Thêm 1 variant vào giỏ. Nếu variant đã có trong giỏ thì cộng dồn `quantity` mới vào `quantity` cũ (kiểm tra stock lại sau khi cộng). Trả về `CartResponse` mới nhất.
+
+**Request Body (`AddToCartRequest`, validate bằng Jakarta Bean Validation):**
+
+| Field | Type | Required | Constraint (annotation) | Mô tả FE gửi |
+|---|---|---|---|---|
+| `variantId` | `Long` | Có | `@NotNull(message = "ID biến thể sản phẩm không được để trống")` | ID của `ProductVariant` (lấy từ API product detail) |
+| `quantity` | `Integer` | Có | `@NotNull` + `@Positive` | Số lượng muốn thêm (lớn hơn 0) |
+
+**Response:** `ApiResponse<CartResponse>` với HTTP `201 Created`, message `"Thêm sản phẩm vào giỏ hàng thành công"`. Body `data` giống cấu trúc 19.1.
+
+**Lỗi:**
+
+| HTTP | ErrorCode | Message | Nguyên nhân |
+|---|---|---|---|
+| 400 | `SYS_422` (validation) | `ID biến thể sản phẩm không được để trống` / `Số lượng phải lớn hơn 0` | `variantId` null hoặc `quantity <= 0` |
+| 400 | `CART_400_1` (`INSUFFICIENT_STOCK`) | Số lượng tồn kho sản phẩm không đủ | `variant.stockQuantity < (existing.quantity + request.quantity)` |
+| 400 | `CART_400_2` (`INVALID_QUANTITY`) | Số lượng sản phẩm thêm vào giỏ phải lớn hơn 0 | Service check `request.quantity <= 0` (dư thừa với Bean Validation) |
+| 404 | `CART_ITEM_404` | Không tìm thấy sản phẩm trong giỏ hàng | `variantId` không tồn tại (re-use error code) |
+| 401 | `AUTH_401` | Chưa xác thực hoặc token không hợp lệ | Thiếu/sai `Authorization` header |
+| 404 | `USER_404_NOT_FOUND` | Không tìm thấy thông tin người dùng | `userId` từ JWT không tồn tại |
 
 ### 19.3 `PUT /api/v1/cart/items/{itemId}`
 
+Cập nhật số lượng tuyệt đối (không phải cộng dồn) cho 1 item. Service kiểm tra `cartItem.cart.id == currentUser.cart.id` để chống thao tác chéo giỏ.
+
+**Path Variable:** `itemId` (Long) — ID của `CartItem`.
+
 **Request Body (`UpdateCartItemRequest`):**
 
-| Field | Type | Required | Validation |
-|---|---|---|---|
-| `quantity` | `integer` | Có | > 0 |
+| Field | Type | Required | Constraint | Mô tả FE gửi |
+|---|---|---|---|---|
+| `quantity` | `Integer` | Có | `@NotNull` + `@Positive` | Số lượng mới (lớn hơn 0) |
 
-### 19.4 `DELETE /api/v1/cart/items/{itemId}`
+**Response:** `ApiResponse<CartResponse>` với HTTP `200 OK`, message `"Cập nhật số lượng thành công"`.
 
 **Lỗi:**
 
-| Code | ErrorCode | Message |
+| HTTP | ErrorCode | Message | Nguyên nhân |
+|---|---|---|---|
+| 400 | `SYS_422` (validation) | `Số lượng phải lớn hơn 0` | `quantity <= 0` |
+| 400 | `CART_400_1` (`INSUFFICIENT_STOCK`) | Số lượng tồn kho sản phẩm không đủ | `variant.stockQuantity < request.quantity` |
+| 400 | `CART_400_2` (`INVALID_QUANTITY`) | Số lượng sản phẩm thêm vào giỏ phải lớn hơn 0 | Service check dư thừa |
+| 403 | `CART_403` (`CART_ITEM_ACCESS_DENIED`) | Bạn không có quyền thao tác trên mục giỏ hàng này | `item.cart.id != currentUser.cart.id` |
+| 404 | `CART_ITEM_404` | Không tìm thấy sản phẩm trong giỏ hàng | `itemId` không tồn tại |
+| 401 | `AUTH_401` | Chưa xác thực hoặc token không hợp lệ | Thiếu/sai `Authorization` header |
+| 404 | `USER_404_NOT_FOUND` | Không tìm thấy thông tin người dùng | `userId` từ JWT không tồn tại |
+
+### 19.4 `DELETE /api/v1/cart/items/{itemId}`
+
+Xóa 1 item khỏi giỏ. Service kiểm tra ownership trước khi xóa.
+
+**Path Variable:** `itemId` (Long) — ID của `CartItem`.
+
+**Response:** `ApiResponse<Void>` với HTTP `200 OK`, message `"Xóa sản phẩm khỏi giỏ hàng thành công"`, `data = null`.
+
+**Lỗi:**
+
+| HTTP | ErrorCode | Message | Nguyên nhân |
+|---|---|---|---|
+| 403 | `CART_403` (`CART_ITEM_ACCESS_DENIED`) | Bạn không có quyền thao tác trên mục giỏ hàng này | `item.cart.id != currentUser.cart.id` |
+| 404 | `CART_ITEM_404` | Không tìm thấy sản phẩm trong giỏ hàng | `itemId` không tồn tại |
+| 401 | `AUTH_401` | Chưa xác thực hoặc token không hợp lệ | Thiếu/sai `Authorization` header |
+| 404 | `USER_404_NOT_FOUND` | Không tìm thấy thông tin người dùng | `userId` từ JWT không tồn tại |
+
+### 19.5 `DELETE /api/v1/cart`
+
+Xóa toàn bộ `CartItem` của user (giữ lại bản ghi `Cart` rỗng để lần sau add thêm không phải tạo mới). Thực hiện bằng `cartItemRepository.deleteAllByCartId(cartId)`.
+
+**Response:** `ApiResponse<Void>` với HTTP `200 OK`, message `"Xóa toàn bộ giỏ hàng thành công"`, `data = null`.
+
+**Lỗi:**
+
+| HTTP | ErrorCode | Message | Nguyên nhân |
+|---|---|---|---|
+| 401 | `AUTH_401` | Chưa xác thực hoặc token không hợp lệ | Thiếu/sai `Authorization` header |
+| 404 | `USER_404_NOT_FOUND` | Không tìm thấy thông tin người dùng | `userId` từ JWT không tồn tại |
+
+### 19.6 Cart Error Codes (tổng hợp)
+
+Tham chiếu `cart/exception/CartErrorCode.java`. Có **5 mã lỗi** riêng của module Cart:
+
+| HTTP | Code | Ý nghĩa |
 |---|---|---|
-| 404 | `CART_ITEM_404` | Không tìm thấy sản phẩm trong giỏ hàng |
-| 403 | `CART_403` | Bạn không có quyền thao tác trên mục giỏ hàng này |
+| 404 | `CART_404` | Không tìm thấy giỏ hàng của người dùng (hiện service tự tạo nên không phát sinh) |
+| 404 | `CART_ITEM_404` | Không tìm thấy `CartItem` theo `id` hoặc `variantId` không tồn tại |
+| 403 | `CART_403` | Không có quyền thao tác trên `CartItem` (không thuộc giỏ của user hiện tại) |
+| 400 | `CART_400_1` (`INSUFFICIENT_STOCK`) | Tồn kho `ProductVariant` không đủ cho số lượng yêu cầu (khi add hoặc update) |
+| 400 | `CART_400_2` (`INVALID_QUANTITY`) | `quantity <= 0` (dư thừa cùng Bean Validation) |
+
+> **Note (2026-10-16)**: Endpoint `POST /api/v1/cart/checkout` được liệt kê trong rule `.cursor/rules/46-endpoints-cart-order-voucher-banner.mdc` (mục "Giỏ hàng") nhưng **CHƯA được implement** trong `CartController.java`. Flow tách giỏ theo store hiện do `OrderBuyerController` xử lý qua `POST /api/v1/orders/checkout` (xem section 20.1) — FE vẫn dùng endpoint Order làm chuẩn.
 
 ---
 
@@ -2645,12 +2777,18 @@ Mapping theo `image/exception/ImageErrorCode.java`:
 
 #### 29.1.1 `GET /api/v1/banners/home`
 
-Lấy tất cả banner ACTIVE cho trang chủ. Bao gồm 2 nhóm:
+Lấy tất cả banner ACTIVE trong khoảng thời gian hiện tại cho trang chủ. Service lọc theo 3 điều kiện (`BannerRepository.findActiveBanners`):
+- `isActive = true`
+- `startDate IS NULL OR startDate <= now` (đã bắt đầu)
+- `endDate IS NULL OR endDate >= now` (chưa kết thúc)
 
-- `mainSlides`: hero slide lớn (banner `HERO`).
-- `sideBanners`: banner phụ bên cạnh (`FREESHIP`, `VOUCHER_NEW_SHOP`, `PROMOTION`).
+Kết quả được chia thành 2 nhóm:
+- `mainSlides`: các banner `type = HERO` (slide chính đầu trang chủ)
+- `sideBanners`: các banner còn lại (`FREESHIP`, `VOUCHER_NEW_SHOP`, `PROMOTION`) — sort theo `position` ASC
 
-**Response (`HomeBannersResponse`):**
+**Request:** Không có body, không có query param. Endpoint **public** (không cần `Authorization`).
+
+**Response (`ApiResponse<HomeBannersResponse>`, HTTP `200 OK`):**
 
 ```json
 {
@@ -2662,34 +2800,51 @@ Lấy tất cả banner ACTIVE cho trang chủ. Bao gồm 2 nhóm:
       {
         "id": 1,
         "type": "HERO",
+        "position": 0,
         "imageUrl": "https://res.cloudinary.com/.../hero1.jpg",
         "imageAlt": "Flash Sale 12h Trưa",
         "ctaHref": "/flash-sales/slots",
-        "ctaText": "Xem ngay"
+        "ctaText": "Xem ngay",
+        "isActive": true,
+        "startDate": "2026-10-01T00:00:00.000Z",
+        "endDate": "2026-12-31T23:59:59.000Z",
+        "createdAt": "2026-09-25T08:00:00.000Z"
       }
     ],
     "sideBanners": [
       {
         "id": 2,
         "type": "FREESHIP",
+        "position": 0,
         "imageUrl": "https://res.cloudinary.com/.../freeship.jpg",
         "imageAlt": "Miễn phí vận chuyển",
         "ctaHref": "/products",
-        "ctaText": "Khám phá"
+        "ctaText": "Khám phá",
+        "isActive": true,
+        "startDate": null,
+        "endDate": null,
+        "createdAt": "2026-09-25T08:00:00.000Z"
       },
       {
         "id": 3,
         "type": "VOUCHER_NEW_SHOP",
+        "position": 1,
         "imageUrl": "https://res.cloudinary.com/.../voucher.jpg",
         "imageAlt": "Voucher cho khách mới",
         "ctaHref": "/vouchers",
-        "ctaText": "Nhận voucher"
+        "ctaText": "Nhận voucher",
+        "isActive": true,
+        "startDate": null,
+        "endDate": null,
+        "createdAt": "2026-09-25T08:00:00.000Z"
       }
     ]
   },
-  "timestamp": "2026-10-12T..."
+  "timestamp": "2026-10-16T..."
 }
 ```
+
+> **Lưu ý FE**: Các trường `position` / `isActive` / `startDate` / `endDate` / `createdAt` vẫn được trả về đầy đủ. FE có thể bỏ qua nếu không cần — chỉ dùng `id`, `imageUrl`, `ctaHref`, `ctaText` để render carousel.
 
 **`BannerType` enum** (tham chiếu `banner/enums/BannerType.java`):
 
@@ -2704,103 +2859,180 @@ Lấy tất cả banner ACTIVE cho trang chủ. Bao gồm 2 nhóm:
 
 ### 29.2 Admin Endpoints (`/api/v1/admin/banners`)
 
-| Method | Endpoint | Access | Mô tả |
-|---|---|---|---|
-| `GET` | `/api/v1/admin/banners` | Admin | List banner (paging, filter `type`, `isActive`) |
-| `POST` | `/api/v1/admin/banners` | Admin | Tạo banner mới |
-| `PUT` | `/api/v1/admin/banners/{id}` | Admin | Cập nhật banner |
-| `PATCH` | `/api/v1/admin/banners/{id}/status` | Admin | Đổi `isActive` (ACTIVE ↔ INACTIVE) |
-| `DELETE` | `/api/v1/admin/banners/{id}` | Admin | Xóa banner (soft delete: `isActive=false`) |
+> Yêu cầu: **Authentication** (Bearer JWT) + **Role `ROLE_ADMIN`** (enforce qua `@PreAuthorize("hasRole('ADMIN')")` ở class-level). Mọi request tới `/api/v1/admin/**` mà không có token hoặc không đúng role đều trả `401 AUTH_401` / `403 AUTH_403`.
+
+| Method | Endpoint | Access | HTTP Status | Mô tả | FE cần gửi |
+|---|---|---|---|---|---|
+| `GET` | `/api/v1/admin/banners` | `ROLE_ADMIN` | `200 OK` | List banner (phân trang, filter theo `type` và `isActive`). Service hiện sort cứng theo `createdAt DESC` (không nhận param `sort`) | `Authorization` + query `type`/`isActive`/`page`/`size` (xem 29.2.1) |
+| `POST` | `/api/v1/admin/banners` | `ROLE_ADMIN` | `201 Created` | Tạo banner mới. Service validate `imageUrl` không blank + `startDate < endDate` | `Authorization` + JSON `BannerRequest` (xem 29.2.2) |
+| `PUT` | `/api/v1/admin/banners/{id}` | `ROLE_ADMIN` | `200 OK` | Cập nhật toàn bộ field của banner. Field nào null sẽ giữ nguyên giá trị cũ. | `Authorization` + path `id` + JSON `BannerRequest` (xem 29.2.3) |
+| `PATCH` | `/api/v1/admin/banners/{id}/status` | `ROLE_ADMIN` | `200 OK` | Đổi `isActive` (kích hoạt / vô hiệu hóa). Khi `isActive=true`, validate `startDate` không trong tương lai + `endDate` không trong quá khứ. | `Authorization` + path `id` + query `?isActive=true\|false` (xem 29.2.4) |
+| `DELETE` | `/api/v1/admin/banners/{id}` | `ROLE_ADMIN` | `200 OK` | **Soft delete**: chỉ set `isActive = false`, không xóa row. Banner sẽ tự ẩn khỏi public API | `Authorization` + path `id` |
 
 #### 29.2.1 `GET /api/v1/admin/banners`
 
-List tất cả banner (paging, filter theo `type` và `isActive`).
+List tất cả banner. Service nạp cả trang bằng `findAll(pageable)`, sau đó filter trong Java theo `type` (convert sang `BannerType` enum) và `isActive`. Lưu ý: do filter chạy trong bộ nhớ, `totalElements` trả về tổng số row trong DB trước khi filter (hiện chưa tối ưu).
 
 **Query params:**
 
-| Param | Type | Default | Mô tả |
-|---|---|---|---|
-| `type` | `String` | — | Filter theo BannerType (`HERO`, `FREESHIP`, `VOUCHER_NEW_SHOP`, `PROMOTION`) |
-| `isActive` | `Boolean` | — | Filter theo trạng thái |
-| `page` | `Integer` | 0 | |
-| `size` | `Integer` | 20 | Max 100 |
+| Param | Type | Default | Required | Mô tả |
+|---|---|---|---|---|
+| `type` | `String` | — | Không | Filter theo `BannerType` enum. Gửi `HERO` / `FREESHIP` / `VOUCHER_NEW_SHOP` / `PROMOTION` (case-insensitive do service gọi `valueOf(type.toUpperCase())`). Gửi sai enum sẽ ném `IllegalArgumentException` → trả `500` |
+| `isActive` | `Boolean` | — | Không | Filter theo trạng thái (`true` / `false`) |
+| `page` | `Integer` | `0` | Không | Số trang, 0-based |
+| `size` | `Integer` | `20` | Không | Số phần tử / trang. `MAX_PAGE_SIZE = 100` theo `AppConstants` |
 
-**Response:** `PageResponse<BannerListItem>` (id, type, position, imageUrl, imageAlt, ctaHref, ctaText, isActive, startDate, endDate, createdAt).
+**Response:** `ApiResponse<PageResponse<BannerListItem>>` với HTTP `200 OK`, message `"Danh sach banner"`. Cấu trúc `PageResponse` xem section 3. Mỗi `BannerListItem` xem 29.4.
+
+**Lỗi:**
+
+| HTTP | ErrorCode | Message | Nguyên nhân |
+|---|---|---|---|
+| 401 | `AUTH_401` | Chưa xác thực hoặc token không hợp lệ | Thiếu/sai `Authorization` |
+| 403 | `AUTH_403` | Không có quyền truy cập tài nguyên | Token không có role `ADMIN` |
+| 500 | `SYS_500` | Lỗi máy chủ nội bộ không xác định | `type` không hợp lệ (`IllegalArgumentException`) |
 
 #### 29.2.2 `POST /api/v1/admin/banners`
 
-Tạo banner mới.
+Tạo banner mới. Service kiểm tra `imageUrl` không blank + `startDate <= endDate` trước khi lưu. Mặc định `isActive = false` nếu không truyền.
 
-**Request (`BannerRequest`):**
+**Request Body (`BannerRequest`, validate bằng Jakarta Bean Validation):**
 
-| Field | Type | Required | Mô tả |
+| Field | Type | Required | Constraint (annotation) | Mô tả FE gửi |
+|---|---|---|---|---|
+| `type` | `BannerType` (enum: `HERO`, `FREESHIP`, `VOUCHER_NEW_SHOP`, `PROMOTION`) | Có | `@NotNull(message = "Loai banner khong duoc de trong")` | Loại banner (ảnh hưởng nhóm `mainSlides` vs `sideBanners` ở API public) |
+| `position` | `Integer` | Không | `@PositiveOrZero(message = "Vi tri hien thi phai >= 0")` | Thứ tự hiển thị, mặc định `0` (càng nhỏ hiển thị trước) |
+| `imageUrl` | `String` | Có | `@NotBlank` + `@Size(max = 500)` | URL ảnh (Cloudinary hoặc CDN khác) |
+| `imageAlt` | `String` | Không | `@Size(max = 255)` | Alt text ảnh (a11y) |
+| `ctaHref` | `String` | Không | `@Size(max = 255)` | URL khi user click vào banner |
+| `ctaText` | `String` | Không | `@Size(max = 50)` | Text hiển thị trên nút CTA |
+| `isActive` | `Boolean` | Không | (không validate) | Mặc định `false` (SCHEDULED). Đổi sang `true` qua `PATCH /status` |
+| `startDate` | `ISO DateTime` (Instant) | Không | (không validate) | Thời điểm bắt đầu hiển thị (null = luôn hiển thị khi active) |
+| `endDate` | `ISO DateTime` (Instant) | Không | (không validate) | Thời điểm kết thúc (null = không bao giờ hết hạn) |
+
+**Response:** `ApiResponse<BannerListItem>` với HTTP `201 Created`, message `"Tao banner thanh cong"`.
+
+**Lỗi:**
+
+| HTTP | ErrorCode | Message | Nguyên nhân |
 |---|---|---|---|
-| `type` | `String` | ✅ | BannerType enum |
-| `position` | `Integer` | | Thứ tự hiển thị (mặc định 0) |
-| `imageUrl` | `String` | ✅ | URL ảnh banner |
-| `imageAlt` | `String` | | Alt text ảnh |
-| `ctaHref` | `String` | | Đường dẫn khi click |
-| `ctaText` | `String` | | Text nút CTA |
-| `isActive` | `Boolean` | | Mặc định `false` (SCHEDULED) |
-| `startDate` | `ISO DateTime` | | Thời điểm bắt đầu hiển thị |
-| `endDate` | `ISO DateTime` | | Thời điểm kết thúc |
-
-**Validation:**
-- `imageUrl` không được blank.
-- `startDate` phải trước `endDate`.
-
-**Response:** `ApiResponse<BannerListItem>` (HTTP 201).
+| 400 | `BANNER_400_IMAGE_URL_BLANK` | URL hình ảnh banner không được để trống | `imageUrl` blank/null (service check dư thừa sau Bean Validation) |
+| 400 | `BANNER_400_INVALID_DATE_RANGE` | Ngày bắt đầu phải trước ngày kết thúc | `startDate > endDate` |
+| 400 | `SYS_422` (validation) | `Loai banner khong duoc de trong` / `Vi tri hien thi phai >= 0` | `type` null hoặc `position < 0` |
+| 401 | `AUTH_401` | Chưa xác thực hoặc token không hợp lệ | Thiếu/sai `Authorization` |
+| 403 | `AUTH_403` | Không có quyền truy cập tài nguyên | Token không có role `ADMIN` |
 
 #### 29.2.3 `PUT /api/v1/admin/banners/{id}`
 
-Cập nhật banner.
+Cập nhật banner. Service kiểm tra tồn tại trước. Field nào `null` trong request sẽ giữ nguyên giá trị cũ (vd: không truyền `isActive` → giữ nguyên). **Không thay đổi `createdAt`**.
 
-**Path:** `id` — banner ID.
+**Path Variable:** `id` (Long) — ID banner cần cập nhật.
 
-**Request:** `BannerRequest` (giống POST, tất cả field optional).
+**Request Body (`BannerRequest`):** giống 29.2.2, tất cả field đều optional (vì partial update).
 
-**Response:** `ApiResponse<BannerListItem>` (HTTP 200).
+**Response:** `ApiResponse<BannerListItem>` với HTTP `200 OK`, message `"Cap nhat banner thanh cong"`.
 
-**Error:** `404 BANNER_404_NOT_FOUND` nếu banner không tồn tại.
+**Lỗi:**
+
+| HTTP | ErrorCode | Message | Nguyên nhân |
+|---|---|---|---|
+| 400 | `BANNER_400_IMAGE_URL_BLANK` | URL hình ảnh banner không được để trống | Nếu gửi `imageUrl` rỗng |
+| 400 | `BANNER_400_INVALID_DATE_RANGE` | Ngày bắt đầu phải trước ngày kết thúc | `startDate > endDate` |
+| 400 | `SYS_422` (validation) | `Vi tri hien thi phai >= 0` | `position < 0` |
+| 404 | `BANNER_404_NOT_FOUND` | Không tìm thấy banner | `id` không tồn tại |
+| 401 | `AUTH_401` | Chưa xác thực hoặc token không hợp lệ | Thiếu/sai `Authorization` |
+| 403 | `AUTH_403` | Không có quyền truy cập tài nguyên | Token không có role `ADMIN` |
 
 #### 29.2.4 `PATCH /api/v1/admin/banners/{id}/status`
 
-Đổi trạng thái banner.
+Đổi trạng thái `isActive` của banner.
 
-**Request body:**
+> **Quan trọng**: Endpoint này dùng **query param** (không phải request body). Cú pháp: `PATCH /api/v1/admin/banners/{id}/status?isActive=true` hoặc `?isActive=false`. Tham chiếu `BannerAdminController.java:75-77` (`@RequestParam Boolean isActive`).
 
-```json
-{ "isActive": true }
-```
+**Path Variable:** `id` (Long) — ID banner cần đổi trạng thái.
 
-**Validation (khi `isActive = true`):**
-- `startDate` không được trong tương lai (banner không thể được kích hoạt trước thời gian bắt đầu).
-- `endDate` không được trong quá khứ (banner đã hết hạn không thể kích hoạt).
+**Query Param:** `isActive` (Boolean, bắt buộc — không có default).
 
-**Error codes:**
-- `404 BANNER_404_NOT_FOUND` — banner không tồn tại.
-- `422 BANNER_422_INVALID_STATUS` — vi phạm validation thời gian khi kích hoạt.
+**Response:** `ApiResponse<BannerListItem>` với HTTP `200 OK`, message `"Doi trang thai banner thanh cong"`.
+
+**Validation (chỉ chạy khi `isActive = true`):**
+- `banner.startDate` không được trong tương lai (banner chưa đến giờ phát sóng).
+- `banner.endDate` không được trong quá khứ (banner đã hết hạn không kích hoạt lại được).
+
+**Lỗi:**
+
+| HTTP | ErrorCode | Message | Nguyên nhân |
+|---|---|---|---|
+| 400 | `SYS_400` | Dữ liệu yêu cầu không hợp lệ | Thiếu query `isActive` (Spring sẽ ném `MissingServletRequestParameterException`) |
+| 404 | `BANNER_404_NOT_FOUND` | Không tìm thấy banner | `id` không tồn tại |
+| 422 | `BANNER_422_INVALID_STATUS` | Trạng thái banner không hợp lệ cho thao tác này | Kích hoạt nhưng `startDate` tương lai hoặc `endDate` quá khứ |
+| 401 | `AUTH_401` | Chưa xác thực hoặc token không hợp lệ | Thiếu/sai `Authorization` |
+| 403 | `AUTH_403` | Không có quyền truy cập tài nguyên | Token không có role `ADMIN` |
 
 #### 29.2.5 `DELETE /api/v1/admin/banners/{id}`
 
-Xóa banner (soft delete: `isActive = false`).
+Xóa banner theo cơ chế **soft delete**: service tạo bản ghi mới với `isActive = false` rồi `save` (giữ nguyên `id`, `createdAt`, các field khác). Banner sẽ tự ẩn khỏi các public API vì chúng filter theo `isActive = true`.
 
-**Error:** `404 BANNER_404_NOT_FOUND` nếu không tồn tại.
+**Path Variable:** `id` (Long) — ID banner cần xóa.
 
-### 29.3 Banner Error Codes
+**Response:** `ApiResponse<Void>` với HTTP `200 OK`, message `"Xoa banner thanh cong"`, `data = null`.
+
+**Lỗi:**
+
+| HTTP | ErrorCode | Message | Nguyên nhân |
+|---|---|---|---|
+| 404 | `BANNER_404_NOT_FOUND` | Không tìm thấy banner | `id` không tồn tại |
+| 401 | `AUTH_401` | Chưa xác thực hoặc token không hợp lệ | Thiếu/sai `Authorization` |
+| 403 | `AUTH_403` | Không có quyền truy cập tài nguyên | Token không có role `ADMIN` |
+
+### 29.3 Banner Error Codes (tổng hợp)
+
+Tham chiếu `banner/exception/BannerErrorCode.java`. Có **4 mã lỗi** riêng của module Banner:
 
 | HTTP | Code | Ý nghĩa |
 |---|---|---|
-| 404 | `BANNER_404_NOT_FOUND` | Banner không tồn tại |
-| 422 | `BANNER_422_INVALID_STATUS` | Trạng thái banner không hợp lệ cho thao tác (vd: kích hoạt banner khi `startDate` trong tương lai hoặc `endDate` trong quá khứ) |
-| 400 | `BANNER_400_INVALID_DATE_RANGE` | `startDate` > `endDate` |
-| 400 | `BANNER_400_IMAGE_URL_BLANK` | `imageUrl` bị blank |
+| 404 | `BANNER_404_NOT_FOUND` | Banner không tồn tại (theo `id`) |
+| 422 | `BANNER_422_INVALID_STATUS` | Trạng thái banner không hợp lệ cho thao tác: phát sinh khi `PATCH /status?isActive=true` nhưng `startDate` tương lai hoặc `endDate` quá khứ |
+| 400 | `BANNER_400_INVALID_DATE_RANGE` | `startDate > endDate` (validate khi POST/PUT banner) |
+| 400 | `BANNER_400_IMAGE_URL_BLANK` | `imageUrl` null hoặc blank (validate khi POST/PUT banner) |
+
+> **Note (2026-10-16)**: Endpoint `GET /api/v1/banners/position/{position}` được liệt kê trong rule `.cursor/rules/46-endpoints-cart-order-voucher-banner.mdc` (mục "Banner Quảng cáo") nhưng **CHƯA được implement** trong `BannerPublicController.java`. Method `getActiveBannersByPosition(Integer position)` đã có sẵn trong `BannerService` interface nhưng chưa expose qua HTTP. Hiện tại FE chỉ có 1 public endpoint là `GET /api/v1/banners/home`.
 
 ### 29.4 Banner DTO Summary
 
-**`BannerListItem`** (list/admin response): `id`, `type`, `position`, `imageUrl`, `imageAlt`, `ctaHref`, `ctaText`, `isActive`, `startDate`, `endDate`, `createdAt`.
+`BannerListItem` (dùng cho list/admin response) và `BannerResponse` (dùng cho public `GET /home` response) có cùng cấu trúc 11 field:
 
-**`BannerResponse`** (dùng chung cho public và admin response): `id`, `type`, `position`, `imageUrl`, `imageAlt`, `ctaHref`, `ctaText`, `isActive`, `startDate`, `endDate`, `createdAt`. Trong `HomeBannersResponse`, các trường `position`/`isActive`/`startDate`/`endDate`/`createdAt` vẫn được trả về — FE có thể bỏ qua nếu không cần.
+| Field | Type | Mô tả |
+|---|---|---|
+| `id` | `Long` | ID banner |
+| `type` | `BannerType` (enum) | Loại banner (`HERO` / `FREESHIP` / `VOUCHER_NEW_SHOP` / `PROMOTION`) |
+| `position` | `Integer` | Thứ tự hiển thị |
+| `imageUrl` | `String` | URL ảnh |
+| `imageAlt` | `String` | Alt text |
+| `ctaHref` | `String` | URL khi click |
+| `ctaText` | `String` | Text nút CTA |
+| `isActive` | `Boolean` | Trạng thái kích hoạt |
+| `startDate` | `Instant` | Thời điểm bắt đầu |
+| `endDate` | `Instant` | Thời điểm kết thúc |
+| `createdAt` | `Instant` | Thời điểm tạo (do `@PrePersist`) |
+
+**`HomeBannersResponse`** (chỉ dùng ở `GET /api/v1/banners/home`):
+
+| Field | Type | Mô tả |
+|---|---|---|
+| `mainSlides` | `List<BannerResponse>` | Các banner `type = HERO` (slide chính đầu trang chủ) |
+| `sideBanners` | `List<BannerResponse>` | Các banner còn lại (`FREESHIP` / `VOUCHER_NEW_SHOP` / `PROMOTION`) — sort theo `position` ASC |
+
+**`BannerType` enum** (tham chiếu `banner/enums/BannerType.java`):
+
+| Value | Mô tả |
+|---|---|
+| `HERO` | Slide chính đầu trang chủ → `mainSlides` |
+| `FREESHIP` | Banner quảng bá freeship → `sideBanners` |
+| `VOUCHER_NEW_SHOP` | Banner voucher cho khách hàng mới / shop mới → `sideBanners` |
+| `PROMOTION` | Banner khuyến mãi chung → `sideBanners` |
+
+**`BannerRequest`** (dùng cho POST/PUT `/api/v1/admin/banners`): cấu trúc tương tự `BannerListItem` (11 field, không có `id` và `createdAt`) + thêm validation. Chi tiết ở 29.2.2.
 
 ---
 
