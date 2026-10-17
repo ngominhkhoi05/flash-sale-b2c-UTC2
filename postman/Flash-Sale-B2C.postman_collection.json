@@ -6591,6 +6591,37 @@
       "description": "Public product review endpoints (rule 47 endpoint list + backend ProductReviewPublicController)."
     },
     {
+      "name": "21_Wallet",
+      "item": [
+        {
+          "name": "[INFO] Wallet module - no controller yet",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/wallet/balance",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "wallet", "balance"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Documented: wallet controller chua duoc build', function () { pm.expect(true).to.equal(true); });",
+                  "pm.test('Status 404 expected (route not built)', function () { pm.expect(pm.response.code).to.be.within(400, 499); });"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Wallet module placeholder. Backend co Wallet entity + WalletTransactionRepository nhung KHONG co controller (rule 47 endpoints chua duoc build). Se bo sung khi backend mo rong (GET balance, POST topup, GET transactions)."
+    },
+    {
       "name": "20b_Negative_Tests_Auth",
       "item": [
         {
