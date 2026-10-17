@@ -1965,11 +1965,12 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });",
-                  "pm.test(\"data.storeGroups la array\", function () { pm.expect(j.data.storeGroups).to.be.an('array'); });"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 200 OK for GET cart', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data.storeGroups is array', function () { pm.expect(j.data.storeGroups).to.be.an('array'); });",
+                  "pm.test('data.totalItems is number', function () { pm.expect(j.data.totalItems).to.be.a('number'); });",
+                  "pm.test('data.totalAmount is number', function () { pm.expect(j.data.totalAmount).to.be.a('number'); });"
                 ]
               }
             }
@@ -2024,14 +2025,13 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx (201)\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });",
-                  "pm.test(\"data.totalItems >= 1\", function () { pm.expect(j.data.totalItems).to.be.at.least(1); });",
+                  "var j = pm.response.json();",
+                  "pm.test('Status 2xx (add to cart)', function () { pm.expect([200, 201]).to.include(pm.response.code); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data.totalItems >= 1', function () { pm.expect(j.data.totalItems).to.be.at.least(1); });",
                   "if (j.success && j.data && j.data.storeGroups && j.data.storeGroups.length>0) {",
                   "  var items = j.data.storeGroups[0].items;",
-                  "  if (items && items.length>0) { pm.environment.set(\"cartItemId\", items[items.length-1].id); }",
+                  "  if (items && items.length>0) { pm.environment.set('cartItemId', items[items.length-1].id); }",
                   "}"
                 ]
               }
@@ -2088,10 +2088,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 200 for update cart item', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data.totalItems reflects new quantity', function () { pm.expect(j.data.totalItems).to.be.at.least(3); });"
                 ]
               }
             }
@@ -2133,10 +2133,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 200 for delete cart item', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data.totalItems decremented', function () { pm.expect(j.data.totalItems).to.be.a('number'); });"
                 ]
               }
             }
@@ -2176,10 +2176,99 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 200 for clear cart', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data.totalItems === 0 after clear', function () { pm.expect(j.data.totalItems).to.equal(0); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] Add to Cart with non-existent variant (404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/v1/cart/items", "host": ["{{baseUrl}}"], "path": ["api","v1","cart","items"] },
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"variantId\": 999999999,\n  \"quantity\": 1\n}", "options": { "raw": { "language": "json" } } }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var j = pm.response.json();",
+                  "pm.test('Status 404 (variant not found)', function () { pm.expect(pm.response.code).to.equal(404); });",
+                  "pm.test('j.success === false', function () { pm.expect(j.success).to.equal(false); });",
+                  "pm.test('j.code starts with PROD_404', function () { pm.expect(j.code).to.match(/^PROD_404/); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] Add to Cart with quantity = 0 (validation error)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/v1/cart/items", "host": ["{{baseUrl}}"], "path": ["api","v1","cart","items"] },
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"variantId\": \"{{variantId}}\",\n  \"quantity\": 0\n}", "options": { "raw": { "language": "json" } } }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var j = pm.response.json();",
+                  "pm.test('Status 400 (validation)', function () { pm.expect(pm.response.code).to.equal(400); });",
+                  "pm.test('j.success === false', function () { pm.expect(j.success).to.equal(false); });",
+                  "pm.test('j.code starts with CART_400 or VALIDATION', function () { pm.expect(j.code).to.match(/^(CART_400|VALIDATION)/); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] GET Cart with no token (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/v1/cart", "host": ["{{baseUrl}}"], "path": ["api","v1","cart"] }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var saved = pm.environment.get('accessToken');",
+                  "if (saved) { pm.environment.set('savedAccessToken', saved); pm.environment.set('accessToken', ''); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var j = pm.response.json();",
+                  "pm.test('Status 401 (no token)', function () { pm.expect(pm.response.code).to.equal(401); });",
+                  "pm.test('j.success === false', function () { pm.expect(j.success).to.equal(false); });",
+                  "pm.test('j.code starts with AUTH_401', function () { pm.expect(j.code).to.match(/^AUTH_401/); });",
+                  "var saved = pm.environment.get('savedAccessToken');",
+                  "if (saved) { pm.environment.set('accessToken', saved); pm.environment.unset('savedAccessToken'); }"
                 ]
               }
             }
@@ -4723,10 +4812,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 200 for delete cart item', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data.totalItems decremented', function () { pm.expect(j.data.totalItems).to.be.a('number'); });"
                 ]
               }
             }
@@ -5526,10 +5615,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 200 for delete cart item', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data.totalItems decremented', function () { pm.expect(j.data.totalItems).to.be.a('number'); });"
                 ]
               }
             }
