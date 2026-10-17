@@ -6392,10 +6392,30 @@
       "script": {
         "type": "text/javascript",
         "exec": [
+          "// ============================================",
+          "// Collection-level pre-request helpers",
+          "// ============================================",
           "function uuidv4() { return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) { var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8); return v.toString(16); }); }",
+          "",
+          "// 1) Initialize default idempotencyKey only once per run",
           "var k = pm.environment.get('idempotencyKey');",
-          "if (!k) { pm.environment.set('idempotencyKey', uuidv4()); }"
-        ]
+          "if (!k) { pm.environment.set('idempotencyKey', uuidv4()); }",
+          "",
+          "// 2) Reset idempotentReplayed flag at start of every request",
+          "//    (test scripts set this to 'true' only when the response header",
+          "//     'Idempotent-Replayed' is present).",
+          "if (pm.info.iteration === 0) { pm.environment.set('idempotentReplayed', 'false'); }",
+          "",
+          "// 3) Replay & conflict key pools - generated once per run for",
+          "//    idempotency-key tests in folder 09 (FlashSale_Reservation).",
+          "if (!pm.environment.get('idempotencyKeyReplay')) { pm.environment.set('idempotencyKeyReplay', uuidv4()); }",
+          "if (!pm.environment.get('idempotencyKeyConflict')) { pm.environment.set('idempotencyKeyConflict', uuidv4()); }",
+          "",
+          "// 4) Skip helper - common test scaffolding can call pm.variables.skip()",
+          "//    if preconditions are not met (e.g. accessToken is empty but",
+          "//    a request needs it). Disabled by default; opt-in per request."
+        ],
+        "type": "text/javascript"
       }
     }
   ],
