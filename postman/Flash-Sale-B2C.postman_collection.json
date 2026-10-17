@@ -5985,11 +5985,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"data.items la array\", function () { pm.expect(j.data.items).to.be.an('array'); });",
-                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "if (j.data) { pm.test('data.content la array', function () { pm.expect(j.data.content).to.be.an('array'); }); }"
                 ]
               }
             }
@@ -6044,9 +6043,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "if (j.success && j.data && j.data.id) { pm.environment.set(\"bannerId\", j.data.id); }"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "if (j.data && j.data.id) { pm.environment.set('bannerId', j.data.id); pm.test('Saved bannerId', function () { pm.expect(j.data.id).to.be.a('number'); }); }"
                 ]
               }
             }
@@ -6102,11 +6102,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"data.id trung bannerId\", function () { pm.expect(String(j.data.id)).to.equal(pm.environment.get(\"bannerId\")); });",
-                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data.id trung bannerId', function () { pm.expect(String(j.data.id)).to.equal(String(pm.environment.get('bannerId'))); });"
                 ]
               }
             }
@@ -6160,11 +6159,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"data.isActive == false\", function () { pm.expect(j.data.isActive).to.equal(false); });",
-                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data.isActive == false', function () { pm.expect(j.data.isActive).to.equal(false); });"
                 ]
               }
             }
@@ -6206,11 +6204,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"data == null (soft delete)\", function () { pm.expect(j.data).to.equal(null); });",
-                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data == null (soft delete)', function () { pm.expect(j.data).to.equal(null); });"
                 ]
               }
             }
@@ -6426,6 +6423,48 @@
                 "exec": [
                   "pm.test(\"Status 4xx (expected)\", function () { pm.expect(pm.response.code).to.be.within(400,499); });",
                   "var j=pm.response.json(); pm.expect(j.success).to.equal(false);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] 403 - Buyer goi Admin Banner",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/banners?page=0&size=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "banners"
+              ],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "5" }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "{{accessToken}}", "type": "string" }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 4xx (expected 403)', function () { pm.expect(pm.response.code).to.be.within(400, 499); });",
+                  "var j = pm.response.json(); pm.expect(j.success).to.equal(false);"
                 ]
               }
             }
