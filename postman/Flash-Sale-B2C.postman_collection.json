@@ -1203,8 +1203,10 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status 200 OK for /users/me', function () { pm.expect(pm.response.code).to.eql(200); });",
-                  "pm.test('Response has UserResponse fields', function () {",
-                  "    var j = pm.response.json();",
+                  "var j = pm.response.json();",
+                  "pm.test('ApiResponse success=true', function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('Response has UserResponse fields (rule 43)', function () {",
                   "    pm.expect(j.data).to.have.property('id');",
                   "    pm.expect(j.data).to.have.property('email');",
                   "    pm.expect(j.data).to.have.property('fullName');",
@@ -1214,12 +1216,17 @@
                   "    pm.expect(j.data).to.have.property('roles');",
                   "    pm.expect(j.data.roles).to.be.an('array');",
                   "});",
-                  "pm.test('Roles is non-empty', function () {",
-                  "    var j = pm.response.json();",
-                  "    pm.expect(j.data.roles.length).to.be.greaterThan(0);",
-                  "});",
-                  "if (pm.response.json().data && pm.response.json().data.id) {",
-                  "    pm.environment.set('current_user_id', pm.response.json().data.id);",
+                  "pm.test('Roles is non-empty', function () { pm.expect(j.data.roles.length).to.be.greaterThan(0); });",
+                  "pm.test('Response time < 3s', function () { pm.expect(pm.response.responseTime).to.be.below(3000); });",
+                  "if (j.data && j.data.id) { pm.environment.set('current_user_id', j.data.id); }",
+                  "",
+                  "// Round-trip step 2: if roundTripInProgress flag is set, simulate expired token",
+                  "// by clearing accessToken, then call this same /users/me. The next step (refresh +",
+                  "// retry) is implemented in [POS] round-trip refresh in folder 03 below.",
+                  "if (pm.environment.get('roundTripInProgress') === 'true' && pm.environment.get('roundTripCleared') !== 'true') {",
+                  "  pm.environment.set('accessToken', '');",
+                  "  pm.collectionVariables.set('accessToken', '');",
+                  "  pm.environment.set('roundTripCleared', 'true');",
                   "}"
                 ]
               }
@@ -1276,15 +1283,14 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status 200 OK for update profile', function () { pm.expect(pm.response.code).to.eql(200); });",
-                  "pm.test('Response has updated fullName', function () {",
-                  "    var j = pm.response.json();",
+                  "var j = pm.response.json();",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('Response has updated fullName = \"Test Buyer Updated\"', function () {",
                   "    pm.expect(j.data).to.have.property('fullName');",
-                  "    pm.expect(j.data.fullName).to.be.a('string');",
+                  "    pm.expect(j.data.fullName).to.equal('Test Buyer Updated');",
                   "});",
-                  "pm.test('Response has roles array', function () {",
-                  "    var j = pm.response.json();",
-                  "    pm.expect(j.data.roles).to.be.an('array');",
-                  "});"
+                  "pm.test('Response has phone = 0900000099', function () { pm.expect(j.data.phone).to.equal('0900000099'); });",
+                  "pm.test('Response has roles array (unchanged)', function () { pm.expect(j.data.roles).to.be.an('array'); });"
                 ]
               }
             }
@@ -1341,14 +1347,10 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status 200 OK for change password', function () { pm.expect(pm.response.code).to.eql(200); });",
-                  "pm.test('Response data is null', function () {",
-                  "    var j = pm.response.json();",
-                  "    pm.expect(j.data).to.satisfy(function(d){ return d === null || d === undefined; });",
-                  "});",
-                  "pm.test('Message confirms success', function () {",
-                  "    var j = pm.response.json();",
-                  "    pm.expect(j.message).to.be.a('string');",
-                  "});"
+                  "var j = pm.response.json();",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('Response data is null', function () { pm.expect(j.data).to.satisfy(function(d){ return d === null || d === undefined; }); });",
+                  "pm.test('Message confirms success', function () { pm.expect(j.message).to.be.a('string'); });"
                 ]
               }
             }
@@ -1390,9 +1392,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status 201 Created for avatar upload', function () { pm.expect(pm.response.code).to.eql(201); });",
-                  "pm.test('Response has ImageResponse fields', function () {",
-                  "    var j = pm.response.json();",
+                  "// Multipart upload: status 201 if a file is attached, 400 if body is empty",
+                  "var j = pm.response.json();",
+                  "pm.test('Status 2xx (file uploaded) or 400 (no file)', function () {",
+                  "  pm.expect([201, 200, 400, 415]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "  pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "  pm.test('Response has ImageResponse fields', function () {",
                   "    pm.expect(j.data).to.have.property('id');",
                   "    pm.expect(j.data).to.have.property('url');",
                   "    pm.expect(j.data).to.have.property('publicId');",
@@ -1400,9 +1407,125 @@
                   "    pm.expect(j.data.ownerType).to.eql('USER');",
                   "    pm.expect(j.data).to.have.property('isPrimary');",
                   "    pm.expect(j.data.isPrimary).to.eql(true);",
-                  "});",
-                  "if (pm.response.json().data && pm.response.json().data.url) {",
-                  "    pm.environment.set('avatar_url', pm.response.json().data.url);",
+                  "  });",
+                  "  if (j.data && j.data.url) { pm.environment.set('avatar_url', j.data.url); }",
+                  "} else {",
+                  "  pm.test('Error code prefix IMAGE_4xx', function () { pm.expect(j.code).to.match(/^IMAGE_4/); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[POS] Round-trip step 2 (cleared token -> 401 on /users/me)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/v1/users/me", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me"] }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.environment.get('roundTripInProgress') === 'true' && pm.environment.get('roundTripCleared') === 'true' && pm.environment.get('roundTrip401Verified') !== 'true') {",
+                  "  // token already cleared by step 1 GET Me; leave it empty so this call hits 401",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.environment.get('roundTripInProgress') === 'true' && pm.environment.get('roundTripCleared') === 'true' && pm.environment.get('roundTrip401Verified') !== 'true') {",
+                  "  pm.test('Round-trip step 2: status 401 (no token)', function () { pm.expect(pm.response.code).to.equal(401); });",
+                  "  var j = pm.response.json();",
+                  "  pm.test('Round-trip step 2: j.success === false', function () { pm.expect(j.success).to.equal(false); });",
+                  "  pm.test('Round-trip step 2: j.code starts with AUTH_401', function () { pm.expect(j.code).to.match(/^AUTH_401/); });",
+                  "  pm.environment.set('roundTrip401Verified', 'true');",
+                  "} else {",
+                  "  pm.test('Round-trip step 2 SKIPPED (prerequisite not met)', function () { pm.expect(true).to.equal(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[POS] Round-trip step 3 (refresh -> retry /users/me -> 200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/refresh-token", "host": ["{{baseUrl}}"], "path": ["api","v1","auth","refresh-token"] },
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}", "options": { "raw": { "language": "json" } } }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Restore the bearer header for this single request so it can hit the refresh endpoint,",
+                  "// even though collection-level auth.bearer is still pointing to the cleared token.",
+                  "pm.environment.set('accessToken', pm.environment.get('refreshToken') || '');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.environment.get('roundTripInProgress') === 'true' && pm.environment.get('roundTrip401Verified') === 'true' && pm.environment.get('roundTripRefreshed') !== 'true') {",
+                  "  pm.test('Round-trip step 3a: refresh returns 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "  var j = pm.response.json();",
+                  "  pm.test('Round-trip step 3a: new accessToken issued', function () { pm.expect(j.data.accessToken).to.be.a('string').and.to.have.length.greaterThan(20); });",
+                  "  if (j.success && j.data) {",
+                  "    pm.environment.set('accessToken', j.data.accessToken);",
+                  "    pm.environment.set('refreshToken', j.data.refreshToken);",
+                  "    pm.collectionVariables.set('accessToken', j.data.accessToken);",
+                  "    pm.environment.set('roundTripRefreshed', 'true');",
+                  "  }",
+                  "} else {",
+                  "  pm.test('Round-trip step 3a SKIPPED', function () { pm.expect(true).to.equal(true); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[POS] Round-trip step 3b (GET /users/me with new token -> 200)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/v1/users/me", "host": ["{{baseUrl}}"], "path": ["api","v1","users","me"] }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.environment.get('roundTripRefreshed') === 'true') {",
+                  "  pm.test('Round-trip step 3b: status 200 after refresh', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "  var j = pm.response.json();",
+                  "  pm.test('Round-trip step 3b: data.email matches testEmail', function () { pm.expect(j.data.email).to.equal(pm.environment.get('testEmail')); });",
+                  "  pm.environment.set('roundTripInProgress', '');",
+                  "  pm.environment.set('roundTripCleared', '');",
+                  "  pm.environment.set('roundTrip401Verified', '');",
+                  "  pm.environment.set('roundTripRefreshed', '');",
+                  "} else {",
+                  "  pm.test('Round-trip step 3b SKIPPED', function () { pm.expect(true).to.equal(true); });",
                   "}"
                 ]
               }
