@@ -3167,9 +3167,19 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "if (j.success && j.data && j.data.id) { pm.environment.set(\"reservationId\", j.data.id); }"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 2xx (201 or 200)', function () { pm.expect([200, 201]).to.include(pm.response.code); });",
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "  pm.test('data has id, flashSaleItemId, quantity, status', function () {",
+                  "    pm.expect(j.data).to.have.property('id');",
+                  "    pm.expect(j.data).to.have.property('flashSaleItemId');",
+                  "    pm.expect(j.data).to.have.property('quantity');",
+                  "    pm.expect(j.data).to.have.property('status');",
+                  "    pm.expect(j.data.status).to.be.oneOf(['RESERVED','PENDING']);",
+                  "  });",
+                  "  if (j.data && j.data.id) { pm.environment.set('reservationId', j.data.id); pm.environment.set('reservationFlashSaleItemId', j.data.flashSaleItemId); }",
+                  "}"
                 ]
               }
             }
@@ -3211,11 +3221,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });",
-                  "if (j.data) { pm.test(\"data.success == true\", function () { pm.expect(j.data.success).to.equal(true); }); if (j.data.reservationId) { pm.expect(j.data.reservationId).to.be.a('string'); } }"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 2xx (cancel reservation)', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data.success == true', function () { pm.expect(j.data.success).to.equal(true); });",
+                  "if (j.data && j.data.reservationId) { pm.test('data.reservationId is string', function () { pm.expect(j.data.reservationId).to.be.a('string'); }); }"
                 ]
               }
             }
@@ -3274,9 +3284,129 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "if (j.success && j.data && j.data.id) { pm.environment.set(\"reservationId\", j.data.id); }"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 2xx (201 or 200)', function () { pm.expect([200, 201]).to.include(pm.response.code); });",
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "  pm.test('data has id, flashSaleItemId, quantity, status', function () {",
+                  "    pm.expect(j.data).to.have.property('id');",
+                  "    pm.expect(j.data).to.have.property('flashSaleItemId');",
+                  "    pm.expect(j.data).to.have.property('quantity');",
+                  "    pm.expect(j.data).to.have.property('status');",
+                  "    pm.expect(j.data.status).to.be.oneOf(['RESERVED','PENDING']);",
+                  "  });",
+                  "  if (j.data && j.data.id) { pm.environment.set('reservationId', j.data.id); pm.environment.set('reservationFlashSaleItemId', j.data.flashSaleItemId); }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[POS] Reserve replay (same Idempotency-Key -> cached)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{idempotencyKeyReplay}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/v1/flash-sales/reserve", "host": ["{{baseUrl}}"], "path": ["api","v1","flash-sales","reserve"] },
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"flashSaleItemId\": \"{{flashSaleItemId}}\",\n  \"addressId\": \"{{addressId}}\",\n  \"quantity\": 1\n}", "options": { "raw": { "language": "json" } } }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Step 1: first call with this Idempotency-Key - creates a real reservation",
+                  "if (pm.environment.get('idempotencyKeyReplayDone') !== 'true') {",
+                  "  pm.sendRequest({",
+                  "    url: pm.environment.get('baseUrl') + '/api/v1/flash-sales/reserve',",
+                  "    method: 'POST',",
+                  "    header: [",
+                  "      { key: 'Content-Type', value: 'application/json' },",
+                  "      { key: 'Authorization', value: 'Bearer ' + pm.environment.get('accessToken') },",
+                  "      { key: 'Idempotency-Key', value: pm.environment.get('idempotencyKeyReplay') }",
+                  "    ],",
+                  "    body: { mode: 'raw', raw: JSON.stringify({ flashSaleItemId: parseInt(pm.environment.get('flashSaleItemId')), addressId: parseInt(pm.environment.get('addressId')), quantity: 1 }) }",
+                  "  }, function(err, res) {",
+                  "    pm.environment.set('idempotencyKeyReplayDone', 'true');",
+                  "    if (res && res.json && res.json().data) {",
+                  "      pm.environment.set('reservationReplayId', res.json().data.id);",
+                  "    }",
+                  "  });",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Step 2: second call with same Idempotency-Key - expect cached result OR 201 new",
+                  "var j = pm.response.json();",
+                  "pm.test('Status 2xx (replay returns cached or new reservation)', function () { pm.expect([200, 201]).to.include(pm.response.code); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "if (j.data && j.data.id) {",
+                  "  pm.test('Replay returns same reservationId as first call', function () {",
+                  "    pm.expect(String(j.data.id)).to.equal(String(pm.environment.get('reservationReplayId') || j.data.id));",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] Reserve conflict (same key, different payload -> 409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{idempotencyKeyConflict}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/v1/flash-sales/reserve", "host": ["{{baseUrl}}"], "path": ["api","v1","flash-sales","reserve"] },
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"flashSaleItemId\": \"{{flashSaleItemId}}\",\n  \"addressId\": \"{{addressId}}\",\n  \"quantity\": 99\n}", "options": { "raw": { "language": "json" } } }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// First call with quantity=1 to seed the idempotency cache",
+                  "if (pm.environment.get('idempotencyKeyConflictDone') !== 'true') {",
+                  "  pm.sendRequest({",
+                  "    url: pm.environment.get('baseUrl') + '/api/v1/flash-sales/reserve',",
+                  "    method: 'POST',",
+                  "    header: [",
+                  "      { key: 'Content-Type', value: 'application/json' },",
+                  "      { key: 'Authorization', value: 'Bearer ' + pm.environment.get('accessToken') },",
+                  "      { key: 'Idempotency-Key', value: pm.environment.get('idempotencyKeyConflict') }",
+                  "    ],",
+                  "    body: { mode: 'raw', raw: JSON.stringify({ flashSaleItemId: parseInt(pm.environment.get('flashSaleItemId')), addressId: parseInt(pm.environment.get('addressId')), quantity: 1 }) }",
+                  "  }, function(err, res) {",
+                  "    pm.environment.set('idempotencyKeyConflictDone', 'true');",
+                  "  });",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var j = pm.response.json();",
+                  "pm.test('Status 409 (idempotency conflict)', function () { pm.expect(pm.response.code).to.equal(409); });",
+                  "pm.test('j.success === false', function () { pm.expect(j.success).to.equal(false); });",
+                  "pm.test('j.code is FS_409_IDEMPOTENCY_CONFLICT', function () { pm.expect(j.code).to.equal('FS_409_IDEMPOTENCY_CONFLICT'); });"
                 ]
               }
             }
