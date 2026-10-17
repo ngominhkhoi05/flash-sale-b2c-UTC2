@@ -18,7 +18,7 @@ public enum AuthErrorCode implements ErrorCode {
     ROLE_NOT_FOUND(HttpStatus.NOT_FOUND, "AUTH_404_ROLE", "Vai trò yêu cầu không tồn tại trên hệ thống"),
 
     // ===== Google OAuth2 (Authorization Code flow) =====
-    GOOGLE_EXCHANGE_FAILED(HttpStatus.BAD_GATEWAY, "AUTH_502_GOOGLE_EXCHANGE",
+    GOOGLE_EXCHANGE_FAILED(HttpStatus.BAD_REQUEST, "AUTH_502_GOOGLE_EXCHANGE",
             "Không thể trao đổi authorization code với Google"),
     GOOGLE_INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH_401_GOOGLE_TOKEN",
             "Google ID token không hợp lệ hoặc đã hết hạn"),
