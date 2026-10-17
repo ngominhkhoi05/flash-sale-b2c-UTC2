@@ -2641,9 +2641,19 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200 (or 404 if order missing)\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 404]); });",
-                  "var j=pm.response.json();",
-                  "if (pm.response.code === 200 && j.success && j.data) { pm.test(\"orderId matches\", function () { pm.expect(j.data.orderId).to.equal(parseInt(pm.environment.get(\"orderId\"))); }); pm.test(\"orderCode is string\", function () { pm.expect(j.data.orderCode).to.be.a('string'); }); pm.test(\"paymentMethod is string (ZALOPAY|COD|UNPAID)\", function () { pm.expect(j.data.paymentMethod).to.be.oneOf([\"ZALOPAY\",\"COD\",\"UNPAID\"]); }); pm.test(\"amount is number\", function () { pm.expect(j.data.amount).to.be.a('number'); }); pm.test(\"status is string (PENDING|SUCCESS)\", function () { pm.expect(j.data.status).to.be.oneOf([\"PENDING\",\"SUCCESS\",\"FAILED\",\"REFUNDED\"]); }); pm.test(\"createdAt is string\", function () { pm.expect(j.data.createdAt).to.be.a('string'); }); }"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 200 (or 404 if order missing)', function () { pm.expect(pm.response.code).to.be.oneOf([200, 404]); });",
+                  "if (pm.response.code === 200 && j.success && j.data) {",
+                  "  pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "  pm.test('orderId matches', function () { pm.expect(j.data.orderId).to.equal(parseInt(pm.environment.get('orderId'))); });",
+                  "  pm.test('orderCode is string', function () { pm.expect(j.data.orderCode).to.be.a('string'); });",
+                  "  pm.test('paymentMethod is string (ZALOPAY|COD|UNPAID)', function () { pm.expect(j.data.paymentMethod).to.be.oneOf(['ZALOPAY','COD','UNPAID']); });",
+                  "  pm.test('amount is number', function () { pm.expect(j.data.amount).to.be.a('number'); });",
+                  "  pm.test('status is string (PENDING|SUCCESS|FAILED|REFUNDED)', function () { pm.expect(j.data.status).to.be.oneOf(['PENDING','SUCCESS','FAILED','REFUNDED']); });",
+                  "  pm.test('createdAt is string', function () { pm.expect(j.data.createdAt).to.be.a('string'); });",
+                  "} else if (pm.response.code === 404) {",
+                  "  pm.test('Error code ORDER_404_NOT_FOUND', function () { pm.expect(j.code).to.equal('ORDER_404_NOT_FOUND'); });",
+                  "}"
                 ]
               }
             }
@@ -2691,9 +2701,17 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200 (or 400/500 if order invalid/ZaloPay error)\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 400, 500]); });",
-                  "var j=pm.response.json();",
-                  "if (pm.response.code === 200 && j.success && j.data) { pm.test(\"paymentMethod == ZALOPAY\", function () { pm.expect(j.data.paymentMethod).to.equal(\"ZALOPAY\"); }); pm.test(\"status == PENDING\", function () { pm.expect(j.data.status).to.equal(\"PENDING\"); }); pm.test(\"transactionCode starts with ZP\", function () { pm.expect(j.data.transactionCode).to.match(/^ZP\\d+_\\d+$/); }); pm.test(\"amount is number > 0\", function () { pm.expect(j.data.amount).to.be.a('number').and.to.be.above(0); }); if (j.data.qrCodeUrl) { pm.test(\"qrCodeUrl is string\", function () { pm.expect(j.data.qrCodeUrl).to.be.a('string'); }); } if (j.data.paymentUrl) { pm.test(\"paymentUrl is string\", function () { pm.expect(j.data.paymentUrl).to.be.a('string'); }); } }"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 200 (or 400/500 if order invalid/ZaloPay error)', function () { pm.expect(pm.response.code).to.be.oneOf([200, 400, 500]); });",
+                  "if (pm.response.code === 200 && j.success && j.data) {",
+                  "  pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "  pm.test('paymentMethod == ZALOPAY', function () { pm.expect(j.data.paymentMethod).to.equal('ZALOPAY'); });",
+                  "  pm.test('status == PENDING', function () { pm.expect(j.data.status).to.equal('PENDING'); });",
+                  "  pm.test('transactionCode starts with ZP', function () { pm.expect(j.data.transactionCode).to.match(/^ZP\\d+_\\d+$/); });",
+                  "  pm.test('amount is number > 0', function () { pm.expect(j.data.amount).to.be.a('number').and.to.be.above(0); });",
+                  "  if (j.data.qrCodeUrl) { pm.test('qrCodeUrl is string', function () { pm.expect(j.data.qrCodeUrl).to.be.a('string'); }); }",
+                  "  if (j.data.paymentUrl) { pm.test('paymentUrl is string', function () { pm.expect(j.data.paymentUrl).to.be.a('string'); }); }",
+                  "}"
                 ]
               }
             }
@@ -2741,9 +2759,16 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200 (or 400 if order not pending)\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 400]); });",
-                  "var j=pm.response.json();",
-                  "if (pm.response.code === 200 && j.success && j.data) { pm.test(\"paymentMethod == COD\", function () { pm.expect(j.data.paymentMethod).to.equal(\"COD\"); }); pm.test(\"transactionCode starts with COD_\", function () { pm.expect(j.data.transactionCode).to.match(/^COD_/); }); pm.test(\"amount is number\", function () { pm.expect(j.data.amount).to.be.a('number'); }); }"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 200 (or 400 if order not pending)', function () { pm.expect(pm.response.code).to.be.oneOf([200, 400]); });",
+                  "if (pm.response.code === 200 && j.success && j.data) {",
+                  "  pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "  pm.test('paymentMethod == COD', function () { pm.expect(j.data.paymentMethod).to.equal('COD'); });",
+                  "  pm.test('transactionCode starts with COD_', function () { pm.expect(j.data.transactionCode).to.match(/^COD_/); });",
+                  "  pm.test('amount is number', function () { pm.expect(j.data.amount).to.be.a('number'); });",
+                  "} else {",
+                  "  pm.test('success == false on transition error', function () { pm.expect(j.success).to.equal(false); });",
+                  "}"
                 ]
               }
             }
@@ -2792,9 +2817,13 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200 (or 404 if no ZaloPay payment yet)\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 404]); });",
-                  "var j=pm.response.json();",
-                  "if (pm.response.code === 200 && j.success && j.data) { pm.test(\"paymentMethod == ZALOPAY\", function () { pm.expect(j.data.paymentMethod).to.equal(\"ZALOPAY\"); }); pm.test(\"status is string (PENDING|SUCCESS)\", function () { pm.expect(j.data.status).to.be.oneOf([\"PENDING\",\"SUCCESS\",\"FAILED\"]); }); }"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 200 (or 404 if no ZaloPay payment yet)', function () { pm.expect(pm.response.code).to.be.oneOf([200, 404]); });",
+                  "if (pm.response.code === 200 && j.success && j.data) {",
+                  "  pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "  pm.test('paymentMethod == ZALOPAY', function () { pm.expect(j.data.paymentMethod).to.equal('ZALOPAY'); });",
+                  "  pm.test('status is string (PENDING|SUCCESS|FAILED)', function () { pm.expect(j.data.status).to.be.oneOf(['PENDING','SUCCESS','FAILED']); });",
+                  "}"
                 ]
               }
             }
