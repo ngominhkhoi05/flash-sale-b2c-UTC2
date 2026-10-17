@@ -7204,6 +7204,171 @@
         }
       ],
       "description": "Negative tests for module Auth: 400 (validation), 401 (credentials/refresh/Google), 404 (user not found), 405 (wrong method), 409 (duplicate email/phone), 502 (Google exchange fail)."
+    },
+    {
+      "name": "20c_Negative_Tests_Expanded",
+      "item": [
+        {
+          "name": "[NEG] Auth 401 - Invalid bearer token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "me"]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "invalid.token.value", "type": "string" }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var j = pm.response.json();",
+                  "pm.test('Status 401', function () { pm.expect(pm.response.code).to.equal(401); });",
+                  "pm.test('j.success === false', function () { pm.expect(j.success).to.equal(false); });",
+                  "pm.test('code prefix AUTH_', function () { pm.expect(j.code).to.match(/^AUTH_/); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] Auth 401 - Expired access token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "me"]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.expired", "type": "string" }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var j = pm.response.json();",
+                  "pm.test('Status 401', function () { pm.expect(pm.response.code).to.equal(401); });",
+                  "pm.test('j.success === false', function () { pm.expect(j.success).to.equal(false); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] Auth 403 - Buyer goi Seller-only",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/seller/stores",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "seller", "stores"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"storeName\": \"Test\",\n  \"description\": \"Test\"\n}"
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "{{accessToken}}", "type": "string" }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var j = pm.response.json();",
+                  "pm.test('Status 4xx (expected 403)', function () { pm.expect(pm.response.code).to.be.within(400, 499); });",
+                  "pm.test('j.success === false', function () { pm.expect(j.success).to.equal(false); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] Auth 404 - User not found on profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/999999999",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "999999999"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var j = pm.response.json();",
+                  "pm.test('Status 4xx (expected 404)', function () { pm.expect(pm.response.code).to.be.within(400, 499); });",
+                  "pm.test('j.success === false', function () { pm.expect(j.success).to.equal(false); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] Auth 405 - Wrong method on cart",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/cart/items",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "cart", "items"]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                { "key": "token", "value": "{{accessToken}}", "type": "string" }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var j = pm.response.json();",
+                  "pm.test('Status 4xx (expected 405)', function () { pm.expect(pm.response.code).to.be.within(400, 499); });",
+                  "pm.test('j.success === false', function () { pm.expect(j.success).to.equal(false); });"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Expanded negative tests: invalid token 401, expired token 401, role-boundary 403, missing user 404, wrong method 405. Verify ApiResponse.success === false on all error paths and code prefix per rule 38."
     }
   ],
   "event": [
