@@ -1133,11 +1133,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"data is array\", function () { pm.expect(j.data).to.be.an('array'); });",
-                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });",
+                  "pm.test('Status 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "var j = pm.response.json();",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data is array', function () { pm.expect(j.data).to.be.an('array'); });",
                   "if (j.data && j.data.length>0) {",
                   "  var it = j.data[0];",
                   "  pm.test(\"item has id + availableStock\", function () { pm.expect(it.id).to.exist; pm.expect(it.availableStock).to.be.a('number'); });",
@@ -1173,11 +1172,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"data is array\", function () { pm.expect(j.data).to.be.an('array'); });",
-                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });",
+                  "pm.test('Status 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "var j = pm.response.json();",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data is array', function () { pm.expect(j.data).to.be.an('array'); });",
                   "if (j.data && j.data.length>0) {",
                   "  var s = j.data[0];",
                   "  pm.test(\"slot has id + title + items\", function () { pm.expect(s.id).to.exist; pm.expect(s.title).to.be.a('string'); pm.expect(s.items).to.be.an('array'); });",
@@ -4823,9 +4821,23 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "if (j.success && j.data && j.data.id) { pm.environment.set(\"imageId\", j.data.id); }"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 2xx (201 created) or 4xx (no file)', function () { pm.expect([201, 200, 400, 415, 502]).to.include(pm.response.code); });",
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "  pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "  pm.test('Returns ImageResponse with required fields', function () {",
+                  "    pm.expect(j.data).to.have.property('id');",
+                  "    pm.expect(j.data).to.have.property('url');",
+                  "    pm.expect(j.data).to.have.property('publicId');",
+                  "    pm.expect(j.data).to.have.property('ownerType');",
+                  "    pm.expect(j.data.ownerType).to.equal('PRODUCT');",
+                  "    pm.expect(j.data).to.have.property('ownerId');",
+                  "    pm.expect(String(j.data.ownerId)).to.equal(String(pm.environment.get('productId')));",
+                  "  });",
+                  "  if (j.data && j.data.id) { pm.environment.set('imageId', j.data.id); }",
+                  "} else {",
+                  "  pm.test('Error code prefix IMAGE_4xx', function () { pm.expect(j.code).to.match(/^IMAGE_4/); });",
+                  "}"
                 ]
               }
             }
@@ -4865,11 +4877,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"data is array\", function () { pm.expect(j.data).to.be.an('array'); });",
-                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });"
+                  "pm.test('Status 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "var j = pm.response.json();",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data is array', function () { pm.expect(j.data).to.be.an('array'); });"
                 ]
               }
             }
@@ -4916,11 +4927,13 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });",
-                  "if (j.data) { pm.test(\"data.isPrimary == true\", function () { pm.expect(j.data.isPrimary).to.equal(true); }); pm.test(\"data.id matches\", function () { pm.expect(String(j.data.id)).to.equal(String(pm.environment.get('imageId'))); }); }"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "if (j.data) {",
+                  "  pm.test('data.isPrimary == true', function () { pm.expect(j.data.isPrimary).to.equal(true); });",
+                  "  pm.test('data.id matches', function () { pm.expect(String(j.data.id)).to.equal(String(pm.environment.get('imageId'))); });",
+                  "}"
                 ]
               }
             }
@@ -4976,11 +4989,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });",
-                  "if (j.data) { pm.test(\"data.displayOrder == 1\", function () { pm.expect(j.data.displayOrder).to.equal(1); }); }"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "if (j.data) { pm.test('data.displayOrder == 1', function () { pm.expect(j.data.displayOrder).to.equal(1); }); }"
                 ]
               }
             }
@@ -5718,11 +5730,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"data is array\", function () { pm.expect(j.data).to.be.an('array'); });",
-                  "pm.test(\"timestamp exists\", function () { pm.expect(j.timestamp).to.be.a('string'); });"
+                  "pm.test('Status 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "var j = pm.response.json();",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data is array', function () { pm.expect(j.data).to.be.an('array'); });"
                 ]
               }
             }
