@@ -3148,18 +3148,21 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx (201/409)\", function () { pm.expect(pm.response.code).to.be.oneOf([201, 409]); });",
-                  "var j=pm.response.json();",
+                  "var j = pm.response.json();",
+                  "pm.test('Status 201 (created) or 409 (duplicate)', function () { pm.expect([201, 409]).to.include(pm.response.code); });",
                   "if (pm.response.code === 201) {",
-                  "  pm.test(\"Returns StoreResponse with PENDING status\", function () {",
+                  "  pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "  pm.test('Returns StoreResponse with PENDING status', function () {",
                   "    pm.expect(j.success).to.equal(true);",
                   "    pm.expect(j.data).to.have.property('id');",
                   "    pm.expect(j.data.status).to.equal('PENDING');",
                   "    pm.expect(j.data).to.have.property('storeName');",
+                  "    pm.expect(j.data).to.have.property('userId');",
+                  "    pm.expect(j.data.storeName).to.equal(pm.environment.get('sellerStoreName'));",
                   "    pm.environment.set('storeId', j.data.id);",
                   "  });",
                   "} else {",
-                  "  pm.test(\"Error code STORE_409_EXISTS or STORE_409_NAME_EXISTS\", function () {",
+                  "  pm.test('Error code STORE_409_EXISTS or STORE_409_NAME_EXISTS', function () {",
                   "    pm.expect(['STORE_409_EXISTS','STORE_409_NAME_EXISTS']).to.include(j.code);",
                   "  });",
                   "}"
@@ -3203,17 +3206,18 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "var j=pm.response.json();",
-                  "pm.test(\"Status 200 or 404\", function () { pm.expect([200, 404]).to.include(pm.response.code); });",
+                  "var j = pm.response.json();",
+                  "pm.test('Status 200 or 404', function () { pm.expect([200, 404]).to.include(pm.response.code); });",
                   "if (pm.response.code === 200) {",
-                  "  pm.test(\"Returns StoreResponse with required fields\", function () {",
+                  "  pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "  pm.test('Returns StoreResponse with required fields', function () {",
                   "    pm.expect(j.data).to.have.property('id');",
                   "    pm.expect(j.data).to.have.property('storeName');",
                   "    pm.expect(j.data).to.have.property('status');",
                   "    pm.expect(j.data).to.have.property('userId');",
                   "  });",
                   "} else {",
-                  "  pm.test(\"Error code STORE_404_NOT_FOUND\", function () { pm.expect(j.code).to.equal('STORE_404_NOT_FOUND'); });",
+                  "  pm.test('Error code STORE_404_NOT_FOUND', function () { pm.expect(j.code).to.equal('STORE_404_NOT_FOUND'); });",
                   "}"
                 ]
               }
