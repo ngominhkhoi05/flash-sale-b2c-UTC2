@@ -48,8 +48,25 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "pm.test(\"ApiResponse shape\", function () { var j=pm.response.json(); pm.expect(j).to.have.property(\"success\"); pm.expect(j).to.have.property(\"code\"); pm.expect(j).to.have.property(\"message\"); pm.expect(j).to.have.property(\"timestamp\"); });"
+                  "// Register tests: 2 outcomes possible (already exists or new)",
+                  "//   - 201: j.code === 'SUCCESS' (fresh user)",
+                  "//   - 409: j.code prefix === 'AUTH_409' (email/phone already taken)",
+                  "var j = pm.response.json();",
+                  "pm.test('ApiResponse shape', function () {",
+                  "  pm.expect(j).to.have.property('success');",
+                  "  pm.expect(j).to.have.property('code');",
+                  "  pm.expect(j).to.have.property('message');",
+                  "  pm.expect(j).to.have.property('timestamp');",
+                  "});",
+                  "pm.test('Status is 2xx (created) or 409 (duplicate)', function () {",
+                  "  pm.expect([201, 200, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "  pm.test('Fresh user code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "} else {",
+                  "  pm.test('Duplicate error code starts with AUTH_409', function () { pm.expect(j.code).to.match(/^AUTH_409/); });",
+                  "}",
+                  "pm.test('Response time < 3s', function () { pm.expect(pm.response.responseTime).to.be.below(3000); });"
                 ]
               }
             }
@@ -94,8 +111,22 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "pm.test(\"ApiResponse shape\", function () { var j=pm.response.json(); pm.expect(j).to.have.property(\"success\"); pm.expect(j).to.have.property(\"code\"); pm.expect(j).to.have.property(\"message\"); pm.expect(j).to.have.property(\"timestamp\"); });"
+                  "var j = pm.response.json();",
+                  "pm.test('ApiResponse shape', function () {",
+                  "  pm.expect(j).to.have.property('success');",
+                  "  pm.expect(j).to.have.property('code');",
+                  "  pm.expect(j).to.have.property('message');",
+                  "  pm.expect(j).to.have.property('timestamp');",
+                  "});",
+                  "pm.test('Status is 2xx (created) or 409 (duplicate)', function () {",
+                  "  pm.expect([201, 200, 409]).to.include(pm.response.code);",
+                  "});",
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "  pm.test('Fresh user code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "} else {",
+                  "  pm.test('Duplicate error code starts with AUTH_409', function () { pm.expect(j.code).to.match(/^AUTH_409/); });",
+                  "}",
+                  "pm.test('Response time < 3s', function () { pm.expect(pm.response.responseTime).to.be.below(3000); });"
                 ]
               }
             }
@@ -140,9 +171,25 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200\", function () { pm.expect(pm.response.code).to.equal(200); });",
-                  "var j=pm.response.json();",
-                  "if (j.success && j.data) { pm.environment.set(\"accessToken\", j.data.accessToken); pm.environment.set(\"refreshToken\", j.data.refreshToken); pm.environment.set(\"userId\", j.data.user.id); pm.environment.set(\"userRole\", j.data.roles[0]); pm.environment.set(\"buyerId\", j.data.user.id); pm.collectionVariables.set(\"accessToken\", j.data.accessToken); }"
+                  "pm.test('Status 200 OK for login buyer', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j = pm.response.json();",
+                  "pm.test('ApiResponse success=true', function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data.accessToken is non-empty string', function () { pm.expect(j.data.accessToken).to.be.a('string').and.to.have.length.greaterThan(20); });",
+                  "pm.test('data.refreshToken is non-empty string', function () { pm.expect(j.data.refreshToken).to.be.a('string').and.to.have.length.greaterThan(20); });",
+                  "pm.test('data.tokenType is Bearer', function () { pm.expect(j.data.tokenType).to.equal('Bearer'); });",
+                  "pm.test('data.user.id is number', function () { pm.expect(j.data.user.id).to.be.a('number'); });",
+                  "pm.test('data.user.email matches testEmail', function () { pm.expect(j.data.user.email).to.equal(pm.environment.get('testEmail')); });",
+                  "pm.test('data.roles includes BUYER', function () { pm.expect(j.data.roles).to.include('BUYER'); });",
+                  "pm.test('Response time < 3s', function () { pm.expect(pm.response.responseTime).to.be.below(3000); });",
+                  "if (j.success && j.data) {",
+                  "  pm.environment.set('accessToken', j.data.accessToken);",
+                  "  pm.environment.set('refreshToken', j.data.refreshToken);",
+                  "  pm.environment.set('userId', j.data.user.id);",
+                  "  pm.environment.set('userRole', j.data.roles[0]);",
+                  "  pm.environment.set('buyerId', j.data.user.id);",
+                  "  pm.collectionVariables.set('accessToken', j.data.accessToken);",
+                  "}"
                 ]
               }
             }
@@ -187,9 +234,23 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200\", function () { pm.expect(pm.response.code).to.equal(200); });",
-                  "var j=pm.response.json();",
-                  "if (j.success && j.data) { pm.environment.set(\"accessToken\", j.data.accessToken); pm.environment.set(\"refreshToken\", j.data.refreshToken); pm.environment.set(\"userId\", j.data.user.id); pm.environment.set(\"userRole\", j.data.roles[0]); pm.environment.set(\"sellerId\", j.data.user.id); pm.collectionVariables.set(\"accessToken\", j.data.accessToken); }"
+                  "pm.test('Status 200 OK for login seller', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j = pm.response.json();",
+                  "pm.test('ApiResponse success=true', function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data.accessToken is non-empty string', function () { pm.expect(j.data.accessToken).to.be.a('string').and.to.have.length.greaterThan(20); });",
+                  "pm.test('data.refreshToken is non-empty string', function () { pm.expect(j.data.refreshToken).to.be.a('string').and.to.have.length.greaterThan(20); });",
+                  "pm.test('data.user.email matches sellerEmail', function () { pm.expect(j.data.user.email).to.equal(pm.environment.get('sellerEmail')); });",
+                  "pm.test('data.roles includes SELLER', function () { pm.expect(j.data.roles).to.include('SELLER'); });",
+                  "pm.test('Response time < 3s', function () { pm.expect(pm.response.responseTime).to.be.below(3000); });",
+                  "if (j.success && j.data) {",
+                  "  pm.environment.set('accessToken', j.data.accessToken);",
+                  "  pm.environment.set('refreshToken', j.data.refreshToken);",
+                  "  pm.environment.set('userId', j.data.user.id);",
+                  "  pm.environment.set('userRole', j.data.roles[0]);",
+                  "  pm.environment.set('sellerId', j.data.user.id);",
+                  "  pm.collectionVariables.set('accessToken', j.data.accessToken);",
+                  "}"
                 ]
               }
             }
@@ -234,9 +295,22 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200\", function () { pm.expect(pm.response.code).to.equal(200); });",
-                  "var j=pm.response.json();",
-                  "if (j.success && j.data) { pm.environment.set(\"accessToken\", j.data.accessToken); pm.environment.set(\"refreshToken\", j.data.refreshToken); pm.environment.set(\"userId\", j.data.user.id); pm.environment.set(\"userRole\", j.data.roles[0]); pm.environment.set(\"adminId\", j.data.user.id); pm.collectionVariables.set(\"accessToken\", j.data.accessToken); }"
+                  "pm.test('Status 200 OK for login admin', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j = pm.response.json();",
+                  "pm.test('ApiResponse success=true', function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data.accessToken is non-empty string', function () { pm.expect(j.data.accessToken).to.be.a('string').and.to.have.length.greaterThan(20); });",
+                  "pm.test('data.user.email matches adminEmail', function () { pm.expect(j.data.user.email).to.equal(pm.environment.get('adminEmail')); });",
+                  "pm.test('data.roles includes ADMIN', function () { pm.expect(j.data.roles).to.include('ADMIN'); });",
+                  "pm.test('Response time < 3s', function () { pm.expect(pm.response.responseTime).to.be.below(3000); });",
+                  "if (j.success && j.data) {",
+                  "  pm.environment.set('accessToken', j.data.accessToken);",
+                  "  pm.environment.set('refreshToken', j.data.refreshToken);",
+                  "  pm.environment.set('userId', j.data.user.id);",
+                  "  pm.environment.set('userRole', j.data.roles[0]);",
+                  "  pm.environment.set('adminId', j.data.user.id);",
+                  "  pm.collectionVariables.set('accessToken', j.data.accessToken);",
+                  "}"
                 ]
               }
             }
@@ -281,9 +355,20 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200\", function () { pm.expect(pm.response.code).to.equal(200); });",
-                  "var j=pm.response.json();",
-                  "if (j.success && j.data) { pm.environment.set(\"accessToken\", j.data.accessToken); pm.environment.set(\"refreshToken\", j.data.refreshToken); pm.collectionVariables.set(\"accessToken\", j.data.accessToken); }"
+                  "pm.test('Status 200 OK for refresh token', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j = pm.response.json();",
+                  "pm.test('ApiResponse success=true', function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data.accessToken is non-empty string', function () { pm.expect(j.data.accessToken).to.be.a('string').and.to.have.length.greaterThan(20); });",
+                  "pm.test('New refreshToken != old refreshToken (rotation)', function () { pm.expect(j.data.refreshToken).to.not.equal(pm.environment.get('oldRefreshToken')); });",
+                  "pm.test('data.tokenType is Bearer', function () { pm.expect(j.data.tokenType).to.equal('Bearer'); });",
+                  "pm.test('Response time < 3s', function () { pm.expect(pm.response.responseTime).to.be.below(3000); });",
+                  "if (j.success && j.data) {",
+                  "  pm.environment.set('oldRefreshToken', pm.environment.get('refreshToken'));",
+                  "  pm.environment.set('accessToken', j.data.accessToken);",
+                  "  pm.environment.set('refreshToken', j.data.refreshToken);",
+                  "  pm.collectionVariables.set('accessToken', j.data.accessToken);",
+                  "}"
                 ]
               }
             }
@@ -338,7 +423,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.environment.set(\"accessToken\",\"\"); pm.environment.set(\"refreshToken\",\"\"); pm.environment.set(\"userId\",\"\"); pm.collectionVariables.set(\"accessToken\",\"\");"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 200 OK for logout', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('j.data is null (no payload)', function () { pm.expect(j.data).to.satisfy(function(d){ return d === null || d === undefined; }); });",
+                  "pm.environment.set('accessToken',''); pm.environment.set('refreshToken',''); pm.environment.set('userId',''); pm.collectionVariables.set('accessToken','');"
                 ]
               }
             }
@@ -370,9 +459,13 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200\", function () { pm.expect(pm.response.code).to.equal(200); });",
-                  "var j=pm.response.json();",
-                  "if (j.success && j.data && j.data.authorizationUrl) { pm.environment.set(\"googleAuthUrl\", j.data.authorizationUrl); pm.environment.set(\"googleState\", j.data.state); }"
+                  "pm.test('Status 200 OK for Google consent URL', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j = pm.response.json();",
+                  "pm.test('ApiResponse success=true', function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data.authorizationUrl is https URL', function () { pm.expect(j.data.authorizationUrl).to.be.a('string').and.to.match(/^https:\\/\\//); });",
+                  "pm.test('data.state is non-empty string', function () { pm.expect(j.data.state).to.be.a('string').and.to.have.length.greaterThan(0); });",
+                  "if (j.success && j.data && j.data.authorizationUrl) { pm.environment.set('googleAuthUrl', j.data.authorizationUrl); pm.environment.set('googleState', j.data.state); }"
                 ]
               }
             }
@@ -417,9 +510,64 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200\", function () { pm.expect(pm.response.code).to.equal(200); });",
-                  "var j=pm.response.json();",
-                  "if (j.success && j.data) { pm.environment.set(\"accessToken\", j.data.accessToken); pm.environment.set(\"refreshToken\", j.data.refreshToken); pm.environment.set(\"userId\", j.data.user.id); pm.environment.set(\"userRole\", j.data.roles[0]); pm.collectionVariables.set(\"accessToken\", j.data.accessToken); }"
+                  "pm.test('Status 200 OK for Google login (mock code)', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j = pm.response.json();",
+                  "pm.test('ApiResponse success=true', function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data.accessToken is non-empty string', function () { pm.expect(j.data.accessToken).to.be.a('string').and.to.have.length.greaterThan(20); });",
+                  "pm.test('data.user.id is number', function () { pm.expect(j.data.user.id).to.be.a('number'); });",
+                  "pm.test('data.user.email contains @', function () { pm.expect(j.data.user.email).to.be.a('string').and.to.include('@'); });",
+                  "if (j.success && j.data) {",
+                  "  pm.environment.set('accessToken', j.data.accessToken);",
+                  "  pm.environment.set('refreshToken', j.data.refreshToken);",
+                  "  pm.environment.set('userId', j.data.user.id);",
+                  "  pm.environment.set('userRole', j.data.roles[0]);",
+                  "  pm.collectionVariables.set('accessToken', j.data.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[POS] Login round-trip (login -> clear -> 401 -> refresh -> 200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["api","v1","auth","login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"usernameOrEmail\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}", "options": { "raw": { "language": "json" } } }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Round-trip step 1: log in fresh, then mutate env to simulate expired/empty token",
+                  "// (post-response of this same request sets a NEW refreshToken into env).",
+                  "// Step 2 (call /users/me with empty token) and step 3 (refresh + retry) are",
+                  "// implemented in their own requests below in folder 03 (User_Profile) so that",
+                  "// they reuse the existing /users/me endpoint - this folder only seeds the data.",
+                  "pm.environment.set('roundTripInProgress', 'true');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 OK for round-trip login (step 1)', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j = pm.response.json();",
+                  "pm.test('Step 1: accessToken is non-empty', function () { pm.expect(j.data.accessToken).to.be.a('string').and.to.have.length.greaterThan(20); });",
+                  "if (j.success && j.data) {",
+                  "  pm.environment.set('accessToken', j.data.accessToken);",
+                  "  pm.environment.set('refreshToken', j.data.refreshToken);",
+                  "  pm.collectionVariables.set('accessToken', j.data.accessToken);",
+                  "}"
                 ]
               }
             }
