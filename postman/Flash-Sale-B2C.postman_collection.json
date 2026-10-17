@@ -2871,12 +2871,10 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status 200 OK for platform vouchers', function () { pm.expect(pm.response.code).to.eql(200); });",
-                  "pm.test('Data is an array', function () {",
-                  "    var j = pm.response.json();",
-                  "    pm.expect(j.data).to.be.an('array');",
-                  "});",
+                  "var j = pm.response.json();",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('Data is an array', function () { pm.expect(j.data).to.be.an('array'); });",
                   "pm.test('All items have storeId=null (platform)', function () {",
-                  "    var j = pm.response.json();",
                   "    j.data.forEach(function(v){",
                   "        pm.expect(v.storeId).to.satisfy(function(x){ return x === null || x === undefined; });",
                   "    });",
@@ -2913,10 +2911,9 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status 200 OK for store vouchers', function () { pm.expect(pm.response.code).to.eql(200); });",
-                  "pm.test('Data is an array', function () {",
-                  "    var j = pm.response.json();",
-                  "    pm.expect(j.data).to.be.an('array');",
-                  "});"
+                  "var j = pm.response.json();",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('Data is an array', function () { pm.expect(j.data).to.be.an('array'); });"
                 ]
               }
             }
@@ -2958,12 +2955,11 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status 200 OK for my vouchers', function () { pm.expect(pm.response.code).to.eql(200); });",
-                  "pm.test('Data is an array', function () {",
-                  "    var j = pm.response.json();",
-                  "    pm.expect(j.data).to.be.an('array');",
-                  "});",
-                  "if (pm.response.json().data && pm.response.json().data.length > 0) {",
-                  "    var first = pm.response.json().data[0];",
+                  "var j = pm.response.json();",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('Data is an array', function () { pm.expect(j.data).to.be.an('array'); });",
+                  "if (j.data && j.data.length > 0) {",
+                  "    var first = j.data[0];",
                   "    pm.test('Voucher has UserVoucherResponse fields', function () {",
                   "        pm.expect(first).to.have.property('code');",
                   "        pm.expect(first).to.have.property('scope');",
@@ -3024,13 +3020,19 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status 200 OK for save voucher', function () { pm.expect(pm.response.code).to.eql(200); });",
-                  "pm.test('Response has UserVoucherResponse fields', function () {",
-                  "    var j = pm.response.json();",
+                  "var j = pm.response.json();",
+                  "pm.test('Status 2xx (200 created or 409 already saved)', function () { pm.expect([200, 201, 409]).to.include(pm.response.code); });",
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "  pm.test('Response has UserVoucherResponse fields', function () {",
                   "    pm.expect(j.data).to.have.property('id');",
                   "    pm.expect(j.data).to.have.property('code');",
+                  "    pm.expect(j.data.code).to.equal(pm.environment.get('voucherCode'));",
                   "    pm.expect(j.data).to.have.property('scope');",
-                  "});"
+                  "  });",
+                  "} else {",
+                  "  pm.test('j.code starts with VOUCHER_409 (already saved)', function () { pm.expect(j.code).to.match(/^VOUCHER_409/); });",
+                  "}"
                 ]
               }
             }
@@ -3085,16 +3087,16 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "var j = pm.response.json();",
                   "pm.test('Status 200 OK for apply voucher', function () { pm.expect(pm.response.code).to.eql(200); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
                   "pm.test('Response has VoucherCalculationResponse fields', function () {",
-                  "    var j = pm.response.json();",
                   "    pm.expect(j.data).to.have.property('voucherId');",
                   "    pm.expect(j.data).to.have.property('code');",
                   "    pm.expect(j.data).to.have.property('discountAmount');",
                   "    pm.expect(j.data).to.have.property('finalAmount');",
                   "});",
                   "pm.test('discountAmount + finalAmount = subtotalAmount (or close)', function () {",
-                  "    var j = pm.response.json();",
                   "    var d = parseFloat(j.data.discountAmount);",
                   "    var f = parseFloat(j.data.finalAmount);",
                   "    pm.expect(d).to.be.at.least(0);",
