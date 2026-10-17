@@ -1,110 +1,170 @@
 # Postman Collection - Flash Sale B2C
 
-Collection + environment de test toan bo REST API cua backend `flash-sale-b2c-UTC2`.
+Collection + environment để test toàn bộ REST API của backend `flash-sale-b2c-UTC2`.
 
 ## Files
 
-| File | Mo ta |
+| File | Mô tả |
 |---|---|
-| `Flash-Sale-B2C.postman_collection.json` | Collection chinh - 22 folder, 100 requests |
-| `Flash-Sale-B2C.postman_environment.json` | Environment - 47 bien (auth tokens, IDs, test data) |
-| `extract-paths-v3.js` | Script Node.js - extract toan bo API paths tu `@RequestMapping` controllers |
-| `verify-final.js` | Script Node.js - verify collection vs code (92 endpoints) |
+| `Flash-Sale-B2C.postman_collection.json` | Collection chính — 25 folder, ~150 requests |
+| `Flash-Sale-B2C.postman_environment.json` | Environment — 50+ biến (auth tokens, IDs, test data) |
+| `extract-paths-v3.js` | Script Node.js — extract toàn bộ API paths từ `@RequestMapping` controllers |
+| `verify-final.js` | Script Node.js — verify collection vs code |
+| `package.json` / `package-lock.json` | Newman runner lockfile |
+
+## 3 Role thật đã đăng ký trong DB
+
+```text
+Buyer:  khoi22092021@gmail.com / password123
+Seller: seller1@demo.local     / password123
+Admin:  admin@flashsale.local   / password123
+```
+
+Đã được seed sẵn trong `data-dev.sql`. Dùng 3 tài khoản này để test các flow Buyer / Seller / Admin mà không cần tự register mới (tiết kiệm thời gian + đảm bảo role mapping đúng).
 
 ## Import
 
-1. Mo Postman -> Import -> chon 2 file tren.
-2. Chon environment `Flash-Sale-B2C` (goc tren ben phai).
-3. (Tuy chon) Sua `baseUrl` neu backend chay port khac 8080.
+1. Mở Postman → Import → chọn 2 file trên.
+2. Chọn environment `Flash-Sale-B2C` (góc trên bên phải).
+3. (Tùy chọn) Sửa `baseUrl` nếu backend chạy port khác 8080.
 
-## Cau truc folder (22 folders, 100 requests)
+## Cấu trúc folder (25 folders)
 
-| # | Folder | Requests | Mo ta |
-|---|---|---|---|
-| 00 | Auth_Setup | 7 | Register / Login (Buyer/Seller/Admin) / Refresh / Logout |
-| 01 | Public_Catalog | 11 | List/filter products, categories, store public |
-| 02 | Public_FlashSale | 2 | List slot Flash Sale + items active |
-| 03 | User_Profile | 4 | Me, update profile, change password, upload avatar |
-| 04 | Address_Book | 6 | CRUD user addresses, set default |
-| 05 | Cart | 5 | View, add, update, remove, clear |
-| 06 | Order_Buyer | 5 | Checkout, list, detail, cancel, QR |
-| 07 | Payment | 3 | ZaloPay, COD, get payment status |
-| 08 | Voucher_Buyer | 5 | Platform, store, mine, save, apply |
-| 09 | FlashSale_Reservation | 3 | Reserve (Lua), reserve alias, cancel |
-| 10 | Store_Seller | 10 | Create store, update, addresses, logo, sidebar |
-| 11 | Product_Seller | 8 | CRUD product, variants, status, images |
-| 11b | Seller_Orders | 2 | List store orders, update status |
-| 12 | FlashSale_Seller | 1 | Register Flash Sale item |
-| 13 | Image_Generic | 6 | Upload, list, set primary, order, delete, force |
-| 14 | Voucher_Seller | 2 | Create, list store voucher |
-| 15 | Admin_Category | 3 | Create, update, delete |
-| 16 | Admin_Store | 1 | Approve/reject store |
-| 17 | Admin_FlashSale | 6 | Slot CRUD, approve item, pre-warm Redis |
-| 18 | Admin_Voucher | 1 | Create platform voucher |
-| 19 | Admin_Banner | 5 | CRUD + status banner |
-| 20 | Negative_Tests | 5 | 401/403/404/409/422 |
+| # | Folder | Mô tả |
+|---|---|---|
+| 00 | Auth_Setup | Register / Login (Buyer/Seller/Admin) / Refresh / Logout / Google |
+| 01 | Public_Catalog | Categories, products, stores, reviews, banners |
+| 02 | Public_FlashSale | List slot Flash Sale + items active |
+| 03 | User_Profile | Me, update, change password, avatar, round-trip |
+| 04 | Address_Book | CRUD + default address (ownership asserted) |
+| 05 | Cart | CRUD + 3 NEG edge cases (no token, qty=0, no variant) |
+| 06 | Order_Buyer | Checkout, list, detail, cancel, QR + multi-vendor |
+| 07 | Payment | ZaloPay, COD, get payment status |
+| 08 | Voucher_Buyer | Platform, store, mine, save, apply, calculate |
+| 09 | FlashSale_Reservation | Reserve + idempotency replay + idempotency conflict |
+| 10 | Store_Seller | Create store, update, addresses, logo, sidebar |
+| 11 | Product_Seller | CRUD product, variants, status, images |
+| 11b | Seller_Orders | List store orders, update status |
+| 12 | FlashSale_Seller | Register Flash Sale item |
+| 13 | Image_Generic | Upload, list, set primary, order, delete, force |
+| 14 | Voucher_Seller | Create, list store voucher |
+| 15 | Admin_Category | Create, update, delete |
+| 16 | Admin_Store | Approve/reject store |
+| 17 | Admin_FlashSale | Slot CRUD, approve item, pre-warm Redis |
+| 18 | Admin_Voucher | Create platform voucher |
+| 19 | Admin_Banner | CRUD + status banner |
+| 20 | Negative_Tests | 401/403/404/409/422 |
+| 20 | Review_Public | GET product reviews (public, no auth) |
+| 21 | Wallet | Placeholder — backend chưa có controller |
+| 20b | Negative_Tests_Auth | 400/401/404/405/409/502 cho auth |
+| 20c | Negative_Tests_Expanded | Invalid token, expired token, role-boundary, wrong method |
 
-## Luong test theo role
+## Luồng test theo role (dùng 3 role thật)
 
-### Buyer (7 buoc)
-1. Folder `00`: `POST Register Buyer` -> `POST Login (Buyer)` (token tu save vao `accessToken`)
-2. Folder `04`: `POST Create Address` (luu `addressId`)
-3. Folder `01`: `GET All Products` (luu `productId`, `variantId` tu response)
+### Buyer (7 bước)
+
+1. Folder `00`: `POST Login (Buyer)` (token tự save vào `accessToken`)
+2. Folder `04`: `POST Create Address` (lưu `addressId`)
+3. Folder `01`: `GET All Products` (lưu `productId`, `variantId`)
 4. Folder `05`: `POST Add to Cart`
-5. Folder `08`: `POST Save Voucher` (neu co) -> `POST Apply Voucher` (luu `voucherCode`)
-6. Folder `06`: `POST Checkout` (luu `orderId`, `orderCode`)
-7. Folder `07`: `POST COD` hoac `POST ZaloPay`
+5. Folder `08`: `POST Save Voucher` (nếu có) → `POST Apply Voucher` (lưu `voucherCode`)
+6. Folder `06`: `POST Checkout` (lưu `orderId`, `orderCode`)
+7. Folder `07`: `POST COD` hoặc `POST ZaloPay`
 
-### Seller (5 buoc)
-1. Folder `00`: `POST Register Seller` -> `POST Login (Seller)` (luu `sellerId`)
-2. Folder `10`: `POST Register Store` -> `POST Create Store Address` (luu `storeId`)
-3. Folder `11`: `POST Create Product` (luu `productId`, `variantId`)
+### Seller (5 bước)
+
+1. Folder `00`: `POST Login (Seller)` (lưu `sellerId`)
+2. Folder `10`: `POST Register Store` → `POST Create Store Address` (lưu `storeId`)
+3. Folder `11`: `POST Create Product` (lưu `productId`, `variantId`)
 4. Folder `12`: `POST Register FS Item`
-5. Folder `11b`: `GET List Store Orders` -> `PATCH Update Order Status`
+5. Folder `11b`: `GET List Store Orders` → `PATCH Update Order Status`
 
-### Admin (3 buoc)
+### Admin (3 bước)
+
 1. Folder `00`: `POST Login (Admin)`
-2. Folder `16`: `PATCH Update Store Status` (chap nhan seller dang ky store)
-3. Folder `17`: `PATCH Approve Item` -> `POST Pre-warm Redis`
+2. Folder `16`: `PATCH Update Store Status` (chấp nhận seller đăng ký store)
+3. Folder `17`: `PATCH Approve Item` → `POST Pre-warm Redis`
 
-## Bien moi truong tu dong cap nhat
+### Chuyển role trong collection
 
-Script trong test tu dong luu vao env:
+Mỗi folder `00` Login riêng (Buyer / Seller / Admin) sẽ ghi đè `accessToken`. Để chuyển role → chạy đúng Login tương ứng trước khi chạy các request cần role đó.
 
-| Bien | Luu tu |
+## Biến môi trường tự động cập nhật
+
+Script trong test tự động lưu vào env:
+
+| Biến | Lưu từ |
 |---|---|
 | `accessToken`, `refreshToken` | Login response |
-| `userId`, `userRole`, `buyerId`/`sellerId`/`adminId` | Login response |
+| `userId`, `userRole`, `buyerId` / `sellerId` / `adminId` | Login response |
 | `addressId` | Create address response |
 | `productId`, `variantId` | Create product response |
 | `storeId` | Create store / sidebar response |
 | `flashSaleSlotId`, `flashSaleItemId` | Admin create slot / register item |
 | `orderId`, `orderCode` | Checkout response |
 | `reservationId` | Reserve response |
-| `imageId`, `bannerId`, `voucherCode` | Response tuong ung |
+| `imageId`, `bannerId`, `voucherCode` | Response tương ứng |
 | `sellerOrderId`, `sellerOrderCode` | Seller list orders response |
-| `idempotencyKey` | Pre-request script tu generate UUID neu chua co |
+| `idempotencyKey`, `idempotencyKeyReplay`, `idempotencyKeyConflict` | Pre-request script generate UUID |
+| `idempotentReplayed` | Set `true` nếu server trả header `Idempotent-Replayed` |
 
-## Bien can set thu cong (neu test buoc rieng le)
+## Biến cần set thủ công (nếu test bước riêng lẻ)
 
-- `baseUrl` - default `http://localhost:8080`
-- `testEmail`, `testPassword` - cho buyer (da co san)
-- `sellerEmail` - cho seller (da co san)
-- `adminEmail`, `adminPassword` - cho admin (da co san)
+- `baseUrl` — default `http://localhost:8080`
+- `testEmail`, `testPassword` — cho buyer test (đã có sẵn `khoi22092021@gmail.com`)
+- `sellerEmail`, `sellerPassword` — cho seller test (đã có sẵn `seller1@demo.local`)
+- `adminEmail`, `adminPassword` — cho admin test (đã có sẵn `admin@flashsale.local`)
+- `nonexistentProductId` — default `999999999`
 
-## Verify sau khi sua backend
+## Chạy bằng Newman CLI
 
 ```bash
-# Extract tat ca API paths tu controllers
+# Cài newman (một lần)
+npm install -g newman
+
+# Chạy full collection (cần env)
+newman run Flash-Sale-B2C.postman_collection.json \
+  -e Flash-Sale-B2C.postman_environment.json \
+  --reporters cli,html \
+  --reporter-html-export report.html
+
+# Chỉ chạy 1 folder
+newman run Flash-Sale-B2C.postman_collection.json \
+  -e Flash-Sale-B2C.postman_environment.json \
+  --folder "00_Auth_Setup"
+
+# Chạy với iteration (test idempotency replay)
+newman run Flash-Sale-B2C.postman_collection.json \
+  -e Flash-Sale-B2C.postman_environment.json \
+  --folder "09_FlashSale_Reservation" \
+  --iteration-count 2
+```
+
+> Xem `package.json` để biết thêm scripts tiện ích (`npm run newman`, `npm run newman:auth`, ...).
+
+## Verify sau khi sửa backend
+
+```bash
+# Extract tất cả API paths từ controllers
 node extract-paths-v3.js
 
-# So sanh voi collection (bao MISSING/EXTRA)
+# So sánh với collection (báo MISSING / EXTRA)
 node verify-final.js
 ```
 
-## Ghi chu
+## Ghi chú kỹ thuật
 
-- **Path prefix `/api/v1`** da duoc hard-code trong tat ca URL - dung khop voi `@RequestMapping` trong controllers.
-- **Idempotency-Key** tu dong them vao `POST /api/v1/flash-sales/reserve` va `POST /api/v1/flash-sales/reservations` theo muc #34 AGENTS.md.
-- **Multipart upload** (avatar/logo/image): chon file truc tiep trong Postman UI - body de trong.
-- **Bodies** da khop voi DTO trong code. Neu backend thay doi field, sua lai body trong collection.
+- **Path prefix `/api/v1`** đã được hard-code trong tất cả URL — khớp với `@RequestMapping` trong controllers.
+- **Idempotency-Key** tự động thêm vào `POST /api/v1/flash-sales/reserve` theo mục #34 AGENTS.md.
+- **ApiResponse contract** (rule 38) — mọi response đều có `{ success, code, message, data, timestamp }`:
+  - Success → `code === "SUCCESS"`.
+  - Error → `code` có prefix theo module (`AUTH_4xx`, `PROD_404`, `FS_409`, `WALLET_xxx`, ...).
+  - Folder `20c` (Negative_Tests_Expanded) assert `j.success === false` + `j.code` prefix đúng.
+- **Multipart upload** (avatar/logo/image): chọn file trực tiếp trong Postman UI — body để trống.
+- **Bodies** đã khớp với DTO trong code. Nếu backend thay đổi field, sửa lại body trong collection.
+- **Bearer token** dùng biến `{{accessToken}}`; sau Login nó tự động được lưu.
+- **Wallet module** (folder 21) hiện là placeholder — backend chỉ có `Wallet` entity + `WalletTransactionRepository` nhưng chưa có `WalletController`. Sẽ bổ sung khi backend mở rộng.
+
+## Audit history
+
+- **2026-10-17** (`feature/postman-audit-2026-10-17`): 17 module commits — sửa thiếu test scripts, thêm NEG edge cases, chuẩn hóa assertions theo `ApiResponse` contract (rule 38), URL sync với controller thật (không theo rule docs sai).
