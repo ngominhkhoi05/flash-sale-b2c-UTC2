@@ -2339,9 +2339,21 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 2xx\", function () { pm.expect(pm.response.code).to.be.within(200,299); });",
-                  "var j=pm.response.json();",
-                  "if (j.success && j.data && j.data.length>0) { pm.environment.set(\"orderId\", j.data[0].id); pm.environment.set(\"orderCode\", j.data[0].orderCode); }"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 2xx (checkout)', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data is array (multi-vendor order)', function () { pm.expect(j.data).to.be.an('array'); });",
+                  "if (j.success && j.data && j.data.length>0) {",
+                  "  pm.environment.set('orderId', j.data[0].id);",
+                  "  pm.environment.set('orderCode', j.data[0].orderCode);",
+                  "  var o = j.data[0];",
+                  "  pm.test('First order has id, orderCode, status, totalAmount', function () {",
+                  "    pm.expect(o.id).to.be.a('number');",
+                  "    pm.expect(o.orderCode).to.be.a('string');",
+                  "    pm.expect(o.status).to.be.a('string');",
+                  "    pm.expect(o.totalAmount).to.be.a('number');",
+                  "  });",
+                  "}"
                 ]
               }
             }
@@ -2391,10 +2403,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200\", function () { pm.expect(pm.response.code).to.equal(200); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"data is PageResponse\", function () { pm.expect(j.data).to.be.an('object'); });",
+                  "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j = pm.response.json();",
+                  "pm.test('success == true', function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data is PageResponse', function () { pm.expect(j.data).to.be.an('object'); });",
                   "pm.test(\"data.items is array\", function () { pm.expect(j.data.items).to.be.an('array'); });",
                   "pm.test(\"data.pageNumber is number\", function () { pm.expect(j.data.pageNumber).to.be.a('number'); });",
                   "pm.test(\"data.totalElements >= 0\", function () { pm.expect(j.data.totalElements).to.be.at.least(0); });",
@@ -2440,10 +2453,25 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200\", function () { pm.expect(pm.response.code).to.equal(200); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "if (j.success && j.data) { var d=j.data; pm.test(\"id matches request\", function () { pm.expect(d.id).to.equal(parseInt(pm.environment.get(\"orderId\"))); }); pm.test(\"orderCode is string\", function () { pm.expect(d.orderCode).to.be.a('string'); }); pm.test(\"buyerId is number\", function () { pm.expect(d.buyerId).to.be.a('number'); }); pm.test(\"storeId is number\", function () { pm.expect(d.storeId).to.be.a('number'); }); pm.test(\"totalAmount is number\", function () { pm.expect(d.totalAmount).to.be.a('number'); }); pm.test(\"status is string\", function () { pm.expect(d.status).to.be.a('string'); }); pm.test(\"items is array\", function () { pm.expect(d.items).to.be.an('array'); }); if (d.items && d.items.length>0) { pm.test(\"first item has variantId\", function () { pm.expect(d.items[0].variantId).to.be.a('number'); }); pm.test(\"first item has priceAtPurchase\", function () { pm.expect(d.items[0].priceAtPurchase).to.be.a('number'); }); } if (d.timeline) { pm.test(\"timeline is array\", function () { pm.expect(d.timeline).to.be.an('array'); }); } }"
+                  "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j = pm.response.json();",
+                  "pm.test('success == true', function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "if (j.success && j.data) {",
+                  "  var d = j.data;",
+                  "  pm.test('id matches request', function () { pm.expect(d.id).to.equal(parseInt(pm.environment.get('orderId'))); });",
+                  "  pm.test('orderCode is string', function () { pm.expect(d.orderCode).to.be.a('string'); });",
+                  "  pm.test('buyerId is number', function () { pm.expect(d.buyerId).to.be.a('number'); });",
+                  "  pm.test('storeId is number', function () { pm.expect(d.storeId).to.be.a('number'); });",
+                  "  pm.test('totalAmount is number', function () { pm.expect(d.totalAmount).to.be.a('number'); });",
+                  "  pm.test('status is string', function () { pm.expect(d.status).to.be.a('string'); });",
+                  "  pm.test('items is array', function () { pm.expect(d.items).to.be.an('array'); });",
+                  "  if (d.items && d.items.length>0) {",
+                  "    pm.test('first item has variantId', function () { pm.expect(d.items[0].variantId).to.be.a('number'); });",
+                  "    pm.test('first item has priceAtPurchase', function () { pm.expect(d.items[0].priceAtPurchase).to.be.a('number'); });",
+                  "  }",
+                  "  if (d.timeline) { pm.test('timeline is array', function () { pm.expect(d.timeline).to.be.an('array'); }); }",
+                  "}"
                 ]
               }
             }
@@ -2490,9 +2518,15 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200 (or 400 if already paid/cancelled)\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 400]); });",
-                  "var j=pm.response.json();",
-                  "if (pm.response.code === 200) { pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); }); pm.test(\"status == CANCELLED\", function () { pm.expect(j.data.status).to.equal(\"CANCELLED\"); }); } else { pm.test(\"success == false on transition error\", function () { pm.expect(j.success).to.equal(false); }); }"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 200 (or 400 if already paid/cancelled)', function () { pm.expect(pm.response.code).to.be.oneOf([200, 400]); });",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "  pm.test('status == CANCELLED', function () { pm.expect(j.data.status).to.equal('CANCELLED'); });",
+                  "} else {",
+                  "  pm.test('success == false on transition error', function () { pm.expect(j.success).to.equal(false); });",
+                  "  pm.test('j.code starts with ORDER_400', function () { pm.expect(j.code).to.match(/^ORDER_400/); });",
+                  "}"
                 ]
               }
             }
@@ -2534,9 +2568,22 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200 (or 404 if orderCode missing)\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 404]); });",
-                  "var j=pm.response.json();",
-                  "if (pm.response.code === 200 && j.success && j.data) { pm.test(\"data.orderCode is string\", function () { pm.expect(j.data.orderCode).to.be.a('string'); }); pm.test(\"data.qrCodeUrl is string\", function () { pm.expect(j.data.qrCodeUrl).to.be.a('string'); }); pm.test(\"data.amount is number\", function () { pm.expect(j.data.amount).to.be.a('number'); }); pm.test(\"data.totalAmount is number\", function () { pm.expect(j.data.totalAmount).to.be.a('number'); }); pm.test(\"data.shopOrders is array\", function () { pm.expect(j.data.shopOrders).to.be.an('array'); }); if (j.data.shopOrders && j.data.shopOrders.length>0) { pm.test(\"shopOrder has storeName\", function () { pm.expect(j.data.shopOrders[0].storeName).to.be.a('string'); }); pm.test(\"shopOrder has orderCode\", function () { pm.expect(j.data.shopOrders[0].orderCode).to.be.a('string'); }); } }"
+                  "var j = pm.response.json();",
+                  "pm.test('Status 200 (or 404 if orderCode missing)', function () { pm.expect(pm.response.code).to.be.oneOf([200, 404]); });",
+                  "if (pm.response.code === 200 && j.success && j.data) {",
+                  "  pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "  pm.test('data.orderCode is string', function () { pm.expect(j.data.orderCode).to.be.a('string'); });",
+                  "  pm.test('data.qrCodeUrl is string', function () { pm.expect(j.data.qrCodeUrl).to.be.a('string'); });",
+                  "  pm.test('data.amount is number', function () { pm.expect(j.data.amount).to.be.a('number'); });",
+                  "  pm.test('data.totalAmount is number', function () { pm.expect(j.data.totalAmount).to.be.a('number'); });",
+                  "  pm.test('data.shopOrders is array (multi-vendor)', function () { pm.expect(j.data.shopOrders).to.be.an('array'); });",
+                  "  if (j.data.shopOrders && j.data.shopOrders.length>0) {",
+                  "    pm.test('shopOrder has storeName', function () { pm.expect(j.data.shopOrders[0].storeName).to.be.a('string'); });",
+                  "    pm.test('shopOrder has orderCode', function () { pm.expect(j.data.shopOrders[0].orderCode).to.be.a('string'); });",
+                  "  }",
+                  "} else if (pm.response.code === 404) {",
+                  "  pm.test('Error code ORDER_404_NOT_FOUND', function () { pm.expect(j.code).to.equal('ORDER_404_NOT_FOUND'); });",
+                  "}"
                 ]
               }
             }
@@ -4417,10 +4464,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200\", function () { pm.expect(pm.response.code).to.equal(200); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"success == true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"data is PageResponse\", function () { pm.expect(j.data).to.be.an('object'); });",
+                  "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j = pm.response.json();",
+                  "pm.test('success == true', function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data is PageResponse', function () { pm.expect(j.data).to.be.an('object'); });",
                   "pm.test(\"data.items is array\", function () { pm.expect(j.data.items).to.be.an('array'); });",
                   "pm.test(\"data.pageNumber is number\", function () { pm.expect(j.data.pageNumber).to.be.a('number'); });",
                   "pm.test(\"data.totalElements >= 0\", function () { pm.expect(j.data.totalElements).to.be.at.least(0); });",
