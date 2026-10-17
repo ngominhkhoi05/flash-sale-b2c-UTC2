@@ -6474,6 +6474,123 @@
       "description": "Negative tests - 401/403/404/409/422."
     },
     {
+      "name": "20_Review_Public",
+      "item": [
+        {
+          "name": "[POS] GET Product Reviews (public)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/{{productId}}/reviews?page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "products", "{{productId}}", "reviews"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var j = pm.response.json();",
+                  "pm.test('Status 200 or 404 (no reviews or no product)', function () { pm.expect([200, 404]).to.include(pm.response.code); });",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "  pm.test('Returns ProductReviewsPageResponse shape', function () {",
+                  "    pm.expect(j.data).to.have.property('items');",
+                  "    pm.expect(j.data).to.have.property('ratingDistribution');",
+                  "    pm.expect(j.data).to.have.property('mediaCount');",
+                  "    pm.expect(j.data).to.have.property('totalElements');",
+                  "  });",
+                  "  pm.test('ratingDistribution has 5 stars keys', function () {",
+                  "    pm.expect(j.data.ratingDistribution).to.have.all.keys('stars1','stars2','stars3','stars4','stars5');",
+                  "  });",
+                  "  pm.test('items is array', function () { pm.expect(j.data.items).to.be.an('array'); });",
+                  "} else {",
+                  "  pm.test('Error code REVIEW_404_PRODUCT_NOT_FOUND', function () { pm.expect(j.code).to.equal('REVIEW_404_PRODUCT_NOT_FOUND'); });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[POS] GET Product Reviews filter rating=5",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/{{productId}}/reviews?rating=5&page=0&size=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "products", "{{productId}}", "reviews"],
+              "query": [
+                { "key": "rating", "value": "5" },
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "5" }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var j = pm.response.json();",
+                  "pm.test('Status 200 or 404', function () { pm.expect([200, 404]).to.include(pm.response.code); });",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('items is array', function () { pm.expect(j.data.items).to.be.an('array'); });",
+                  "  pm.test('every item has rating === 5', function () {",
+                  "    j.data.items.forEach(function (it) { pm.expect(it.rating).to.equal(5); });",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "[NEG] GET Reviews for non-existent product 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products/999999999/reviews?page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "products", "999999999", "reviews"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "10" }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var j = pm.response.json();",
+                  "pm.test('Status 4xx', function () { pm.expect(pm.response.code).to.be.within(400, 499); });",
+                  "pm.test('j.success === false', function () { pm.expect(j.success).to.equal(false); });",
+                  "pm.test('Error code REVIEW_404_PRODUCT_NOT_FOUND', function () { pm.expect(j.code).to.equal('REVIEW_404_PRODUCT_NOT_FOUND'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Public product review endpoints (rule 47 endpoint list + backend ProductReviewPublicController)."
+    },
+    {
       "name": "20b_Negative_Tests_Auth",
       "item": [
         {
