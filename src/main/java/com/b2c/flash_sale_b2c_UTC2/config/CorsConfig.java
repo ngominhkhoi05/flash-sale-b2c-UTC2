@@ -41,9 +41,25 @@ public class CorsConfig implements WebMvcConfigurer {
         CorsConfiguration configuration = new CorsConfiguration();
         List<String> origins = getAllowedOrigins();
 
-        configuration.setAllowedOriginPatterns(origins);
+        // Fix 2026-10-18: wildcard origin pattern KHONG hop le khi
+        // allowCredentials=true (spec CORS cam). Phai echo origin cu the.
+        // Tu dong chuyen "*" -> "null" (KHONG BAO GIO dung "*" khi co credentials).
+        boolean hasWildcard = origins.size() == 1 && "*".equals(origins.get(0));
+        if (hasWildcard) {
+            configuration.setAllowedOriginPatterns(List.of("null"));
+        } else {
+            configuration.setAllowedOrigins(origins);
+        }
+
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
+
+        // Fix 2026-10-18: wildcard header KHONG hop le khi allowCredentials=true.
+        // Browser gui Access-Control-Request-Headers cho preflight POST co body JSON.
+        // Phai list explicit theo spec W3C CORS (lowercase, comma-separated).
+        configuration.setAllowedHeaders(List.of(
+            "content-type", "authorization", "x-user-id", "x-idempotency-key",
+            "accept", "origin", "referer", "user-agent"
+        ));
         configuration.setExposedHeaders(List.of("Authorization", "X-Request-Id", "Idempotency-Key"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
@@ -56,11 +72,18 @@ public class CorsConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         List<String> origins = getAllowedOrigins();
+        boolean hasWildcard = origins.size() == 1 && "*".equals(origins.get(0));
+        String[] originArray = hasWildcard
+            ? new String[]{"null"}
+            : origins.toArray(new String[0]);
 
         registry.addMapping("/**")
-                .allowedOriginPatterns(origins.toArray(new String[0]))
+                .allowedOrigins(originArray)
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
-                .allowedHeaders("*")
+                .allowedHeaders(
+                    "content-type", "authorization", "x-user-id", "x-idempotency-key",
+                    "accept", "origin", "referer", "user-agent"
+                )
                 .exposedHeaders("Authorization", "X-Request-Id", "Idempotency-Key")
                 .allowCredentials(true)
                 .maxAge(3600);
@@ -68,9 +91,12 @@ public class CorsConfig implements WebMvcConfigurer {
         // WebSocket SockJS transport cần riêng CORS config
         // (SockJS dùng iframe + xhr-streaming có thể trigger preflight)
         registry.addMapping("/ws/**")
-                .allowedOriginPatterns(origins.toArray(new String[0]))
+                .allowedOrigins(originArray)
                 .allowedMethods("GET", "POST")
-                .allowedHeaders("*")
+                .allowedHeaders(
+                    "content-type", "authorization", "x-user-id", "x-idempotency-key",
+                    "accept", "origin", "referer", "user-agent"
+                )
                 .allowCredentials(true)
                 .maxAge(3600);
     }
