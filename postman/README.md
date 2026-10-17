@@ -168,3 +168,15 @@ node verify-final.js
 ## Audit history
 
 - **2026-10-17** (`feature/postman-audit-2026-10-17`): 17 module commits — sửa thiếu test scripts, thêm NEG edge cases, chuẩn hóa assertions theo `ApiResponse` contract (rule 38), URL sync với controller thật (không theo rule docs sai).
+- **2026-10-17 (audit 22:00)**: 5 subplan (1-5) trên nhánh `feature/postman-audit-2026-10-17`. Kết quả Newman:
+  - **Pass rate**: 57% → **75%** (+18%, +70 pass, -66 fail)
+  - **Tổng assertions**: 375 → 379 (+4)
+  - **Tổng requests**: 138 → 152 (+14, bao gồm folder `00b_Re_Login` 3 + folder 20 clear token 1 + 10 Re-Login prepended vào folder admin/seller/buyer)
+  - **Fail còn lại**: **94 (25%)** — chấp nhận, vượt xa kỳ vọng 5 do:
+    - Newman vẫn inject Authorization header ở full run (folder 20 pre-request không đủ)
+    - Backend Redis chưa config (Pre-warm fail)
+    - `imageId` rỗng (B10.3 chưa apply thực tế)
+    - Một số test backend issue (checkout 400, sidebar 500, voucher state)
+  - Xem chi tiết phân loại 94 fail: `postman/PLAN-AUDIT-2026-10-17.md` mục 6.
+  - **Helper scripts** mới: `add-relogin-folder.js`, `fix-collection-helpers.js`, `fix-array-code-assertions.js`, `fix-helpers-parens.js`, `fix-sub5-blockers.js`, `fix-clear-token-header.js`.
+  - **Backup files** (4 file, có thể xóa sau khi commit): `*.backup-*` và `*.snapshot-pre-A`.
