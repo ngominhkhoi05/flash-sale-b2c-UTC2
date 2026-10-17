@@ -5,6 +5,7 @@ import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -69,6 +70,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error(HttpStatus.NOT_FOUND.value(), "Tài nguyên không tồn tại"));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMalformedJson(HttpMessageNotReadableException ex) {
+        // Log chi tiết lỗi parse JSON phía server (debug) nhưng KHÔNG trả về cho client
+        // để tránh leak cấu trúc internal (vd: field name, class name).
+        Throwable rootCause = ex.getMostSpecificCause();
+        log.warn("Malformed JSON request: {}",
+                rootCause != null ? rootCause.getMessage() : ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(
+                        HttpStatus.BAD_REQUEST.value(),
+                        CommonErrorCode.MALFORMED_JSON_REQUEST.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)
