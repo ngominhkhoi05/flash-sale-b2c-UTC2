@@ -603,17 +603,19 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200\", function () { pm.expect(pm.response.code).to.equal(200); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"Response success=true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"Has data array\", function () { pm.expect(j.data).to.be.an('array'); });",
+                  "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j = pm.response.json();",
+                  "pm.test('Response success=true', function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('Has data array', function () { pm.expect(j.data).to.be.an('array'); });",
                   "if (j.success && Array.isArray(j.data) && j.data.length>0) {",
-                  "  pm.test(\"Each category has id/name/slug\", function () {",
+                  "  pm.test('Each category has id/name/slug', function () {",
                   "    j.data.forEach(function(c){ pm.expect(c).to.have.property('id'); pm.expect(c).to.have.property('name'); pm.expect(c).to.have.property('slug'); });",
                   "  });",
                   "  pm.environment.set('categoryId', j.data[0].id);",
                   "  pm.environment.set('categorySlug', j.data[0].slug);",
-                  "}"
+                  "}",
+                  "pm.test('Response time < 3s', function () { pm.expect(pm.response.responseTime).to.be.below(3000); });"
                 ]
               }
             }
@@ -733,23 +735,26 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200\", function () { pm.expect(pm.response.code).to.equal(200); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"Response success=true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"Has items array\", function () { pm.expect(j.data).to.have.property('items'); pm.expect(j.data.items).to.be.an('array'); });",
+                  "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j = pm.response.json();",
+                  "pm.test('Response success=true', function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('Has items array (paged)', function () { pm.expect(j.data).to.have.property('items'); pm.expect(j.data.items).to.be.an('array'); });",
+                  "pm.test('Pagination fields exist', function () { pm.expect(j.data).to.have.property('page'); pm.expect(j.data).to.have.property('size'); pm.expect(j.data).to.have.property('totalElements'); });",
                   "if (j.success && j.data && j.data.items && j.data.items.length>0) {",
                   "  pm.environment.set('productId', j.data.items[0].id);",
                   "  pm.environment.set('productSlug', j.data.items[0].name ? j.data.items[0].name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') : '');",
                   "  var p = j.data.items[0];",
-                  "  pm.test(\"Product has required fields\", function () {",
+                  "  pm.test('Product has required fields', function () {",
                   "    pm.expect(p).to.have.property('id');",
                   "    pm.expect(p).to.have.property('storeId');",
                   "    pm.expect(p).to.have.property('name');",
                   "    pm.expect(p).to.have.property('minPrice');",
                   "    pm.expect(p).to.have.property('maxPrice');",
                   "  });",
-                  "  pm.test(\"status is ACTIVE (Public filter)\", function () { pm.expect(p.status).to.equal('ACTIVE'); });",
-                  "}"
+                  "  pm.test('status is ACTIVE (Public filter)', function () { pm.expect(p.status).to.equal('ACTIVE'); });",
+                  "}",
+                  "pm.test('Response time < 3s', function () { pm.expect(pm.response.responseTime).to.be.below(3000); });"
                 ]
               }
             }
@@ -880,15 +885,16 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200\", function () { pm.expect(pm.response.code).to.equal(200); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"Response success=true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"Has 3 list fields (forYou, bestSellers, hotDeals)\", function () {",
+                  "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j = pm.response.json();",
+                  "pm.test('Response success=true', function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('Has 3 list fields (forYou, bestSellers, hotDeals)', function () {",
                   "  pm.expect(j.data).to.have.property('forYou');",
                   "  pm.expect(j.data).to.have.property('bestSellers');",
                   "  pm.expect(j.data).to.have.property('hotDeals');",
                   "});",
-                  "pm.test(\"Each list is an array\", function () {",
+                  "pm.test('Each list is an array', function () {",
                   "  pm.expect(j.data.forYou).to.be.an('array');",
                   "  pm.expect(j.data.bestSellers).to.be.an('array');",
                   "  pm.expect(j.data.hotDeals).to.be.an('array');",
@@ -971,10 +977,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200\", function () { pm.expect(pm.response.code).to.equal(200); });",
-                  "var j=pm.response.json();",
-                  "pm.test(\"Response success=true\", function () { pm.expect(j.success).to.equal(true); });",
-                  "pm.test(\"Returns array of FeaturedStoreResponse\", function () {",
+                  "pm.test('Status 200', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j = pm.response.json();",
+                  "pm.test('Response success=true', function () { pm.expect(j.success).to.equal(true); });",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('Returns array of FeaturedStoreResponse', function () {",
                   "  pm.expect(j.data).to.be.an('array');",
                   "  j.data.forEach(function(s){",
                   "    pm.expect(s).to.have.property('id');",
@@ -1005,7 +1012,31 @@
               ]
             }
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 OK for banners home', function () { pm.expect(pm.response.code).to.equal(200); });",
+                  "var j = pm.response.json();",
+                  "pm.test('j.code === SUCCESS', function () { pm.expect(j.code).to.equal('SUCCESS'); });",
+                  "pm.test('data is an array (can be empty)', function () { pm.expect(j.data).to.be.an('array'); });",
+                  "if (j.data && j.data.length > 0) {",
+                  "  var b = j.data[0];",
+                  "  pm.test('Banner has id, title, imageUrl, position', function () {",
+                  "    pm.expect(b).to.have.property('id');",
+                  "    pm.expect(b).to.have.property('title');",
+                  "    pm.expect(b).to.have.property('imageUrl');",
+                  "    pm.expect(b).to.have.property('position');",
+                  "  });",
+                  "  pm.test('Banner is ACTIVE', function () { pm.expect(b.status).to.equal('ACTIVE'); });",
+                  "}"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "GET Product Reviews",
