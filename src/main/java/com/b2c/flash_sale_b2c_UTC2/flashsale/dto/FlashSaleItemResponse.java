@@ -23,4 +23,18 @@ public class FlashSaleItemResponse {
     private BigDecimal commissionRateOverride;
     private String status;
     private Instant createdAt;
+
+    // Enriched fields for Seller & Admin UI
+    private String slotTitle;
+    private Instant slotStartTime;
+    private Instant slotEndTime;
+    private String slotStatus;
+    private Long storeId;
+    private String storeName;
+    private Long productId;
+    private String productName;
+    private String skuCode;
+    private String variantName;
+    private String imageUrl;
+    private BigDecimal originalPrice;
 }

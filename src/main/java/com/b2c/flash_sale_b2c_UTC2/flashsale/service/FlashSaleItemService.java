@@ -1,9 +1,13 @@
 package com.b2c.flash_sale_b2c_UTC2.flashsale.service;
 
+import com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse;
 import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.BatchApproveFlashSaleItemsRequest;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.BatchApproveFlashSaleItemsResponse;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.FlashSaleItemResponse;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.PublicFlashSaleSlotResponse;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.RegisterFlashSaleItemRequest;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.RejectFlashSaleItemRequest;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.entity.FlashSaleItem;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.entity.FlashSaleSlot;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.exception.FlashSaleErrorCode;
@@ -20,6 +24,8 @@ import com.b2c.flash_sale_b2c_UTC2.store.repository.StoreRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -251,5 +257,112 @@ public class FlashSaleItemService {
                 log.debug("Redis stock already exists for FlashSaleItem ID: {}. Skipping SETNX.", item.getId());
             }
         }
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<FlashSaleItemResponse> getSellerItems(Long sellerUserId, Long slotId, String status, Pageable pageable) {
+        Store store = storeRepository.findByUserId(sellerUserId)
+                .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.NOT_STORE_OWNER));
+
+        Page<FlashSaleItem> page = itemRepository.findByStoreIdAndFilters(store.getId(), slotId, status, pageable);
+        List<FlashSaleItemResponse> dtos = enrichItemResponses(page.getContent());
+        return PageResponse.of(page, dtos);
+    }
+
+    @Transactional
+    public void cancelRegistration(Long sellerUserId, Long itemId) {
+        Store store = storeRepository.findByUserId(sellerUserId)
+                .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.NOT_STORE_OWNER));
+
+        FlashSaleItem item = itemRepository.findById(itemId)
+                .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.ITEM_NOT_FOUND));
+
+        if (!item.getVariant().getProduct().getStore().getId().equals(store.getId())) {
+            throw new BusinessException(FlashSaleErrorCode.NOT_STORE_OWNER);
+        }
+
+        if (!"PENDING_APPROVAL".equals(item.getStatus())) {
+            throw new BusinessException(FlashSaleErrorCode.ITEM_NOT_PENDING_APPROVAL);
+        }
+
+        itemRepository.delete(item);
+        log.info("Seller user ID: {} cancelled registration for FlashSaleItem ID: {}", sellerUserId, itemId);
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<FlashSaleItemResponse> getAdminSlotItems(Long slotId, String status, String search, Pageable pageable) {
+        slotRepository.findById(slotId)
+                .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.SLOT_NOT_FOUND));
+
+        Page<FlashSaleItem> page = itemRepository.findBySlotIdAndFilters(slotId, status, search, pageable);
+        List<FlashSaleItemResponse> dtos = enrichItemResponses(page.getContent());
+        return PageResponse.of(page, dtos);
+    }
+
+    @Transactional
+    public FlashSaleItemResponse rejectItem(Long itemId, RejectFlashSaleItemRequest request) {
+        FlashSaleItem item = itemRepository.findById(itemId)
+                .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.ITEM_NOT_FOUND));
+
+        if (!"PENDING_APPROVAL".equals(item.getStatus())) {
+            throw new BusinessException(FlashSaleErrorCode.ITEM_NOT_PENDING_APPROVAL);
+        }
+
+        item.setStatus("REJECTED");
+        FlashSaleItem savedItem = itemRepository.save(item);
+        log.info("Admin rejected FlashSaleItem ID: {}, reason: {}", savedItem.getId(), request != null ? request.getReason() : "None");
+        return itemMapper.toResponse(savedItem);
+    }
+
+    @Transactional
+    public BatchApproveFlashSaleItemsResponse batchApproveItems(BatchApproveFlashSaleItemsRequest request) {
+        List<Long> approvedItemIds = new ArrayList<>();
+        List<String> failedReasons = new ArrayList<>();
+
+        if (request != null && request.getItemIds() != null) {
+            for (Long itemId : request.getItemIds()) {
+                try {
+                    approveItem(itemId);
+                    approvedItemIds.add(itemId);
+                } catch (BusinessException ex) {
+                    failedReasons.add("ID " + itemId + ": " + ex.getMessage());
+                } catch (Exception ex) {
+                    failedReasons.add("ID " + itemId + ": Lỗi: " + ex.getMessage());
+                }
+            }
+        }
+        return BatchApproveFlashSaleItemsResponse.builder()
+                .approvedItemIds(approvedItemIds)
+                .failedReasons(failedReasons)
+                .build();
+    }
+
+    private List<FlashSaleItemResponse> enrichItemResponses(List<FlashSaleItem> items) {
+        if (items.isEmpty()) {
+            return List.of();
+        }
+        List<Long> variantIds = items.stream().map(i -> i.getVariant().getId()).toList();
+        List<Long> productIds = items.stream().map(i -> i.getVariant().getProduct().getId()).distinct().toList();
+
+        java.util.Map<Long, String> variantImageMap = variantIds.isEmpty() ? java.util.Map.of() :
+                imageService.getPrimaryImagesByOwnerIds(ImageOwnerType.VARIANT, variantIds)
+                        .entrySet().stream()
+                        .collect(java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey, e -> e.getValue().getUrl()));
+        java.util.Map<Long, String> productImageMap = productIds.isEmpty() ? java.util.Map.of() :
+                imageService.getPrimaryImagesByOwnerIds(ImageOwnerType.PRODUCT, productIds)
+                        .entrySet().stream()
+                        .collect(java.util.stream.Collectors.toMap(java.util.Map.Entry::getKey, e -> e.getValue().getUrl()));
+
+        List<FlashSaleItemResponse> responses = new ArrayList<>(items.size());
+        for (FlashSaleItem item : items) {
+            FlashSaleItemResponse dto = itemMapper.toResponse(item);
+            String img = variantImageMap.get(item.getVariant().getId());
+            if (img == null) {
+                img = productImageMap.get(item.getVariant().getProduct().getId());
+            }
+            dto.setImageUrl(img);
+            responses.add(dto);
+        }
+        return responses;
     }
 }

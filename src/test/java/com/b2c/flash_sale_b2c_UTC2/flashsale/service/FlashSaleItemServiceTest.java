@@ -145,4 +145,71 @@ class FlashSaleItemServiceTest {
         int stock = svc.getRealtimeStock(item);
         assertEquals(42, stock);
     }
+
+    @Test
+    @DisplayName("cancelRegistration: huy dang ky thanh cong khi o trang thai PENDING_APPROVAL")
+    void cancelRegistration_Success() {
+        Store store = Store.builder().id(10L).build();
+        when(storeRepository.findByUserId(99L)).thenReturn(java.util.Optional.of(store));
+        when(itemRepository.findById(1L)).thenReturn(java.util.Optional.of(item));
+
+        itemServiceWithoutRedis.cancelRegistration(99L, 1L);
+
+        org.mockito.Mockito.verify(itemRepository).delete(item);
+    }
+
+    @Test
+    @DisplayName("cancelRegistration: nem loi khi item khong o trang thai PENDING_APPROVAL")
+    void cancelRegistration_ThrowWhenNotPending() {
+        Store store = Store.builder().id(10L).build();
+        item.setStatus("APPROVED");
+        when(storeRepository.findByUserId(99L)).thenReturn(java.util.Optional.of(store));
+        when(itemRepository.findById(1L)).thenReturn(java.util.Optional.of(item));
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException.class,
+                () -> itemServiceWithoutRedis.cancelRegistration(99L, 1L)
+        );
+    }
+
+    @Test
+    @DisplayName("rejectItem: admin tu choi dang ky item thanh cong")
+    void rejectItem_Success() {
+        when(itemRepository.findById(1L)).thenReturn(java.util.Optional.of(item));
+        when(itemRepository.save(org.mockito.ArgumentMatchers.any())).thenAnswer(inv -> inv.getArgument(0));
+        when(itemMapper.toResponse(org.mockito.ArgumentMatchers.any())).thenReturn(
+                com.b2c.flash_sale_b2c_UTC2.flashsale.dto.FlashSaleItemResponse.builder()
+                        .id(1L)
+                        .status("REJECTED")
+                        .build()
+        );
+
+        var res = itemServiceWithoutRedis.rejectItem(
+                1L,
+                new com.b2c.flash_sale_b2c_UTC2.flashsale.dto.RejectFlashSaleItemRequest("Gia khong phu hop")
+        );
+
+        assertEquals("REJECTED", res.getStatus());
+    }
+
+    @Test
+    @DisplayName("batchApproveItems: admin duyet danh sach item thanh cong")
+    void batchApproveItems_Success() {
+        when(itemRepository.findById(1L)).thenReturn(java.util.Optional.of(item));
+        when(variantRepository.deductStockQuantityConditionally(1000L, 10)).thenReturn(1);
+        when(itemRepository.save(org.mockito.ArgumentMatchers.any())).thenReturn(item);
+        when(itemMapper.toResponse(org.mockito.ArgumentMatchers.any())).thenReturn(
+                com.b2c.flash_sale_b2c_UTC2.flashsale.dto.FlashSaleItemResponse.builder()
+                        .id(1L)
+                        .status("APPROVED")
+                        .build()
+        );
+
+        var res = itemServiceWithoutRedis.batchApproveItems(
+                new com.b2c.flash_sale_b2c_UTC2.flashsale.dto.BatchApproveFlashSaleItemsRequest(java.util.List.of(1L))
+        );
+
+        assertEquals(1, res.getApprovedItemIds().size());
+        assertEquals(1L, res.getApprovedItemIds().get(0));
+    }
 }
