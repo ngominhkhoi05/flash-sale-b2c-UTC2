@@ -32,6 +32,8 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
     private final ImageService imageService;
+    private final com.b2c.flash_sale_b2c_UTC2.order.repository.OrderRepository orderRepository;
+    private final com.b2c.flash_sale_b2c_UTC2.image.repository.ImageRepository imageRepository;
 
     private List<String> getUserRoles(Long userId) {
         if (userId == null || userRoleRepository == null) return List.of();
@@ -123,5 +125,131 @@ public class UserServiceImpl implements UserService {
         } catch (Exception ex) {
             log.warn("Lỗi khi thu hồi refresh tokens trong Redis cho userId={}: {}", userId, ex.getMessage());
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse<com.b2c.flash_sale_b2c_UTC2.user.dto.AdminUserResponse> getAdminUsers(
+            String role,
+            String status,
+            String search,
+            org.springframework.data.domain.Pageable pageable
+    ) {
+        String trimmedRole = (role != null && !role.trim().isEmpty() && !"ALL".equalsIgnoreCase(role.trim()))
+                ? role.trim().toUpperCase()
+                : null;
+        String trimmedStatus = (status != null && !status.trim().isEmpty() && !"ALL".equalsIgnoreCase(status.trim()))
+                ? status.trim().toUpperCase()
+                : null;
+        String trimmedSearch = (search != null && !search.trim().isEmpty())
+                ? search.trim()
+                : null;
+
+        var page = userRepository.findAdminUsers(trimmedRole, trimmedStatus, trimmedSearch, pageable);
+        if (page.isEmpty()) {
+            return com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse.of(page, java.util.Collections.emptyList());
+        }
+
+        List<Long> userIds = page.getContent().stream().map(User::getId).toList();
+
+        // 1. Batch load roles for all users
+        List<com.b2c.flash_sale_b2c_UTC2.user.entity.UserRole> userRoles = userRoleRepository.findByUserIdsWithRole(userIds);
+        java.util.Map<Long, List<String>> userRolesMap = new java.util.HashMap<>();
+        for (var ur : userRoles) {
+            if (ur.getUser() != null && ur.getRole() != null) {
+                String rName = ur.getRole().getName();
+                String formattedRole = rName.startsWith("ROLE_") ? rName.substring(5) : rName;
+                userRolesMap.computeIfAbsent(ur.getUser().getId(), k -> new java.util.ArrayList<>()).add(formattedRole);
+            }
+        }
+
+        // 2. Batch load avatars
+        List<com.b2c.flash_sale_b2c_UTC2.image.entity.Image> images = imageRepository.findByOwnerTypeAndOwnerIdIn(ImageOwnerType.USER, userIds);
+        java.util.Map<Long, String> avatarMap = new java.util.HashMap<>();
+        for (var img : images) {
+            avatarMap.putIfAbsent(img.getOwnerId(), img.getUrl());
+        }
+
+        // 3. Batch load order counts
+        List<Object[]> orderCounts = orderRepository.countOrdersByBuyerIds(userIds);
+        java.util.Map<Long, Long> orderCountMap = new java.util.HashMap<>();
+        for (Object[] row : orderCounts) {
+            if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
+                orderCountMap.put(((Number) row[0]).longValue(), ((Number) row[1]).longValue());
+            }
+        }
+
+        List<com.b2c.flash_sale_b2c_UTC2.user.dto.AdminUserResponse> content = page.getContent().stream().map(user -> {
+            Long uid = user.getId();
+            List<String> roles = userRolesMap.getOrDefault(uid, List.of("BUYER"));
+            String primaryRole = roles.contains("ADMIN")
+                    ? "ADMIN"
+                    : (roles.contains("SELLER") ? "SELLER" : "BUYER");
+
+            return com.b2c.flash_sale_b2c_UTC2.user.dto.AdminUserResponse.builder()
+                    .id(uid)
+                    .email(user.getEmail())
+                    .fullName(user.getFullName())
+                    .phone(user.getPhone())
+                    .avatarUrl(avatarMap.get(uid))
+                    .status(user.getStatus())
+                    .role(primaryRole)
+                    .roles(roles)
+                    .ordersCount(orderCountMap.getOrDefault(uid, 0L))
+                    .createdAt(user.getCreatedAt())
+                    .build();
+        }).toList();
+
+        return com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse.of(page, content);
+    }
+
+    @Override
+    @Transactional
+    public com.b2c.flash_sale_b2c_UTC2.user.dto.AdminUserResponse updateUserStatus(
+            Long userId,
+            com.b2c.flash_sale_b2c_UTC2.user.dto.UpdateUserStatusRequest request
+    ) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(UserErrorCode.USER_NOT_FOUND));
+
+        String newStatus = request.getStatus().trim().toUpperCase();
+        if (!"ACTIVE".equals(newStatus) && !"LOCKED".equals(newStatus)) {
+            throw new BusinessException(UserErrorCode.INVALID_USER_STATUS);
+        }
+
+        // Kiểm tra nếu là ADMIN thì không được khóa
+        List<String> roles = getUserRoles(userId);
+        boolean isAdmin = roles.stream().anyMatch(r -> r.contains("ADMIN"));
+        if (isAdmin && "LOCKED".equals(newStatus)) {
+            throw new BusinessException(UserErrorCode.CANNOT_LOCK_ADMIN);
+        }
+
+        user.setStatus(newStatus);
+        user = userRepository.save(user);
+
+        if ("LOCKED".equals(newStatus)) {
+            revokeAllUserRefreshTokens(userId);
+        }
+
+        log.info("Admin đã cập nhật trạng thái người dùng id={} thành {}, lý do: {}", userId, newStatus, request.getReason());
+
+        String primaryRole = roles.stream().anyMatch(r -> r.contains("ADMIN"))
+                ? "ADMIN"
+                : (roles.stream().anyMatch(r -> r.contains("SELLER")) ? "SELLER" : "BUYER");
+
+        var avatar = imageService.getPrimaryImage(ImageOwnerType.USER, userId);
+
+        return com.b2c.flash_sale_b2c_UTC2.user.dto.AdminUserResponse.builder()
+                .id(user.getId())
+                .email(user.getEmail())
+                .fullName(user.getFullName())
+                .phone(user.getPhone())
+                .avatarUrl(avatar != null ? avatar.getUrl() : null)
+                .status(user.getStatus())
+                .role(primaryRole)
+                .roles(roles)
+                .ordersCount(0L)
+                .createdAt(user.getCreatedAt())
+                .build();
     }
 }

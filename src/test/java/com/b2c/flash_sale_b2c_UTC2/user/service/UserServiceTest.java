@@ -53,6 +53,12 @@ class UserServiceTest {
     @Mock
     private SetOperations<String, String> setOperations;
 
+    @Mock
+    private com.b2c.flash_sale_b2c_UTC2.order.repository.OrderRepository orderRepository;
+
+    @Mock
+    private com.b2c.flash_sale_b2c_UTC2.image.repository.ImageRepository imageRepository;
+
     @InjectMocks
     private UserServiceImpl userService;
 
@@ -164,6 +170,63 @@ class UserServiceTest {
         when(userRepository.findByPhone("0988888888")).thenReturn(Optional.of(anotherUser));
 
         assertThrows(BusinessException.class, () -> userService.updateProfile(1L, request));
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    @DisplayName("Admin lấy danh sách người dùng thành công")
+    void getAdminUsers_Success() {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 10);
+        org.springframework.data.domain.Page<User> userPage = new org.springframework.data.domain.PageImpl<>(
+                List.of(sampleUser), pageable, 1);
+
+        when(userRepository.findAdminUsers("BUYER", "ACTIVE", "Test", pageable)).thenReturn(userPage);
+        when(userRoleRepository.findByUserIdsWithRole(any())).thenReturn(List.of());
+        when(imageRepository.findByOwnerTypeAndOwnerIdIn(any(), any())).thenReturn(List.of());
+        when(orderRepository.countOrdersByBuyerIds(any())).thenReturn(List.<Object[]>of(new Object[]{1L, 3L}));
+
+        var result = userService.getAdminUsers("BUYER", "ACTIVE", "Test", pageable);
+
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+        assertEquals(1, result.getItems().size());
+        assertEquals("user@example.com", result.getItems().get(0).getEmail());
+        assertEquals(3L, result.getItems().get(0).getOrdersCount());
+    }
+
+    @Test
+    @DisplayName("Admin khóa người dùng thường thành công và thu hồi refresh token")
+    void updateUserStatus_LockUser_Success() {
+        com.b2c.flash_sale_b2c_UTC2.user.dto.UpdateUserStatusRequest request =
+                new com.b2c.flash_sale_b2c_UTC2.user.dto.UpdateUserStatusRequest("LOCKED", "Spam");
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(sampleUser));
+        when(userRepository.save(any(User.class))).thenReturn(sampleUser);
+        when(userRoleRepository.findByUserId(1L)).thenReturn(List.of());
+        when(stringRedisTemplate.opsForSet()).thenReturn(setOperations);
+
+        var response = userService.updateUserStatus(1L, request);
+
+        assertNotNull(response);
+        assertEquals("LOCKED", response.getStatus());
+        verify(userRepository).save(any(User.class));
+        verify(stringRedisTemplate).delete("auth:user_tokens:1");
+    }
+
+    @Test
+    @DisplayName("Admin cố tình khóa tài khoản ADMIN bị ném lỗi CANNOT_LOCK_ADMIN")
+    void updateUserStatus_CannotLockAdmin() {
+        com.b2c.flash_sale_b2c_UTC2.user.dto.UpdateUserStatusRequest request =
+                new com.b2c.flash_sale_b2c_UTC2.user.dto.UpdateUserStatusRequest("LOCKED", "Try lock admin");
+
+        var adminRole = com.b2c.flash_sale_b2c_UTC2.user.entity.Role.builder().name("ADMIN").build();
+        var userRole = com.b2c.flash_sale_b2c_UTC2.user.entity.UserRole.builder().role(adminRole).build();
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(sampleUser));
+        when(userRoleRepository.findByUserId(1L)).thenReturn(List.of(userRole));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> userService.updateUserStatus(1L, request));
+        assertEquals(UserErrorCode.CANNOT_LOCK_ADMIN.getCode(), ex.getErrorCode().getCode());
         verify(userRepository, never()).save(any(User.class));
     }
 }
