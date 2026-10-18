@@ -6,7 +6,12 @@ import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductDetailResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductFilterRequest;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductSummaryResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.RecommendedProductsResponse;
+import com.b2c.flash_sale_b2c_UTC2.product.dto.SearchRequest;
+import com.b2c.flash_sale_b2c_UTC2.product.dto.SearchResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.enums.ProductSortOption;
+import com.b2c.flash_sale_b2c_UTC2.product.enums.SearchCity;
+import com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService;
+import com.b2c.flash_sale_b2c_UTC2.product.enums.SearchSortKey;
 import com.b2c.flash_sale_b2c_UTC2.product.service.ProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -24,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/products")
@@ -105,6 +111,64 @@ public class ProductController {
                 .build();
         PageResponse<ProductSummaryResponse> response = productService.getPublicProducts(filter, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm thành công", response));
+    }
+
+    @GetMapping("/search")
+    @Operation(summary = "Tìm kiếm sản phẩm cho storefront /search (Public)",
+               description = "Trả về items + total + facets (subcategories, cities, ratings, services). " +
+                             "Sort: relevance (default) | newest | best_selling | price_asc | price_desc. " +
+                             "Page 0-based (BE convention).")
+    public ResponseEntity<ApiResponse<SearchResponse>> searchProducts(
+            @Parameter(description = "Từ khoá tìm theo tên sản phẩm (LIKE %q%)")
+            @RequestParam(value = "q", required = false) String q,
+
+            @Parameter(description = "Danh sách subcategory key (vd: true-wireless)")
+            @RequestParam(value = "subcategory", required = false) List<String> subcategory,
+
+            @Parameter(description = "Danh sách city (HCM | HN | DN | BD) - hiện tại chỉ facet, không filter DB")
+            @RequestParam(value = "city", required = false) List<String> city,
+
+            @Parameter(description = "Danh sách service flag (flash-sale | voucher | freeship | official)")
+            @RequestParam(value = "service", required = false) List<String> service,
+
+            @Parameter(description = "Giá tối thiểu (VND)")
+            @RequestParam(value = "priceMin", required = false) BigDecimal priceMin,
+
+            @Parameter(description = "Giá tối đa (VND)")
+            @RequestParam(value = "priceMax", required = false) BigDecimal priceMax,
+
+            @Parameter(description = "Rating tối thiểu (3 | 4 | 5)")
+            @RequestParam(value = "rating", required = false) Integer rating,
+
+            @Parameter(description = "Sort key: relevance | newest | best_selling | price_asc | price_desc",
+                    schema = @Schema(implementation = SearchSortKey.class))
+            @RequestParam(value = "sort", required = false) String sort,
+
+            @Parameter(description = "Phân trang (page=0, size=20)")
+            @PageableDefault(size = 20) Pageable pageable
+    ) {
+        List<SearchCity> cities = city == null ? null : city.stream()
+                .map(SearchCity::fromKey)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        List<SearchService> services = service == null ? null : service.stream()
+                .map(SearchService::fromKey)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+
+        SearchRequest req = SearchRequest.builder()
+                .q(q)
+                .subcategories(subcategory)
+                .cities(city)  // raw strings consumed by the service for facet count
+                .services(services)
+                .priceMin(priceMin)
+                .priceMax(priceMax)
+                .rating(rating)
+                .sort(SearchSortKey.fromValue(sort))
+                .build();
+
+        SearchResponse response = productService.searchProducts(req, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Tìm kiếm sản phẩm thành công", response));
     }
 
     @GetMapping("/{id}")
