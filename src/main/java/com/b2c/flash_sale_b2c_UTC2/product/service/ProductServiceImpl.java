@@ -356,7 +356,9 @@ public class ProductServiceImpl implements ProductService {
             productPage = productRepository.findAll(spec, sortedPageable);
         }
 
-        // 3. Batch-load variants + images and map to summary DTOs.
+        // 3. Batch-load variants + images and map to RecommendedProductResponse
+        //    (same shape as /api/v1/products/recommended) so the FE can render
+        //    the storefront ProductCard directly.
         List<Long> productIds = productPage.getContent().stream().map(Product::getId).toList();
         Map<Long, List<ProductVariant>> variantsByProductId = productIds.isEmpty() ? Map.of() :
                 productVariantRepository.findByProductIdInAndStatus(productIds, "ACTIVE").stream()
@@ -367,8 +369,8 @@ public class ProductServiceImpl implements ProductService {
                         .entrySet().stream()
                         .collect(Collectors.toMap(Map.Entry::getKey, e -> nullSafeUrl(e.getValue())));
 
-        List<ProductSummaryResponse> content = productPage.getContent().stream()
-                .map(p -> mapToSummaryResponse(p, variantsByProductId.getOrDefault(p.getId(), List.of()),
+        List<RecommendedProductResponse> content = productPage.getContent().stream()
+                .map(p -> mapToSearchItem(p, variantsByProductId.getOrDefault(p.getId(), List.of()),
                         primaryImageMap.get(p.getId())))
                 .toList();
 
@@ -981,6 +983,35 @@ public class ProductServiceImpl implements ProductService {
                     .label("hot_deal")
                     .build();
         }).toList();
+    }
+
+    /**
+     * Map a {@link Product} to a {@link RecommendedProductResponse} for the search
+     * endpoint. Mirrors {@link #mapToRecommended(Product, List, String, String)} but
+     * does not set a {@code label} (the search endpoint does not classify items as
+     * {@code for_you} / {@code best_seller} / {@code hot_deal}).
+     */
+    private RecommendedProductResponse mapToSearchItem(Product p, List<ProductVariant> variants,
+                                                       String imageUrl) {
+        BigDecimal minPrice = null, maxPrice = null;
+        int totalStock = 0;
+        for (ProductVariant v : variants) {
+            if (minPrice == null || v.getOriginalPrice().compareTo(minPrice) < 0) minPrice = v.getOriginalPrice();
+            if (maxPrice == null || v.getOriginalPrice().compareTo(maxPrice) > 0) maxPrice = v.getOriginalPrice();
+            totalStock += (v.getStockQuantity() != null ? v.getStockQuantity() : 0);
+        }
+        return RecommendedProductResponse.builder()
+                .id(p.getId())
+                .storeId(p.getStore().getId())
+                .storeName(p.getStore().getStoreName())
+                .name(p.getName())
+                .imageUrl(imageUrl)
+                .minPrice(minPrice)
+                .maxPrice(maxPrice)
+                .totalStock(totalStock)
+                .totalSold(p.getTotalSold())
+                .label(null)
+                .build();
     }
 
     private RecommendedProductResponse mapToRecommended(Product p, List<ProductVariant> variants,

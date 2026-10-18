@@ -25,8 +25,15 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SearchResponse {
+    /**
+     * Items returned for the search query. Each item is a
+     * {@link RecommendedProductResponse} (same shape as
+     * {@code GET /api/v1/products/recommended}) so the FE can render
+     * the storefront {@code ProductCard} variant without an extra mapping
+     * step.
+     */
     @Builder.Default
-    private List<ProductSummaryResponse> items = Collections.emptyList();
+    private List<RecommendedProductResponse> items = Collections.emptyList();
     private long total;
     private int page;
     private int pageSize;

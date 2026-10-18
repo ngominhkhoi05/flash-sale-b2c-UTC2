@@ -5,6 +5,7 @@ import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
 import com.b2c.flash_sale_b2c_UTC2.order.repository.OrderItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductSummaryResponse;
+import com.b2c.flash_sale_b2c_UTC2.product.dto.RecommendedProductResponse;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.SearchFacetsDto;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.SearchRequest;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.SearchResponse;
@@ -31,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -200,5 +202,37 @@ class ProductServiceSearchTest {
         );
 
         assertEquals(2, response.getPage());
+    }
+
+    @Test
+    @DisplayName("searchProducts: items use RecommendedProductResponse shape (not ProductSummaryResponse)")
+    void searchProducts_itemsUseRecommendedProductResponseShape() {
+        when(productRepository.findAll(
+                any(org.springframework.data.jpa.domain.Specification.class),
+                any(Pageable.class)))
+                .thenReturn(org.springframework.data.domain.Page.empty(Pageable.ofSize(20)));
+        when(productVariantRepository.findByProductIdInAndStatus(any(), any()))
+                .thenReturn(List.of());
+        when(imageService.getPrimaryImagesByOwnerIds(any(), any()))
+                .thenReturn(Map.of());
+        when(productRepository.count(any(org.springframework.data.jpa.domain.Specification.class)))
+                .thenReturn(0L);
+
+        SearchResponse response = productService.searchProducts(
+                new SearchRequest("", null, null, null, null, null, null, SearchSortKey.NEWEST),
+                Pageable.ofSize(20)
+        );
+
+        // items is List<RecommendedProductResponse> (not List<ProductSummaryResponse>)
+        // — the FE renders storefront ProductCard from this shape.
+        assertNotNull(response.getItems());
+        for (Object item : response.getItems()) {
+            assertInstanceOf(RecommendedProductResponse.class, item,
+                    "items must be RecommendedProductResponse so FE can render ProductCard");
+            // Must NOT be the old ProductSummaryResponse
+            if (item instanceof ProductSummaryResponse) {
+                throw new AssertionError("items must not be ProductSummaryResponse");
+            }
+        }
     }
 }
