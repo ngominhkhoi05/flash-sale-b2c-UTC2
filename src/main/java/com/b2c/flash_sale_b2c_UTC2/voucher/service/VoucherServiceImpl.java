@@ -57,6 +57,9 @@ public class VoucherServiceImpl implements VoucherService {
         }
 
         String discountType = request.getDiscountType().trim().toUpperCase();
+        if ("PERCENTAGE".equals(discountType)) {
+            discountType = "PERCENT";
+        }
         if ("PERCENT".equals(discountType) && request.getDiscountValue().compareTo(new BigDecimal("100")) > 0) {
             throw new BusinessException(VoucherErrorCode.INVALID_DISCOUNT_PERCENT);
         }
@@ -70,6 +73,9 @@ public class VoucherServiceImpl implements VoucherService {
             if (!store.getUser().getId().equals(userId)) {
                 throw new BusinessException(StoreErrorCode.STORE_ACCESS_DENIED);
             }
+        } else {
+            // Tự động gán Store của Seller nếu user sở hữu Store
+            store = storeRepository.findByUserId(userId).orElse(null);
         }
 
         Voucher voucher = Voucher.builder()
