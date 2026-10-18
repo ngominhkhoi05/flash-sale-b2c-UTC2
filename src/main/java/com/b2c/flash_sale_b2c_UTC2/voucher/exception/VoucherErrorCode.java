@@ -21,6 +21,7 @@ public enum VoucherErrorCode implements ErrorCode {
     INVALID_DISCOUNT_PERCENT("VOUCHER_400_8", "Tỷ lệ giảm giá theo % không được vượt quá 100%", HttpStatus.BAD_REQUEST),
     VOUCHER_ALREADY_SAVED("VOUCHER_409_SAVED", "Mã giảm giá đã có trong kho voucher của bạn", HttpStatus.CONFLICT),
     VOUCHER_CANNOT_DELETE("VOUCHER_400_9", "Không thể xóa mã giảm giá đã có lượt sử dụng", HttpStatus.BAD_REQUEST),
+    VOUCHER_CANNOT_BE_DELETED("VOUCHER_400_9", "Không thể xóa mã giảm giá đã có lượt sử dụng", HttpStatus.BAD_REQUEST),
     INVALID_TOTAL_QUANTITY("VOUCHER_400_10", "Tổng số lượng phát hành không được nhỏ hơn số lượt đã sử dụng", HttpStatus.BAD_REQUEST);
 
     private final String code;

@@ -546,4 +546,90 @@ public class VoucherServiceImpl implements VoucherService {
                 .totalUsages(totalUsages)
                 .build();
     }
+
+    @Override
+    @Transactional
+    public void deleteVoucher(Long voucherId) {
+        Voucher voucher = voucherRepository.findById(voucherId)
+                .orElseThrow(() -> new BusinessException(VoucherErrorCode.VOUCHER_NOT_FOUND));
+
+        if (voucher.getUsedQuantity() != null && voucher.getUsedQuantity() > 0) {
+            throw new BusinessException(VoucherErrorCode.VOUCHER_CANNOT_BE_DELETED);
+        }
+
+        voucherRepository.delete(voucher);
+        log.info("Admin đã xóa thành công voucher id={}", voucherId);
+    }
+
+    @Override
+    @Transactional
+    public VoucherResponse updateAdminVoucherStatus(Long voucherId, UpdateVoucherStatusRequest request) {
+        Voucher voucher = voucherRepository.findById(voucherId)
+                .orElseThrow(() -> new BusinessException(VoucherErrorCode.VOUCHER_NOT_FOUND));
+
+        String targetStatus = request.getStatus().trim().toUpperCase();
+        if (!"ACTIVE".equals(targetStatus) && !"PAUSED".equals(targetStatus) && !"DISABLED".equals(targetStatus)) {
+            throw new BusinessException(VoucherErrorCode.VOUCHER_INACTIVE);
+        }
+
+        voucher.setStatus(targetStatus);
+        voucher = voucherRepository.save(voucher);
+        log.info("Admin cập nhật trạng thái voucher id={} thành {}", voucherId, targetStatus);
+        return voucherMapper.toResponse(voucher);
+    }
+
+    @Override
+    @Transactional
+    public VoucherResponse updateVoucher(Long voucherId, UpdateVoucherRequest request) {
+        Voucher voucher = voucherRepository.findById(voucherId)
+                .orElseThrow(() -> new BusinessException(VoucherErrorCode.VOUCHER_NOT_FOUND));
+
+        if (request.getStartTime() != null) {
+            voucher.setStartTime(request.getStartTime());
+        }
+        if (request.getEndTime() != null) {
+            voucher.setEndTime(request.getEndTime());
+        }
+        if (voucher.getEndTime().isBefore(voucher.getStartTime()) || voucher.getEndTime().equals(voucher.getStartTime())) {
+            throw new BusinessException(VoucherErrorCode.INVALID_VOUCHER_DATES);
+        }
+
+        if (request.getDiscountType() != null && !request.getDiscountType().isBlank()) {
+            String discountType = request.getDiscountType().trim().toUpperCase();
+            if ("PERCENTAGE".equals(discountType)) {
+                discountType = "PERCENT";
+            }
+            voucher.setDiscountType(discountType);
+        }
+
+        if (request.getDiscountValue() != null) {
+            if ("PERCENT".equals(voucher.getDiscountType()) && request.getDiscountValue().compareTo(new BigDecimal("100")) > 0) {
+                throw new BusinessException(VoucherErrorCode.INVALID_DISCOUNT_PERCENT);
+            }
+            voucher.setDiscountValue(request.getDiscountValue());
+        }
+
+        if (request.getMinOrderAmount() != null) {
+            voucher.setMinOrderAmount(request.getMinOrderAmount());
+        }
+        if (request.getMaxDiscountAmount() != null) {
+            voucher.setMaxDiscountAmount(request.getMaxDiscountAmount());
+        }
+        if (request.getTotalQuantity() != null) {
+            if (voucher.getUsedQuantity() != null && request.getTotalQuantity() < voucher.getUsedQuantity()) {
+                throw new BusinessException(VoucherErrorCode.INVALID_TOTAL_QUANTITY);
+            }
+            voucher.setTotalQuantity(request.getTotalQuantity());
+        }
+        if (request.getUserUsageLimit() != null) {
+            voucher.setUserUsageLimit(request.getUserUsageLimit());
+        }
+        if (request.getStatus() != null && !request.getStatus().isBlank()) {
+            voucher.setStatus(request.getStatus().trim().toUpperCase());
+        }
+
+        voucher = voucherRepository.save(voucher);
+        log.info("Cập nhật voucher id={} thành công", voucherId);
+        return voucherMapper.toResponse(voucher);
+    }
 }
