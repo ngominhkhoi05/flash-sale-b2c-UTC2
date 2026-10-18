@@ -107,6 +107,23 @@ public class FlashSaleWsBroadcaster {
         log.debug("[WS] Broadcast slot status {} to {}: slotId={}", newStatus, dest, slotId);
     }
 
+    /**
+     * Broadcast thông báo đơn hàng mới / cập nhật đơn hàng tới Kênh Người Bán (Seller) theo thời gian thực.
+     * @param storeId id gian hàng
+     * @param orderData dữ liệu đơn hàng (OrderResponse)
+     */
+    public void broadcastNewOrderToStore(Long storeId, Object orderData) {
+        try {
+            if (storeId != null) {
+                messagingTemplate.convertAndSend("/topic/stores/" + storeId + "/orders", orderData);
+            }
+            messagingTemplate.convertAndSend("/topic/seller/orders", orderData);
+            log.info("[WS] Broadcast new order to store {}: data={}", storeId, orderData);
+        } catch (Exception ex) {
+            log.warn("[WS] Error broadcasting order to store {}: {}", storeId, ex.getMessage());
+        }
+    }
+
     // ── Private user destinations ────────────────────────────────
 
     /**
