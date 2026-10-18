@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Admin - Banners", description = "Banner management for admin")
 @RestController
 @RequestMapping("/api/v1/admin/banners")
-@PreAuthorize("hasRole(''ADMIN'')")
+@PreAuthorize("hasRole('ADMIN')")
 @RequiredArgsConstructor
 public class BannerAdminController {
 
