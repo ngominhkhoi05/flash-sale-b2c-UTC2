@@ -2,6 +2,7 @@ package com.b2c.flash_sale_b2c_UTC2.flashsale.service;
 
 import com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse;
 import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.BatchApproveFailedItem;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.BatchApproveFlashSaleItemsRequest;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.BatchApproveFlashSaleItemsResponse;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.FlashSaleItemResponse;
@@ -317,7 +318,7 @@ public class FlashSaleItemService {
     @Transactional
     public BatchApproveFlashSaleItemsResponse batchApproveItems(BatchApproveFlashSaleItemsRequest request) {
         List<Long> approvedItemIds = new ArrayList<>();
-        List<String> failedReasons = new ArrayList<>();
+        List<BatchApproveFailedItem> failedReasons = new ArrayList<>();
 
         if (request != null && request.getItemIds() != null) {
             for (Long itemId : request.getItemIds()) {
@@ -325,9 +326,15 @@ public class FlashSaleItemService {
                     approveItem(itemId);
                     approvedItemIds.add(itemId);
                 } catch (BusinessException ex) {
-                    failedReasons.add("ID " + itemId + ": " + ex.getMessage());
+                    failedReasons.add(BatchApproveFailedItem.builder()
+                            .itemId(itemId)
+                            .reason(ex.getMessage())
+                            .build());
                 } catch (Exception ex) {
-                    failedReasons.add("ID " + itemId + ": Lỗi: " + ex.getMessage());
+                    failedReasons.add(BatchApproveFailedItem.builder()
+                            .itemId(itemId)
+                            .reason("Lỗi: " + ex.getMessage())
+                            .build());
                 }
             }
         }

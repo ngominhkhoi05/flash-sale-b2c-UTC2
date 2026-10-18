@@ -18,5 +18,5 @@ public class BatchApproveFlashSaleItemsResponse {
     private List<Long> approvedItemIds = Collections.emptyList();
 
     @Builder.Default
-    private List<String> failedReasons = Collections.emptyList();
+    private List<BatchApproveFailedItem> failedReasons = Collections.emptyList();
 }
