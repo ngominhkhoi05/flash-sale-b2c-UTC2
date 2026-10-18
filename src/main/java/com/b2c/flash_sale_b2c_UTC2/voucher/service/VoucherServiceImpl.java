@@ -17,9 +17,14 @@ import com.b2c.flash_sale_b2c_UTC2.voucher.entity.UserVoucher;
 import com.b2c.flash_sale_b2c_UTC2.voucher.entity.Voucher;
 import com.b2c.flash_sale_b2c_UTC2.voucher.exception.VoucherErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.voucher.mapper.VoucherMapper;
+import com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse;
+import com.b2c.flash_sale_b2c_UTC2.voucher.dto.AdminVoucherKpisResponse;
+import com.b2c.flash_sale_b2c_UTC2.voucher.dto.UpdateVoucherStatusRequest;
 import com.b2c.flash_sale_b2c_UTC2.voucher.repository.UserVoucherRepository;
 import com.b2c.flash_sale_b2c_UTC2.voucher.repository.VoucherRepository;
 import com.b2c.flash_sale_b2c_UTC2.voucher.repository.VoucherUsageRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -363,5 +368,70 @@ public class VoucherServiceImpl implements VoucherService {
             return (val / 1000) + "K";
         }
         return val + "đ";
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<VoucherResponse> getSellerVouchers(Long sellerUserId, String status, Pageable pageable) {
+        Store store = storeRepository.findByUserId(sellerUserId)
+                .orElseThrow(() -> new BusinessException(StoreErrorCode.STORE_NOT_FOUND));
+
+        Page<Voucher> page = voucherRepository.findSellerVouchers(store.getId(), status, Instant.now(), pageable);
+        List<VoucherResponse> content = page.getContent().stream().map(voucherMapper::toResponse).toList();
+        return PageResponse.of(page, content);
+    }
+
+    @Override
+    @Transactional
+    public VoucherResponse updateSellerVoucherStatus(Long sellerUserId, Long voucherId, UpdateVoucherStatusRequest request) {
+        Store store = storeRepository.findByUserId(sellerUserId)
+                .orElseThrow(() -> new BusinessException(StoreErrorCode.STORE_NOT_FOUND));
+
+        Voucher voucher = voucherRepository.findById(voucherId)
+                .orElseThrow(() -> new BusinessException(VoucherErrorCode.VOUCHER_NOT_FOUND));
+
+        if (voucher.getStore() == null || !voucher.getStore().getId().equals(store.getId())) {
+            throw new BusinessException(StoreErrorCode.STORE_ACCESS_DENIED);
+        }
+
+        String targetStatus = request.getStatus().trim().toUpperCase();
+        if (!"ACTIVE".equals(targetStatus) && !"PAUSED".equals(targetStatus)) {
+            throw new BusinessException(VoucherErrorCode.VOUCHER_INACTIVE);
+        }
+
+        if (voucher.getEndTime().isBefore(Instant.now())) {
+            throw new BusinessException(VoucherErrorCode.VOUCHER_EXPIRED);
+        }
+
+        voucher.setStatus(targetStatus);
+        voucher = voucherRepository.save(voucher);
+        log.info("Seller userId={} cập nhật trạng thái voucher id={} thành {}", sellerUserId, voucherId, targetStatus);
+        return voucherMapper.toResponse(voucher);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<VoucherResponse> getAdminVouchers(String scope, String status, String search, Pageable pageable) {
+        Page<Voucher> page = voucherRepository.findAdminVouchers(scope, status, search, Instant.now(), pageable);
+        List<VoucherResponse> content = page.getContent().stream().map(voucherMapper::toResponse).toList();
+        return PageResponse.of(page, content);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AdminVoucherKpisResponse getAdminVoucherKpis() {
+        long totalVouchers = voucherRepository.count();
+        long activeVouchers = voucherRepository.countActiveVouchers(Instant.now());
+        BigDecimal totalDistributedBudget = voucherRepository.sumTotalDistributedBudget();
+        BigDecimal usedBudget = voucherUsageRepository.sumTotalUsedBudget();
+        long totalUsages = voucherRepository.sumTotalUsages();
+
+        return AdminVoucherKpisResponse.builder()
+                .totalVouchers(totalVouchers)
+                .activeVouchers(activeVouchers)
+                .totalDistributedBudget(totalDistributedBudget)
+                .usedBudget(usedBudget)
+                .totalUsages(totalUsages)
+                .build();
     }
 }

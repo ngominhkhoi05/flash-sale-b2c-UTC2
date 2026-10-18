@@ -198,14 +198,20 @@ class VoucherControllerTest {
     @DisplayName("Seller xem danh sách voucher của gian hàng mình -> 200 OK")
     void getMyStoreVouchers_WithSellerRole_ShouldReturn200() throws Exception {
         VoucherResponse response = VoucherResponse.builder().id(200L).code("SHOP20").build();
-        when(voucherService.getMyStoreVouchers(2L)).thenReturn(List.of(response));
+        com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse<VoucherResponse> pageResponse =
+                com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse.<VoucherResponse>builder()
+                        .items(List.of(response))
+                        .totalElements(1)
+                        .totalPages(1)
+                        .build();
+        when(voucherService.getSellerVouchers(eq(2L), any(), any())).thenReturn(pageResponse);
 
         mockMvc.perform(get("/api/v1/seller/vouchers")
                         .header("Authorization", "Bearer " + sellerToken)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[0].code").value("SHOP20"));
+                .andExpect(jsonPath("$.data.items[0].code").value("SHOP20"));
     }
 
     @Test
