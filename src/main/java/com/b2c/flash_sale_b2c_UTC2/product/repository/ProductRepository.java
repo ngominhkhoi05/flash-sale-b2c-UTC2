@@ -153,4 +153,38 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
            "  WHERE v.product.id = p.id AND fsi.status = 'APPROVED' AND sl.status = 'ACTIVE'" +
            ")")
     Page<Product> findProductsWithActiveFlashSaleByCategory(@Param("categoryId") Integer categoryId, Pageable pageable);
+
+    @Query(value = """
+        SELECT p FROM Product p
+        JOIN FETCH p.store s
+        JOIN FETCH p.category c
+        WHERE (:status IS NULL OR :status = '' OR p.status = :status)
+        AND (:categoryId IS NULL OR :categoryId <= 0 OR c.id = :categoryId)
+        AND (
+            :search IS NULL OR :search = '' OR
+            LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%')) OR
+            LOWER(s.storeName) LIKE LOWER(CONCAT('%', :search, '%')) OR
+            LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%'))
+        )
+        ORDER BY p.createdAt DESC
+    """,
+    countQuery = """
+        SELECT count(p) FROM Product p
+        JOIN p.store s
+        JOIN p.category c
+        WHERE (:status IS NULL OR :status = '' OR p.status = :status)
+        AND (:categoryId IS NULL OR :categoryId <= 0 OR c.id = :categoryId)
+        AND (
+            :search IS NULL OR :search = '' OR
+            LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%')) OR
+            LOWER(s.storeName) LIKE LOWER(CONCAT('%', :search, '%')) OR
+            LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%'))
+        )
+    """)
+    Page<Product> findAdminProducts(
+            @Param("status") String status,
+            @Param("categoryId") Integer categoryId,
+            @Param("search") String search,
+            Pageable pageable
+    );
 }
