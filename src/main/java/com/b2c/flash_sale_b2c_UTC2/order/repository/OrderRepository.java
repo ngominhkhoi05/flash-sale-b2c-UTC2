@@ -85,6 +85,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
      * <p>Used by {@code UserServiceImpl.listAdminUsers} to batch-load order counts for many
      * users at once, avoiding N+1.
      */
-    @Query("SELECT o.buyerId, count(o) FROM Order o WHERE o.buyerId IN :buyerIds GROUP BY o.buyerId")
+    @Query("SELECT o.buyer.id, count(o) FROM Order o WHERE o.buyer.id IN :buyerIds GROUP BY o.buyer.id")
     List<Object[]> countOrdersByBuyerIds(@Param("buyerIds") List<Long> buyerIds);
 }
