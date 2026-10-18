@@ -7,6 +7,7 @@ import com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse;
 import com.b2c.flash_sale_b2c_UTC2.config.JwtProperties;
 import com.b2c.flash_sale_b2c_UTC2.config.SecurityConfig;
 import com.b2c.flash_sale_b2c_UTC2.user.entity.User;
+import com.b2c.flash_sale_b2c_UTC2.voucher.dto.UpdateVoucherRequest;
 import com.b2c.flash_sale_b2c_UTC2.voucher.dto.UpdateVoucherStatusRequest;
 import com.b2c.flash_sale_b2c_UTC2.voucher.dto.VoucherResponse;
 import com.b2c.flash_sale_b2c_UTC2.voucher.service.VoucherService;
@@ -30,9 +31,12 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -178,5 +182,102 @@ class SellerVoucherControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data.status").value("PAUSED"));
+    }
+
+    @Test
+    @DisplayName("Seller xem chi tiết voucher thành công trả về 200 OK")
+    void getStoreVoucherDetail_Seller_ShouldReturn200() throws Exception {
+        VoucherResponse response = VoucherResponse.builder()
+                .id(1L)
+                .code("SHOP20K")
+                .storeId(10L)
+                .discountType("FIXED_AMOUNT")
+                .discountValue(BigDecimal.valueOf(20000))
+                .status("ACTIVE")
+                .build();
+
+        when(voucherService.getSellerVoucherDetail(eq(2L), eq(1L))).thenReturn(response);
+
+        mockMvc.perform(get("/api/v1/seller/vouchers/1")
+                        .header("Authorization", "Bearer " + sellerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.id").value(1))
+                .andExpect(jsonPath("$.data.code").value("SHOP20K"));
+    }
+
+    @Test
+    @DisplayName("Buyer gọi API xem chi tiết voucher của seller bị 403 Forbidden")
+    void getStoreVoucherDetail_Buyer_ShouldReturn403() throws Exception {
+        mockMvc.perform(get("/api/v1/seller/vouchers/1")
+                        .header("Authorization", "Bearer " + buyerToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(403));
+    }
+
+    @Test
+    @DisplayName("Seller chỉnh sửa voucher thành công trả về 200 OK")
+    void updateStoreVoucher_Seller_ShouldReturn200() throws Exception {
+        UpdateVoucherRequest request = UpdateVoucherRequest.builder()
+                .name("Voucher giảm 25k")
+                .discountValue(BigDecimal.valueOf(25000))
+                .totalQuantity(150)
+                .status("ACTIVE")
+                .build();
+
+        VoucherResponse response = VoucherResponse.builder()
+                .id(1L)
+                .code("SHOP20K")
+                .discountValue(BigDecimal.valueOf(25000))
+                .totalQuantity(150)
+                .status("ACTIVE")
+                .build();
+
+        when(voucherService.updateSellerVoucher(eq(2L), eq(1L), any(UpdateVoucherRequest.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(put("/api/v1/seller/vouchers/1")
+                        .header("Authorization", "Bearer " + sellerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.totalQuantity").value(150));
+    }
+
+    @Test
+    @DisplayName("Buyer gọi API chỉnh sửa voucher của seller bị 403 Forbidden")
+    void updateStoreVoucher_Buyer_ShouldReturn403() throws Exception {
+        UpdateVoucherRequest request = UpdateVoucherRequest.builder()
+                .name("Hack voucher")
+                .build();
+
+        mockMvc.perform(put("/api/v1/seller/vouchers/1")
+                        .header("Authorization", "Bearer " + buyerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(403));
+    }
+
+    @Test
+    @DisplayName("Seller xóa voucher thành công trả về 200 OK")
+    void deleteStoreVoucher_Seller_ShouldReturn200() throws Exception {
+        doNothing().when(voucherService).deleteSellerVoucher(eq(2L), eq(1L));
+
+        mockMvc.perform(delete("/api/v1/seller/vouchers/1")
+                        .header("Authorization", "Bearer " + sellerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.message").value("Xóa mã giảm giá thành công"));
+    }
+
+    @Test
+    @DisplayName("Buyer gọi API xóa voucher của seller bị 403 Forbidden")
+    void deleteStoreVoucher_Buyer_ShouldReturn403() throws Exception {
+        mockMvc.perform(delete("/api/v1/seller/vouchers/1")
+                        .header("Authorization", "Bearer " + buyerToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(403));
     }
 }
