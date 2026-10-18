@@ -5,15 +5,25 @@ import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
 import com.b2c.flash_sale_b2c_UTC2.store.entity.Store;
 import com.b2c.flash_sale_b2c_UTC2.store.repository.StoreRepository;
 import com.b2c.flash_sale_b2c_UTC2.user.entity.User;
+import com.b2c.flash_sale_b2c_UTC2.user.repository.UserRepository;
+import com.b2c.flash_sale_b2c_UTC2.wallet.dto.AdminWithdrawalResponse;
+import com.b2c.flash_sale_b2c_UTC2.wallet.dto.ApproveWithdrawalRequest;
+import com.b2c.flash_sale_b2c_UTC2.wallet.dto.RejectWithdrawalRequest;
+import com.b2c.flash_sale_b2c_UTC2.wallet.dto.SellerBankAccountRequest;
+import com.b2c.flash_sale_b2c_UTC2.wallet.dto.SellerBankAccountResponse;
 import com.b2c.flash_sale_b2c_UTC2.wallet.dto.SellerWalletResponse;
 import com.b2c.flash_sale_b2c_UTC2.wallet.dto.SellerWithdrawalRequest;
 import com.b2c.flash_sale_b2c_UTC2.wallet.dto.WalletTransactionResponse;
+import com.b2c.flash_sale_b2c_UTC2.wallet.entity.StoreBankAccount;
 import com.b2c.flash_sale_b2c_UTC2.wallet.entity.Wallet;
 import com.b2c.flash_sale_b2c_UTC2.wallet.entity.WalletTransaction;
+import com.b2c.flash_sale_b2c_UTC2.wallet.entity.WalletWithdrawalRequest;
 import com.b2c.flash_sale_b2c_UTC2.wallet.exception.WalletErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.wallet.mapper.WalletTransactionMapper;
+import com.b2c.flash_sale_b2c_UTC2.wallet.repository.StoreBankAccountRepository;
 import com.b2c.flash_sale_b2c_UTC2.wallet.repository.WalletRepository;
 import com.b2c.flash_sale_b2c_UTC2.wallet.repository.WalletTransactionRepository;
+import com.b2c.flash_sale_b2c_UTC2.wallet.repository.WalletWithdrawalRequestRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,6 +58,15 @@ class WalletServiceImplTest {
     private StoreRepository storeRepository;
 
     @Mock
+    private StoreBankAccountRepository storeBankAccountRepository;
+
+    @Mock
+    private WalletWithdrawalRequestRepository walletWithdrawalRequestRepository;
+
+    @Mock
+    private UserRepository userRepository;
+
+    @Mock
     private WalletTransactionMapper walletTransactionMapper;
 
     @InjectMocks
@@ -56,6 +75,7 @@ class WalletServiceImplTest {
     private User testUser;
     private Store testStore;
     private Wallet testWallet;
+    private StoreBankAccount testBankAccount;
 
     @BeforeEach
     void setUp() {
@@ -68,6 +88,18 @@ class WalletServiceImplTest {
                 .frozenBalance(new BigDecimal("1000000.00"))
                 .updatedAt(Instant.now())
                 .build();
+
+        testBankAccount = StoreBankAccount.builder()
+                .id(1L)
+                .store(testStore)
+                .bankName("Vietcombank")
+                .bankCode("VCB")
+                .accountNumber("102988391204")
+                .accountHolder("NGUYEN VAN A")
+                .branch("Chi nhánh Thủ Đức")
+                .isVerified(true)
+                .updatedAt(Instant.now())
+                .build();
     }
 
     @Test
@@ -76,6 +108,7 @@ class WalletServiceImplTest {
         when(storeRepository.findByUserId(10L)).thenReturn(Optional.of(testStore));
         when(walletRepository.findByStoreId(100L)).thenReturn(Optional.of(testWallet));
         when(walletTransactionRepository.sumWithdrawnByWalletId(1L)).thenReturn(new BigDecimal("2000000.00"));
+        when(storeBankAccountRepository.findByStoreId(100L)).thenReturn(Optional.of(testBankAccount));
 
         SellerWalletResponse response = walletService.getSellerWallet(10L);
 
@@ -84,8 +117,44 @@ class WalletServiceImplTest {
         assertEquals(new BigDecimal("1000000.00"), response.getPendingBalance());
         assertEquals(new BigDecimal("2000000.00"), response.getTotalWithdrawn());
         assertNotNull(response.getBankAccount());
-        assertEquals("MB Bank", response.getBankAccount().getBankName());
-        assertEquals("NGUYỄN VĂN A", response.getBankAccount().getAccountHolder());
+        assertEquals("Vietcombank", response.getBankAccount().getBankName());
+        assertEquals("NGUYEN VAN A", response.getBankAccount().getAccountHolder());
+    }
+
+    @Test
+    @DisplayName("getSellerBankAccount - Thành công trả về tài khoản ngân hàng")
+    void getSellerBankAccount_Success() {
+        when(storeRepository.findByUserId(10L)).thenReturn(Optional.of(testStore));
+        when(storeBankAccountRepository.findByStoreId(100L)).thenReturn(Optional.of(testBankAccount));
+
+        SellerBankAccountResponse response = walletService.getSellerBankAccount(10L);
+
+        assertNotNull(response);
+        assertEquals("VCB", response.getBankCode());
+        assertEquals("102988391204", response.getAccountNumber());
+    }
+
+    @Test
+    @DisplayName("updateSellerBankAccount - Cập nhật hoặc thêm mới tài khoản ngân hàng")
+    void updateSellerBankAccount_Success() {
+        SellerBankAccountRequest request = SellerBankAccountRequest.builder()
+                .bankName("Techcombank")
+                .bankCode("TCB")
+                .accountNumber("1903829102")
+                .accountHolder("NGUYEN VAN A")
+                .branch("Chi nhánh Tân Bình")
+                .build();
+
+        when(storeRepository.findByUserId(10L)).thenReturn(Optional.of(testStore));
+        when(storeBankAccountRepository.findByStoreId(100L)).thenReturn(Optional.of(testBankAccount));
+        when(storeBankAccountRepository.save(any(StoreBankAccount.class))).thenAnswer(i -> i.getArgument(0));
+
+        SellerBankAccountResponse response = walletService.updateSellerBankAccount(10L, request);
+
+        assertNotNull(response);
+        assertEquals("TCB", response.getBankCode());
+        assertEquals("1903829102", response.getAccountNumber());
+        verify(storeBankAccountRepository).save(any(StoreBankAccount.class));
     }
 
     @Test
@@ -129,22 +198,22 @@ class WalletServiceImplTest {
     }
 
     @Test
-    @DisplayName("requestSellerWithdrawal - Thành công trừ số dư và lưu giao dịch WITHDRAWAL")
+    @DisplayName("requestSellerWithdrawal - Thành công trừ số dư khả dụng, tăng số dư đóng băng và lưu yêu cầu rút")
     void requestSellerWithdrawal_Success() {
         SellerWithdrawalRequest request = SellerWithdrawalRequest.builder()
                 .amount(new BigDecimal("500000.00"))
-                .bankAccountNumber("123456789")
                 .note("Rút tiền tuần 1")
                 .build();
 
         when(storeRepository.findByUserId(10L)).thenReturn(Optional.of(testStore));
+        when(storeBankAccountRepository.findByStoreId(100L)).thenReturn(Optional.of(testBankAccount));
         when(walletRepository.findByStoreIdWithLock(100L)).thenReturn(Optional.of(testWallet));
         when(walletRepository.save(any(Wallet.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         WalletTransaction savedTx = WalletTransaction.builder()
                 .id(88L)
                 .wallet(testWallet)
-                .transactionType("WITHDRAWAL")
+                .transactionType("WITHDRAWAL_REQUEST")
                 .amount(new BigDecimal("-500000.00"))
                 .balanceAfter(new BigDecimal("4500000.00"))
                 .description("Rút tiền tuần 1")
@@ -160,8 +229,25 @@ class WalletServiceImplTest {
         assertNotNull(response);
         assertEquals(88L, response.getId());
         assertEquals(new BigDecimal("4500000.00"), testWallet.getBalance());
+        assertEquals(new BigDecimal("1500000.00"), testWallet.getFrozenBalance());
         verify(walletRepository).save(testWallet);
+        verify(walletWithdrawalRequestRepository).save(any(WalletWithdrawalRequest.class));
         verify(walletTransactionRepository).save(any(WalletTransaction.class));
+    }
+
+    @Test
+    @DisplayName("requestSellerWithdrawal - Ném ngoại lệ khi chưa cấu hình tài khoản ngân hàng")
+    void requestSellerWithdrawal_NoBankConfigured() {
+        SellerWithdrawalRequest request = SellerWithdrawalRequest.builder()
+                .amount(new BigDecimal("100000.00"))
+                .build();
+
+        when(storeRepository.findByUserId(10L)).thenReturn(Optional.of(testStore));
+        when(storeBankAccountRepository.findByStoreId(100L)).thenReturn(Optional.empty());
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> walletService.requestSellerWithdrawal(10L, request));
+        assertEquals(WalletErrorCode.WALLET_BANK_NOT_CONFIGURED, ex.getErrorCode());
     }
 
     @Test
@@ -184,6 +270,7 @@ class WalletServiceImplTest {
                 .build();
 
         when(storeRepository.findByUserId(10L)).thenReturn(Optional.of(testStore));
+        when(storeBankAccountRepository.findByStoreId(100L)).thenReturn(Optional.of(testBankAccount));
         when(walletRepository.findByStoreIdWithLock(100L)).thenReturn(Optional.of(testWallet));
 
         BusinessException ex = assertThrows(BusinessException.class,
@@ -192,14 +279,60 @@ class WalletServiceImplTest {
     }
 
     @Test
-    @DisplayName("getCustomerWallet - Người dùng chưa có shop trả về ví mặc định số dư 0")
-    void getCustomerWallet_NoStore_ReturnsZero() {
-        when(storeRepository.findByUserId(20L)).thenReturn(Optional.empty());
+    @DisplayName("approveWithdrawal - Admin phê duyệt thành công, trừ số dư đóng băng")
+    void approveWithdrawal_Success() {
+        WalletWithdrawalRequest request = WalletWithdrawalRequest.builder()
+                .id(1L)
+                .requestCode("WDR-261018-0001")
+                .wallet(testWallet)
+                .store(testStore)
+                .amount(new BigDecimal("500000.00"))
+                .status("PENDING")
+                .build();
 
-        SellerWalletResponse response = walletService.getCustomerWallet(20L);
+        User admin = User.builder().id(999L).fullName("Admin").build();
+
+        when(walletWithdrawalRequestRepository.findById(1L)).thenReturn(Optional.of(request));
+        when(walletRepository.findByIdWithLock(1L)).thenReturn(Optional.of(testWallet));
+        when(userRepository.findById(999L)).thenReturn(Optional.of(admin));
+        when(walletWithdrawalRequestRepository.save(any(WalletWithdrawalRequest.class))).thenAnswer(i -> i.getArgument(0));
+
+        AdminWithdrawalResponse response = walletService.approveWithdrawal(1L, 999L,
+                ApproveWithdrawalRequest.builder().adminNote("Đã chuyển khoản").build());
 
         assertNotNull(response);
-        assertEquals(BigDecimal.ZERO, response.getBalance());
-        assertFalse(response.getBankAccount().isVerified());
+        assertEquals("APPROVED", response.getStatus());
+        assertEquals(new BigDecimal("500000.00"), testWallet.getFrozenBalance());
+        verify(walletRepository).save(testWallet);
+    }
+
+    @Test
+    @DisplayName("rejectWithdrawal - Admin từ chối thành công, hoàn lại số dư khả dụng")
+    void rejectWithdrawal_Success() {
+        WalletWithdrawalRequest request = WalletWithdrawalRequest.builder()
+                .id(1L)
+                .requestCode("WDR-261018-0001")
+                .wallet(testWallet)
+                .store(testStore)
+                .amount(new BigDecimal("500000.00"))
+                .status("PENDING")
+                .build();
+
+        User admin = User.builder().id(999L).fullName("Admin").build();
+
+        when(walletWithdrawalRequestRepository.findById(1L)).thenReturn(Optional.of(request));
+        when(walletRepository.findByIdWithLock(1L)).thenReturn(Optional.of(testWallet));
+        when(userRepository.findById(999L)).thenReturn(Optional.of(admin));
+        when(walletWithdrawalRequestRepository.save(any(WalletWithdrawalRequest.class))).thenAnswer(i -> i.getArgument(0));
+
+        AdminWithdrawalResponse response = walletService.rejectWithdrawal(1L, 999L,
+                RejectWithdrawalRequest.builder().reason("Sai số tài khoản").build());
+
+        assertNotNull(response);
+        assertEquals("REJECTED", response.getStatus());
+        assertEquals(new BigDecimal("500000.00"), testWallet.getFrozenBalance());
+        assertEquals(new BigDecimal("5500000.00"), testWallet.getBalance());
+        verify(walletRepository).save(testWallet);
+        verify(walletTransactionRepository).save(any(WalletTransaction.class));
     }
 }
