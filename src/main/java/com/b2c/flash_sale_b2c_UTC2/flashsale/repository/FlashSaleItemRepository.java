@@ -107,8 +107,7 @@ public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Lo
         JOIN FETCH p.store st
         WHERE st.id = :storeId
         AND (:slotId IS NULL OR s.id = :slotId)
-        AND (:status IS NULL OR fsi.status = :status)
-        ORDER BY fsi.createdAt DESC
+        AND (:status IS NULL OR :status = '' OR fsi.status = :status)
     """,
     countQuery = """
         SELECT COUNT(fsi) FROM FlashSaleItem fsi
@@ -118,7 +117,7 @@ public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Lo
         JOIN p.store st
         WHERE st.id = :storeId
         AND (:slotId IS NULL OR s.id = :slotId)
-        AND (:status IS NULL OR fsi.status = :status)
+        AND (:status IS NULL OR :status = '' OR fsi.status = :status)
     """)
     Page<FlashSaleItem> findByStoreIdAndFilters(
             @Param("storeId") Long storeId,
@@ -133,15 +132,14 @@ public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Lo
         JOIN FETCH fsi.variant v
         JOIN FETCH v.product p
         JOIN FETCH p.store st
-        WHERE s.id = :slotId
-        AND (:status IS NULL OR fsi.status = :status)
+        WHERE (:slotId IS NULL OR s.id = :slotId)
+        AND (:status IS NULL OR :status = '' OR fsi.status = :status)
         AND (
-            :search IS NULL OR
+            :search IS NULL OR :search = '' OR
             LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%')) OR
             LOWER(st.storeName) LIKE LOWER(CONCAT('%', :search, '%')) OR
             LOWER(v.sku) LIKE LOWER(CONCAT('%', :search, '%'))
         )
-        ORDER BY fsi.createdAt DESC
     """,
     countQuery = """
         SELECT COUNT(fsi) FROM FlashSaleItem fsi
@@ -149,10 +147,10 @@ public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Lo
         JOIN fsi.variant v
         JOIN v.product p
         JOIN p.store st
-        WHERE s.id = :slotId
-        AND (:status IS NULL OR fsi.status = :status)
+        WHERE (:slotId IS NULL OR s.id = :slotId)
+        AND (:status IS NULL OR :status = '' OR fsi.status = :status)
         AND (
-            :search IS NULL OR
+            :search IS NULL OR :search = '' OR
             LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%')) OR
             LOWER(st.storeName) LIKE LOWER(CONCAT('%', :search, '%')) OR
             LOWER(v.sku) LIKE LOWER(CONCAT('%', :search, '%'))
@@ -164,4 +162,12 @@ public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Lo
             @Param("search") String search,
             Pageable pageable
     );
+
+    @Query("""
+        SELECT fsi.status, COUNT(fsi)
+        FROM FlashSaleItem fsi
+        WHERE (:slotId IS NULL OR fsi.slot.id = :slotId)
+        GROUP BY fsi.status
+    """)
+    List<Object[]> countStatusBySlotId(@Param("slotId") Long slotId);
 }

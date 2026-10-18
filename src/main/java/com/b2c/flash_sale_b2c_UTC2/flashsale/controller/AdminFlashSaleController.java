@@ -89,6 +89,33 @@ public class AdminFlashSaleController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm đăng ký thành công", response));
     }
 
+    @GetMapping("/items")
+    @Operation(summary = "Lấy danh sách SKU đăng ký", description = "Admin xem danh sách các SKU đăng ký có lọc và phân trang")
+    public ResponseEntity<ApiResponse<com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse<FlashSaleItemResponse>>> getItems(
+            @RequestParam(required = false) Long slotId,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String search,
+            @org.springframework.data.web.PageableDefault(size = 15, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) org.springframework.data.domain.Pageable pageable
+    ) {
+        var response = itemService.getAdminItems(slotId, status, search, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm đăng ký thành công", response));
+    }
+
+    @GetMapping("/items/counts")
+    @Operation(summary = "Lấy thống kê trạng thái duyệt SKU", description = "Admin lấy số lượng SKU chờ duyệt, đã duyệt, từ chối")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> getItemCounts(
+            @RequestParam(required = false) Long slotId
+    ) {
+        var response = itemService.getAdminItemCounts(slotId);
+        return ResponseEntity.ok(ApiResponse.success("Lấy thống kê duyệt thành công", response));
+    }
+
+    @GetMapping("/slots/{id}/logs")
+    @Operation(summary = "Lấy nhật ký kiểm toán phiên Flash Sale", description = "Admin xem audit log của phiên Flash Sale")
+    public ResponseEntity<ApiResponse<List<Object>>> getSlotLogs(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success("Lấy logs thành công", java.util.Collections.emptyList()));
+    }
+
     @PatchMapping("/items/{id}/reject")
     @Operation(summary = "Từ chối duyệt SKU Flash Sale", description = "Admin từ chối biến thể SKU kèm lý do")
     public ResponseEntity<ApiResponse<FlashSaleItemResponse>> rejectItem(

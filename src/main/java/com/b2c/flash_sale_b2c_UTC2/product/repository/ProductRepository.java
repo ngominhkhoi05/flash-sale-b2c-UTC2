@@ -169,15 +169,15 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
         SELECT p FROM Product p
         JOIN FETCH p.store s
         JOIN FETCH p.category c
-        WHERE (:status IS NULL OR p.status = :status)
+        WHERE (:status IS NULL OR :status = '' OR p.status = :status)
         AND (:categoryId IS NULL OR c.id = :categoryId)
-        AND (:search IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%')))
+        AND (:search IS NULL OR :search = '' OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%')))
         """,
         countQuery = """
         SELECT count(p) FROM Product p
-        WHERE (:status IS NULL OR p.status = :status)
+        WHERE (:status IS NULL OR :status = '' OR p.status = :status)
         AND (:categoryId IS NULL OR p.category.id = :categoryId)
-        AND (:search IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%')))
+        AND (:search IS NULL OR :search = '' OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%')))
         """)
     Page<Product> findAdminProducts(
             @Param("status") String status,

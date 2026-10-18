@@ -292,12 +292,53 @@ public class FlashSaleItemService {
 
     @Transactional(readOnly = true)
     public PageResponse<FlashSaleItemResponse> getAdminSlotItems(Long slotId, String status, String search, Pageable pageable) {
-        slotRepository.findById(slotId)
-                .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.SLOT_NOT_FOUND));
+        return getAdminItems(slotId, status, search, pageable);
+    }
 
-        Page<FlashSaleItem> page = itemRepository.findBySlotIdAndFilters(slotId, status, search, pageable);
+    @Transactional(readOnly = true)
+    public PageResponse<FlashSaleItemResponse> getAdminItems(Long slotId, String status, String search, Pageable pageable) {
+        if (slotId != null) {
+            slotRepository.findById(slotId)
+                    .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.SLOT_NOT_FOUND));
+        }
+
+        String sanitizedStatus = (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status.trim()))
+                ? status.trim().toUpperCase()
+                : null;
+        String sanitizedSearch = (search != null && !search.isBlank()) ? search.trim() : null;
+
+        Page<FlashSaleItem> page = itemRepository.findBySlotIdAndFilters(slotId, sanitizedStatus, sanitizedSearch, pageable);
         List<FlashSaleItemResponse> dtos = enrichItemResponses(page.getContent());
         return PageResponse.of(page, dtos);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Long> getAdminItemCounts(Long slotId) {
+        if (slotId != null) {
+            slotRepository.findById(slotId)
+                    .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.SLOT_NOT_FOUND));
+        }
+
+        List<Object[]> rows = itemRepository.countStatusBySlotId(slotId);
+        long pending = 0;
+        long approved = 0;
+        long rejected = 0;
+        for (Object[] row : rows) {
+            String status = (String) row[0];
+            Long count = (Long) row[1];
+            if ("PENDING_APPROVAL".equalsIgnoreCase(status) || "PENDING".equalsIgnoreCase(status)) {
+                pending += (count != null ? count : 0);
+            } else if ("APPROVED".equalsIgnoreCase(status)) {
+                approved += (count != null ? count : 0);
+            } else if ("REJECTED".equalsIgnoreCase(status)) {
+                rejected += (count != null ? count : 0);
+            }
+        }
+        return java.util.Map.of(
+                "pending", pending,
+                "approved", approved,
+                "rejected", rejected
+        );
     }
 
     @Transactional
