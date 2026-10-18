@@ -165,6 +165,64 @@ class SellerWalletControllerTest {
     }
 
     @Test
+    @DisplayName("GET /api/v1/seller/wallet/bank-account - Thành công cho SELLER")
+    void getBankAccount_Success() throws Exception {
+        com.b2c.flash_sale_b2c_UTC2.wallet.dto.SellerBankAccountResponse response =
+                com.b2c.flash_sale_b2c_UTC2.wallet.dto.SellerBankAccountResponse.builder()
+                        .id(1L)
+                        .bankName("Vietcombank")
+                        .bankCode("VCB")
+                        .accountNumber("0123456789")
+                        .accountHolder("NGUYEN VAN BAN")
+                        .isVerified(true)
+                        .build();
+
+        when(walletService.getSellerBankAccount(20L)).thenReturn(response);
+
+        mockMvc.perform(get("/api/v1/seller/wallet/bank-account")
+                        .header("Authorization", "Bearer " + sellerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.bankCode").value("VCB"))
+                .andExpect(jsonPath("$.data.accountHolder").value("NGUYEN VAN BAN"));
+    }
+
+    @Test
+    @DisplayName("PUT /api/v1/seller/wallet/bank-account - Thành công cho SELLER")
+    void updateBankAccount_Success() throws Exception {
+        com.b2c.flash_sale_b2c_UTC2.wallet.dto.SellerBankAccountRequest request =
+                com.b2c.flash_sale_b2c_UTC2.wallet.dto.SellerBankAccountRequest.builder()
+                        .bankName("Vietcombank")
+                        .bankCode("VCB")
+                        .accountNumber("102988391204")
+                        .accountHolder("NGUYEN VAN BAN")
+                        .branch("Chi nhánh Thủ Đức")
+                        .build();
+
+        com.b2c.flash_sale_b2c_UTC2.wallet.dto.SellerBankAccountResponse response =
+                com.b2c.flash_sale_b2c_UTC2.wallet.dto.SellerBankAccountResponse.builder()
+                        .id(1L)
+                        .bankName("Vietcombank")
+                        .bankCode("VCB")
+                        .accountNumber("102988391204")
+                        .accountHolder("NGUYEN VAN BAN")
+                        .branch("Chi nhánh Thủ Đức")
+                        .isVerified(true)
+                        .build();
+
+        when(walletService.updateSellerBankAccount(eq(20L), any(com.b2c.flash_sale_b2c_UTC2.wallet.dto.SellerBankAccountRequest.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/seller/wallet/bank-account")
+                        .header("Authorization", "Bearer " + sellerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.accountNumber").value("102988391204"));
+    }
+
+    @Test
     @DisplayName("GET /api/v1/seller/wallet - 403 Forbidden cho BUYER")
     void getMyWallet_Forbidden_ForBuyer() throws Exception {
         mockMvc.perform(get("/api/v1/seller/wallet")

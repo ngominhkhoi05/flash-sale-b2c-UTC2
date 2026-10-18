@@ -3,6 +3,8 @@ package com.b2c.flash_sale_b2c_UTC2.wallet.controller;
 import com.b2c.flash_sale_b2c_UTC2.auth.security.CustomUserDetails;
 import com.b2c.flash_sale_b2c_UTC2.common.api.ApiResponse;
 import com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse;
+import com.b2c.flash_sale_b2c_UTC2.wallet.dto.SellerBankAccountRequest;
+import com.b2c.flash_sale_b2c_UTC2.wallet.dto.SellerBankAccountResponse;
 import com.b2c.flash_sale_b2c_UTC2.wallet.dto.SellerWalletResponse;
 import com.b2c.flash_sale_b2c_UTC2.wallet.dto.SellerWithdrawalRequest;
 import com.b2c.flash_sale_b2c_UTC2.wallet.dto.WalletTransactionResponse;
@@ -19,6 +21,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -55,8 +58,29 @@ public class SellerWalletController {
         return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử giao dịch thành công", response));
     }
 
+    @GetMapping("/bank-account")
+    @Operation(summary = "Lấy thông tin tài khoản ngân hàng của shop", description = "Trả về thông tin tài khoản ngân hàng đã cấu hình của shop")
+    public ResponseEntity<ApiResponse<SellerBankAccountResponse>> getBankAccount(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        SellerBankAccountResponse response = walletService.getSellerBankAccount(userDetails.getUser().getId());
+        return ResponseEntity.ok(ApiResponse.success("Lấy thông tin tài khoản ngân hàng thành công", response));
+    }
+
+    @PutMapping("/bank-account")
+    @Operation(summary = "Cập nhật thông tin tài khoản ngân hàng của shop", description = "Thêm mới hoặc cập nhật thông tin tài khoản ngân hàng nhận tiền rút")
+    public ResponseEntity<ApiResponse<SellerBankAccountResponse>> updateBankAccount(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody SellerBankAccountRequest request
+    ) {
+        SellerBankAccountResponse response = walletService.updateSellerBankAccount(
+                userDetails.getUser().getId(), request
+        );
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật thông tin tài khoản ngân hàng thành công", response));
+    }
+
     @PostMapping("/withdraw")
-    @Operation(summary = "Tạo yêu cầu rút tiền về tài khoản ngân hàng", description = "Trừ số dư khả dụng và ghi nhận giao dịch rút tiền")
+    @Operation(summary = "Tạo yêu cầu rút tiền về tài khoản ngân hàng", description = "Đóng băng số dư khả dụng và tạo lệnh rút tiền chờ duyệt")
     public ResponseEntity<ApiResponse<WalletTransactionResponse>> requestWithdrawal(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @Valid @RequestBody SellerWithdrawalRequest request
@@ -67,3 +91,4 @@ public class SellerWalletController {
         return ResponseEntity.ok(ApiResponse.success("Tạo yêu cầu rút tiền thành công", response));
     }
 }
+
