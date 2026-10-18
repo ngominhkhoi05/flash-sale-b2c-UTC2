@@ -75,4 +75,28 @@ public interface ProductReviewRepository extends JpaRepository<ProductReview, Lo
      */
     @Query("SELECT COUNT(r) FROM ProductReview r WHERE r.product.store.id = :storeId AND r.status = 'VISIBLE'")
     long countByStoreId(@Param("storeId") Long storeId);
+
+    @Query("""
+        SELECT r FROM ProductReview r
+        LEFT JOIN FETCH r.product p
+        LEFT JOIN FETCH r.orderItem oi
+        LEFT JOIN FETCH oi.variant v
+        WHERE r.product.store.id = :storeId
+        AND (:rating IS NULL OR r.rating = :rating)
+        AND (:replyStatus IS NULL OR 
+             (:replyStatus = 'REPLIED' AND r.sellerReply IS NOT NULL) OR 
+             (:replyStatus = 'UNREPLIED' AND r.sellerReply IS NULL))
+        ORDER BY r.createdAt DESC
+    """)
+    Page<ProductReview> findByStoreIdAndFilters(
+            @Param("storeId") Long storeId,
+            @Param("rating") Integer rating,
+            @Param("replyStatus") String replyStatus,
+            Pageable pageable);
+
+    @Query("SELECT r.rating, count(r) FROM ProductReview r WHERE r.product.store.id = :storeId GROUP BY r.rating")
+    List<Object[]> countByRatingGroupedForStore(@Param("storeId") Long storeId);
+
+    @Query("SELECT COUNT(r) FROM ProductReview r WHERE r.product.store.id = :storeId AND r.sellerReply IS NOT NULL")
+    long countRepliedByStoreId(@Param("storeId") Long storeId);
 }

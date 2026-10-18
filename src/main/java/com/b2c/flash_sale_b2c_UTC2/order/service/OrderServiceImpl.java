@@ -286,12 +286,40 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<OrderResponse> getSellerOrders(Long sellerUserId, Pageable pageable) {
+        return getSellerOrders(sellerUserId, null, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<OrderResponse> getSellerOrders(Long sellerUserId, String status, Pageable pageable) {
         Store store = storeRepository.findByUserId(sellerUserId)
                 .orElseThrow(() -> new BusinessException(StoreErrorCode.STORE_NOT_FOUND));
 
-        Page<Order> page = orderRepository.findByStoreId(store.getId(), pageable);
+        Page<Order> page;
+        if (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status.trim())) {
+            page = orderRepository.findByStoreIdAndStatus(store.getId(), status.trim().toUpperCase(), pageable);
+        } else {
+            page = orderRepository.findByStoreId(store.getId(), pageable);
+        }
+
         List<OrderResponse> content = page.getContent().stream().map(this::enrichOrderResponse).toList();
         return PageResponse.of(page, content);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public OrderResponse getSellerOrderDetail(Long sellerUserId, Long orderId) {
+        Store store = storeRepository.findByUserId(sellerUserId)
+                .orElseThrow(() -> new BusinessException(StoreErrorCode.STORE_NOT_FOUND));
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
+
+        if (!order.getStore().getId().equals(store.getId())) {
+            throw new BusinessException(OrderErrorCode.ORDER_ACCESS_DENIED);
+        }
+
+        return enrichOrderResponse(order);
     }
 
     @Override
