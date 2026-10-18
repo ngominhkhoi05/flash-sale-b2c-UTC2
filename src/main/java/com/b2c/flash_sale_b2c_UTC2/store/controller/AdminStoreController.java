@@ -24,6 +24,18 @@ public class AdminStoreController {
 
     private final StoreService storeService;
 
+    @Operation(summary = "Lấy danh sách gian hàng toàn sàn", description = "Admin tra cứu, lọc theo status/search và phân trang danh sách gian hàng")
+    @org.springframework.web.bind.annotation.GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse<com.b2c.flash_sale_b2c_UTC2.store.dto.AdminStoreResponse>>> getAdminStores(
+            @org.springframework.web.bind.annotation.RequestParam(name = "status", required = false) String status,
+            @org.springframework.web.bind.annotation.RequestParam(name = "search", required = false) String search,
+            @org.springframework.data.web.PageableDefault(size = 10, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) org.springframework.data.domain.Pageable pageable
+    ) {
+        var response = storeService.getAdminStores(status, search, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách gian hàng thành công", response));
+    }
+
     @Operation(summary = "Phê duyệt hoặc khóa gian hàng", description = "Admin cập nhật trạng thái (APPROVED, BANNED, SUSPENDED). Khi APPROVED, tự động cấp quyền SELLER cho chủ shop")
     @PatchMapping("/{id}/status")
     @PreAuthorize("hasRole('ADMIN')")

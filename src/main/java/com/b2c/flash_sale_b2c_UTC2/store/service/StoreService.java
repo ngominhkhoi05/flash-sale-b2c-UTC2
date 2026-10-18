@@ -24,6 +24,12 @@ public interface StoreService {
 
     StoreResponse updateStoreStatus(Long storeId, UpdateStoreStatusRequest request);
 
+    com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse<com.b2c.flash_sale_b2c_UTC2.store.dto.AdminStoreResponse> getAdminStores(
+            String status,
+            String search,
+            org.springframework.data.domain.Pageable pageable
+    );
+
     /**
      * Get featured stores for homepage (Vibe Mall section).
      * Returns APPROVED stores ordered by createdAt DESC.

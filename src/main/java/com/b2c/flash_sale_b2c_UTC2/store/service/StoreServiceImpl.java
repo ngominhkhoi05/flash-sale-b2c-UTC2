@@ -167,6 +167,107 @@ public class StoreServiceImpl implements StoreService {
 
     @Override
     @Transactional(readOnly = true)
+    public com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse<com.b2c.flash_sale_b2c_UTC2.store.dto.AdminStoreResponse> getAdminStores(
+            String status,
+            String search,
+            org.springframework.data.domain.Pageable pageable
+    ) {
+        String trimmedStatus = (status != null && !status.trim().isEmpty() && !"ALL".equalsIgnoreCase(status.trim()))
+                ? status.trim().toUpperCase()
+                : null;
+        String trimmedSearch = (search != null && !search.trim().isEmpty())
+                ? search.trim()
+                : null;
+
+        org.springframework.data.domain.Page<Store> page = storeRepository.findAdminStores(trimmedStatus, trimmedSearch, pageable);
+        if (page.isEmpty()) {
+            return com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse.of(page, java.util.Collections.emptyList());
+        }
+
+        List<Long> storeIds = page.getContent().stream().map(Store::getId).toList();
+
+        // 1. Batch load store logos
+        List<com.b2c.flash_sale_b2c_UTC2.image.entity.Image> images = imageRepository.findByOwnerTypeAndOwnerIdIn(ImageOwnerType.STORE, storeIds);
+        java.util.Map<Long, String> logoMap = new java.util.HashMap<>();
+        for (var img : images) {
+            logoMap.putIfAbsent(img.getOwnerId(), img.getUrl());
+        }
+
+        // 2. Batch load product counts
+        List<Object[]> productCountRows = productRepository.countProductsByStoreIds(storeIds);
+        java.util.Map<Long, Long> productCountMap = new java.util.HashMap<>();
+        for (Object[] row : productCountRows) {
+            if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
+                productCountMap.put(((Number) row[0]).longValue(), ((Number) row[1]).longValue());
+            }
+        }
+
+        // 3. Batch load order counts
+        List<Object[]> orderCountRows = orderRepository.countOrdersByStoreIds(storeIds);
+        java.util.Map<Long, Long> orderCountMap = new java.util.HashMap<>();
+        for (Object[] row : orderCountRows) {
+            if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
+                orderCountMap.put(((Number) row[0]).longValue(), ((Number) row[1]).longValue());
+            }
+        }
+
+        // 4. Batch load avg ratings
+        List<Object[]> avgRatingRows = productReviewRepository.avgRatingsByStoreIds(storeIds);
+        java.util.Map<Long, Double> ratingMap = new java.util.HashMap<>();
+        for (Object[] row : avgRatingRows) {
+            if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
+                ratingMap.put(((Number) row[0]).longValue(), ((Number) row[1]).doubleValue());
+            }
+        }
+
+        List<com.b2c.flash_sale_b2c_UTC2.store.dto.AdminStoreResponse> content = page.getContent().stream().map(store -> {
+            Long storeId = store.getId();
+            User user = store.getUser();
+            String storeName = store.getStoreName();
+            String slug = storeName != null
+                    ? storeName.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-+|-+$", "")
+                    : "";
+            String logoUrl = logoMap.get(storeId);
+            String ownerName = user != null ? user.getFullName() : "";
+            String ownerEmail = user != null ? user.getEmail() : "";
+            String ownerPhone = user != null ? user.getPhone() : "";
+
+            Long pCount = productCountMap.getOrDefault(storeId, 0L);
+            Long oCount = orderCountMap.getOrDefault(storeId, 0L);
+            Double rating = ratingMap.getOrDefault(storeId, 0.0);
+
+            return com.b2c.flash_sale_b2c_UTC2.store.dto.AdminStoreResponse.builder()
+                    .id(storeId)
+                    .storeName(storeName)
+                    .name(storeName)
+                    .slug(slug)
+                    .description(store.getDescription())
+                    .legalName(storeName)
+                    .defaultCommissionRate(store.getDefaultCommissionRate())
+                    .status(store.getStatus())
+                    .tier(store.getTier() != null ? store.getTier().name() : "NORMAL")
+                    .logoUrl(logoUrl)
+                    .avatarUrl(logoUrl)
+                    .bannerUrl(null)
+                    .ownerEmail(ownerEmail)
+                    .ownerFullName(ownerName)
+                    .ownerName(ownerName)
+                    .ownerPhone(ownerPhone)
+                    .phone(ownerPhone)
+                    .productsCount(pCount)
+                    .totalProducts(pCount)
+                    .ordersCount(oCount)
+                    .totalOrders(oCount)
+                    .ratingAvg(rating)
+                    .createdAt(store.getCreatedAt())
+                    .build();
+        }).toList();
+
+        return com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse.of(page, content);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<FeaturedStoreResponse> getFeaturedStores(int limit) {
         int safeLimit = Math.max(1, Math.min(8, limit));
         List<Store> stores = storeRepository.findFeaturedStores(
