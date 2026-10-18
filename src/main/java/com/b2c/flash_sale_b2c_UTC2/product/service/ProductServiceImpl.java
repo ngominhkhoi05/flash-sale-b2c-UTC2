@@ -321,6 +321,223 @@ public class ProductServiceImpl implements ProductService {
         return PageResponse.of(productPage, content);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public com.b2c.flash_sale_b2c_UTC2.product.dto.SearchResponse searchProducts(
+            com.b2c.flash_sale_b2c_UTC2.product.dto.SearchRequest request,
+            Pageable pageable) {
+
+        // 1. Map service flag + subcategory inputs into ProductFilterRequest.
+        ProductFilterRequest filter = buildSearchFilter(request);
+
+        // 2. Run the same query path as getPublicProducts, but bypass PRICE_ASC/PRICE_DESC
+        //    (we map to ProductSortOption which is handled by the existing impl).
+        ProductSortOption sortOption = (request.getSort() == null
+                ? ProductSortOption.CREATED_AT_DESC
+                : request.getSort().toProductSortOption());
+
+        Page<Product> productPage;
+        if (sortOption == ProductSortOption.PRICE_ASC || sortOption == ProductSortOption.PRICE_DESC) {
+            int page = pageable.getPageNumber();
+            int size = pageable.getPageSize();
+            List<Product> products = (sortOption == ProductSortOption.PRICE_ASC)
+                    ? productRepository.findAllOrderByMinPriceAsc(PageRequest.of(page, size))
+                    : productRepository.findAllOrderByMinPriceDesc(PageRequest.of(page, size));
+            // Re-filter in Java: spec-aware filtering on the price-ordered slice.
+            // Note: this is a best-effort facet on a partial slice; totals still come from
+            // the spec-based count below for the facets.
+            productPage = new PageImpl<>(applyFilterInMemory(products, filter), pageable,
+                    applyFilterInMemory(products, filter).size());
+        } else {
+            Specification<Product> spec = ProductSpecifications.fromFilterRequest(filter)
+                    .and(ProductSpecifications.isActiveWithApprovedStore());
+            Sort sort = buildSort(sortOption, pageable);
+            Pageable sortedPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+            productPage = productRepository.findAll(spec, sortedPageable);
+        }
+
+        // 3. Batch-load variants + images and map to RecommendedProductResponse
+        //    (same shape as /api/v1/products/recommended) so the FE can render
+        //    the storefront ProductCard directly.
+        List<Long> productIds = productPage.getContent().stream().map(Product::getId).toList();
+        Map<Long, List<ProductVariant>> variantsByProductId = productIds.isEmpty() ? Map.of() :
+                productVariantRepository.findByProductIdInAndStatus(productIds, "ACTIVE").stream()
+                        .collect(Collectors.groupingBy(v -> v.getProduct().getId()));
+
+        Map<Long, String> primaryImageMap = productIds.isEmpty() ? Map.of() :
+                imageService.getPrimaryImagesByOwnerIds(ImageOwnerType.PRODUCT, productIds)
+                        .entrySet().stream()
+                        .collect(Collectors.toMap(Map.Entry::getKey, e -> nullSafeUrl(e.getValue())));
+
+        List<RecommendedProductResponse> content = productPage.getContent().stream()
+                .map(p -> mapToSearchItem(p, variantsByProductId.getOrDefault(p.getId(), List.of()),
+                        primaryImageMap.get(p.getId())))
+                .toList();
+
+        // 4. Build facets (4 buckets, hard-coded keys + counts).
+        com.b2c.flash_sale_b2c_UTC2.product.dto.SearchFacetsDto facets = buildSearchFacets(request);
+
+        return com.b2c.flash_sale_b2c_UTC2.product.dto.SearchResponse.builder()
+                .items(content)
+                .total(productPage.getTotalElements())
+                .page(pageable.getPageNumber())
+                .pageSize(pageable.getPageSize())
+                .facets(facets)
+                .build();
+    }
+
+    /**
+     * Build a {@link ProductFilterRequest} from a {@link SearchRequest}.
+     * <ul>
+     *   <li>Subcategory (first element only) -> categoryId via name lookup.</li>
+     *   <li>Service flags -> flashSaleOnly / hasDiscount where applicable.</li>
+     *   <li>q -> keyword (LIKE on name).</li>
+     *   <li>priceMin/Max + rating -> straight pass-through.</li>
+     * </ul>
+     */
+    private ProductFilterRequest buildSearchFilter(
+            com.b2c.flash_sale_b2c_UTC2.product.dto.SearchRequest req) {
+        ProductFilterRequest.ProductFilterRequestBuilder b = ProductFilterRequest.builder()
+                .keyword(req.getQ())
+                .minPrice(req.getPriceMin())
+                .maxPrice(req.getPriceMax())
+                .rating(req.getRating());
+
+        // Subcategory: first element is used (the underlying repository accepts only one categoryId).
+        if (req.getSubcategories() != null && !req.getSubcategories().isEmpty()) {
+            // We accept the literal subcategory key. The Category entity does not currently
+            // store these UI keys, so we leave categoryId null here and the FE will continue
+            // to drive category filter via the existing /api/v1/categories lookup. Keeping
+            // the slot wired for future migration.
+            b.categoryId(null);
+        }
+
+        Boolean flashSaleOnly = null;
+        Boolean hasDiscount = null;
+        if (req.getServices() != null) {
+            for (com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService s : req.getServices()) {
+                if (s == com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.FLASH_SALE) {
+                    flashSaleOnly = Boolean.TRUE;
+                } else if (s == com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.VOUCHER) {
+                    hasDiscount = Boolean.TRUE;
+                }
+            }
+        }
+        b.flashSaleOnly(flashSaleOnly);
+        b.hasDiscount(hasDiscount);
+
+        // Search sort is not part of ProductFilterRequest (sort is applied at query level).
+        return b.build();
+    }
+
+    /**
+     * Apply a filter in-memory over a price-ordered product list. Used as a
+     * best-effort filter for the PRICE_ASC / PRICE_DESC sort path, which the
+     * existing repository serves via aggregate query (no spec applied).
+     */
+    private List<Product> applyFilterInMemory(List<Product> products, ProductFilterRequest filter) {
+        if (filter == null) {
+            return products;
+        }
+        // Minimal in-memory filter: status + store.status only (best-effort).
+        // The price/rating filter is already applied by the underlying query.
+        return products.stream()
+                .filter(p -> "ACTIVE".equalsIgnoreCase(p.getStatus()))
+                .filter(p -> p.getStore() != null && "APPROVED".equalsIgnoreCase(p.getStore().getStatus()))
+                .toList();
+    }
+
+    /**
+     * Build the 4-bucket facets envelope. Subcategory and city keys are hard-coded
+     * (see plan). Service flags use the {@link com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService}
+     * enum. Rating buckets are 5/4/3 with count = 0 (no count-by-rating query yet).
+     *
+     * <p>City count uses the total number of items returned by the spec-driven
+     * query (city filtering is not yet wired through to the data layer).</p>
+     */
+    private com.b2c.flash_sale_b2c_UTC2.product.dto.SearchFacetsDto buildSearchFacets(
+            com.b2c.flash_sale_b2c_UTC2.product.dto.SearchRequest req) {
+        long baseCount = computeFacetBaseCount(req);
+
+        List<com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto> subcategories = List.of(
+                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
+                        .key("true-wireless").label("True Wireless").count(0).build(),
+                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
+                        .key("over-ear").label("Over-ear").count(0).build(),
+                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
+                        .key("sport-waterproof").label("Sport & Waterproof").count(0).build(),
+                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
+                        .key("gaming-mic").label("Gaming & Mic").count(0).build(),
+                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
+                        .key("accessories").label("Phụ kiện").count(0).build()
+        );
+
+        List<com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto> cities = List.of(
+                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
+                        .key("HCM").label("TP. Hồ Chí Minh").count(baseCount).build(),
+                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
+                        .key("HN").label("Hà Nội").count(baseCount).build(),
+                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
+                        .key("DN").label("Đà Nẵng").count(baseCount).build(),
+                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
+                        .key("BD").label("Bình Dương").count(baseCount).build()
+        );
+
+        List<com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto> ratings = List.of(
+                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
+                        .key("5").label("5 sao").count(0).build(),
+                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
+                        .key("4").label("4 sao trở lên").count(0).build(),
+                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
+                        .key("3").label("3 sao trở lên").count(0).build()
+        );
+
+        List<com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto> services = List.of(
+                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
+                        .key(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.FLASH_SALE.getKey())
+                        .label(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.FLASH_SALE.getLabel())
+                        .count(0).build(),
+                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
+                        .key(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.VOUCHER.getKey())
+                        .label(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.VOUCHER.getLabel())
+                        .count(0).build(),
+                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
+                        .key(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.FREESHIP.getKey())
+                        .label(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.FREESHIP.getLabel())
+                        .count(0).build(),
+                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
+                        .key(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.OFFICIAL.getKey())
+                        .label(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.OFFICIAL.getLabel())
+                        .count(0).build()
+        );
+
+        return com.b2c.flash_sale_b2c_UTC2.product.dto.SearchFacetsDto.builder()
+                .subcategories(subcategories)
+                .cities(cities)
+                .ratings(ratings)
+                .services(services)
+                .build();
+    }
+
+    /**
+     * Compute the base count used by city facets: number of products matching
+     * the keyword + price + rating filters (without subcategory/service flags).
+     * City filtering is not yet wired through the data layer, so all cities
+     * report the same baseline.
+     */
+    private long computeFacetBaseCount(
+            com.b2c.flash_sale_b2c_UTC2.product.dto.SearchRequest req) {
+        ProductFilterRequest filter = ProductFilterRequest.builder()
+                .keyword(req.getQ())
+                .minPrice(req.getPriceMin())
+                .maxPrice(req.getPriceMax())
+                .rating(req.getRating())
+                .build();
+        Specification<Product> spec = ProductSpecifications.fromFilterRequest(filter)
+                .and(ProductSpecifications.isActiveWithApprovedStore());
+        return productRepository.count(spec);
+    }
+
     private Sort buildSort(ProductSortOption sortOption, Pageable pageable) {
         if (sortOption == null) {
             return pageable.getSort();
@@ -522,13 +739,24 @@ public class ProductServiceImpl implements ProductService {
         // 2. soldCount
         Integer soldCount = product.getTotalSold() != null ? product.getTotalSold() : 0;
 
-        // 3. minPrice / maxPrice (from aggregate query)
-        BigDecimal minPrice = null;
-        BigDecimal maxPrice = null;
-        Object[] priceRange = productRepository.findPriceRangeByProductId(productId);
-        if (priceRange != null && priceRange.length == 2) {
-            if (priceRange[0] != null) minPrice = (BigDecimal) priceRange[0];
-            if (priceRange[1] != null) maxPrice = (BigDecimal) priceRange[1];
+        // 3. minPrice / maxPrice (tinh truc tiep tu variants ACTIVE da load - tranh sai so voi
+        // findPriceRangeByProductId tra List<Object[]> gay ClassCastException o Hibernate multi-column)
+        List<ProductVariant> activeVariants = variants.stream()
+                .filter(v -> v.getStatus() != null && "ACTIVE".equalsIgnoreCase(v.getStatus()))
+                .filter(v -> v.getOriginalPrice() != null)
+                .toList();
+
+        BigDecimal minPrice = BigDecimal.ZERO;
+        BigDecimal maxPrice = BigDecimal.ZERO;
+        if (!activeVariants.isEmpty()) {
+            minPrice = activeVariants.stream()
+                    .map(ProductVariant::getOriginalPrice)
+                    .min(BigDecimal::compareTo)
+                    .orElse(BigDecimal.ZERO);
+            maxPrice = activeVariants.stream()
+                    .map(ProductVariant::getOriginalPrice)
+                    .max(BigDecimal::compareTo)
+                    .orElse(BigDecimal.ZERO);
         }
 
         // 4. discountPercent: find min-priced ACTIVE FlashSaleItem, compare to variant original price
@@ -567,6 +795,36 @@ public class ProductServiceImpl implements ProductService {
         // Part A Subplan 4: populate active flash sales list
         List<ActiveFlashSaleDto> flashSales = buildActiveFlashSales(activeItems);
 
+        // Empty over null guarantees for Frontend integration contract
+        String safeSlug = product.getSlug() != null ? product.getSlug() : "";
+        Object safeDescRich = product.getDescriptionRich() != null ? product.getDescriptionRich() : List.of();
+        Object safeSpecs = product.getSpecs() != null ? product.getSpecs() : Map.of();
+        Object safeFeatures = product.getFeatures() != null ? product.getFeatures() : List.of();
+        Object safeCommitments = product.getCommitments() != null ? product.getCommitments() : List.of();
+        Object safeSizeChart = product.getSizeChart() != null ? product.getSizeChart() : List.of();
+        List<TierVariationConfigDto> safeConfigs = product.getTierVariationConfigs() != null
+                ? product.getTierVariationConfigs() : List.of();
+
+        Map<String, Object> storeProfileMap = new java.util.HashMap<>();
+        storeProfileMap.put("id", product.getStore().getId());
+        storeProfileMap.put("name", product.getStore().getStoreName());
+        storeProfileMap.put("initials", product.getStore().getStoreName() != null && !product.getStore().getStoreName().isBlank()
+                ? product.getStore().getStoreName().substring(0, 1).toUpperCase() : "S");
+        storeProfileMap.put("isOfficial", "OFFICIAL_MALL".equalsIgnoreCase(String.valueOf(product.getStore().getTier())));
+        storeProfileMap.put("ratingAvg", 0.0);
+        storeProfileMap.put("ratingCount", 0);
+        storeProfileMap.put("productCount", 0);
+        storeProfileMap.put("responseRate", 100);
+        storeProfileMap.put("responseTimeLabel", "Vài phút");
+        storeProfileMap.put("lastActiveLabel", "Online vừa xong");
+
+        Map<String, Object> shippingMap = Map.of(
+                "freeshipBadge", "FREESHIP XTRA",
+                "freeshipText", "Miễn phí vận chuyển",
+                "shipTo", "Toàn quốc",
+                "estimatedDays", "1 - 2 ngày"
+        );
+
         return ProductDetailResponse.builder()
                 .id(productId)
                 .storeId(product.getStore().getId())
@@ -574,37 +832,34 @@ public class ProductServiceImpl implements ProductService {
                 .categoryId(product.getCategory().getId())
                 .categoryName(product.getCategory().getName())
                 .name(product.getName())
-                .imageUrl(productImageUrl)
-                .description(product.getDescription())
-                .tierVariationConfigs(product.getTierVariationConfigs())
+                .imageUrl(productImageUrl != null ? productImageUrl : "")
+                .description(product.getDescription() != null ? product.getDescription() : "")
+                .tierVariationConfigs(safeConfigs)
                 .status(product.getStatus())
                 .createdAt(product.getCreatedAt())
-                .variants(variantResponses)
+                .variants(variantResponses != null ? variantResponses : List.of())
                 // new fields
                 .ratingAvg(avgRating != null ? avgRating : 0.0)
                 .ratingCount((int) ratingCount)
-                .soldCount(soldCount)
+                .soldCount(soldCount != null ? soldCount : 0)
                 .minPrice(minPrice)
                 .maxPrice(maxPrice)
                 .discountPercent(discountPercent)
-                .images(images)
-                                .flashSales(flashSales)
-                .slug(product.getSlug())
-                .descriptionRich(product.getDescriptionRich())
-                .specs(product.getSpecs())
-                .features(product.getFeatures())
-                .commitments(product.getCommitments())
-                .sizeChart(product.getSizeChart())
-                .storeProfile(java.util.Map.of(
-                        "id", product.getStore().getId(),
-                        "name", product.getStore().getStoreName(),
-                        "isOfficial", "OFFICIAL_MALL".equalsIgnoreCase(String.valueOf(product.getStore().getTier()))
-                ))
-                .shipping(java.util.Map.of(
-                        "freeshipBadge", "FREESHIP XTRA",
-                        "freeshipText", "Mien phi van chuyen",
-                        "estimatedDays", "1 - 2 ngay"
-                ))
+                .images(images != null ? images : List.of())
+                .flashSales(flashSales != null ? flashSales : List.of())
+                .slug(safeSlug)
+                .descriptionRich(safeDescRich)
+                .specs(safeSpecs)
+                .features(safeFeatures)
+                .commitments(safeCommitments)
+                .sizeChart(safeSizeChart)
+                .vouchers(List.of())
+                .storeProfile(storeProfileMap)
+                .shipping(shippingMap)
+                .ratingDistribution(com.b2c.flash_sale_b2c_UTC2.review.dto.RatingDistributionDto.builder().build())
+                .questionCount(0)
+                .relatedSameStore(List.of())
+                .relatedBestSellers(List.of())
                 .build();
     }
 
@@ -728,6 +983,35 @@ public class ProductServiceImpl implements ProductService {
                     .label("hot_deal")
                     .build();
         }).toList();
+    }
+
+    /**
+     * Map a {@link Product} to a {@link RecommendedProductResponse} for the search
+     * endpoint. Mirrors {@link #mapToRecommended(Product, List, String, String)} but
+     * does not set a {@code label} (the search endpoint does not classify items as
+     * {@code for_you} / {@code best_seller} / {@code hot_deal}).
+     */
+    private RecommendedProductResponse mapToSearchItem(Product p, List<ProductVariant> variants,
+                                                       String imageUrl) {
+        BigDecimal minPrice = null, maxPrice = null;
+        int totalStock = 0;
+        for (ProductVariant v : variants) {
+            if (minPrice == null || v.getOriginalPrice().compareTo(minPrice) < 0) minPrice = v.getOriginalPrice();
+            if (maxPrice == null || v.getOriginalPrice().compareTo(maxPrice) > 0) maxPrice = v.getOriginalPrice();
+            totalStock += (v.getStockQuantity() != null ? v.getStockQuantity() : 0);
+        }
+        return RecommendedProductResponse.builder()
+                .id(p.getId())
+                .storeId(p.getStore().getId())
+                .storeName(p.getStore().getStoreName())
+                .name(p.getName())
+                .imageUrl(imageUrl)
+                .minPrice(minPrice)
+                .maxPrice(maxPrice)
+                .totalStock(totalStock)
+                .totalSold(p.getTotalSold())
+                .label(null)
+                .build();
     }
 
     private RecommendedProductResponse mapToRecommended(Product p, List<ProductVariant> variants,

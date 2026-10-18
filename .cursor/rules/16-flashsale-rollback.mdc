@@ -1,0 +1,46 @@
+---
+description: Hoàn kho khi quá hạn (Timeout Rollback) - trả lại đúng số lượng đã giữ, tính idempotent qua Redis marker.
+globs: flashsale/**, src/main/resources/lua/**
+---
+
+# Hoàn kho khi Quá hạn (Timeout Rollback)
+
+Khi lượt giữ chỗ bị hết hạn hoặc hủy bỏ, hệ thống phải hoàn trả lại **đúng số lượng sản phẩm đã giữ chỗ**.
+
+```text
+Sai:  INCRBY stock 1
+Đúng: INCRBY stock {reservedQuantity}
+```
+
+- Nếu người dùng giữ trước 5 sản phẩm thì khi rollback phải trả lại đúng 5 sản phẩm vào kho.
+- Quá trình rollback bắt buộc phải có **tính Idempotent** (xem chi tiết tại `25-idempotency.mdc`) để ngăn chặn việc hoàn kho nhiều lần cho cùng một đơn hàng.
+- Sử dụng Redis marker `rollback:{orderId}:{itemId}` được thiết lập ngay lần đầu hoàn kho; các lần gọi tiếp theo sẽ bỏ qua.
+
+## Kịch bản Lua script
+
+File `src/main/resources/lua/rollback_stock.lua` thực hiện các bước:
+1. Kiểm tra marker idempotent (nếu đã tồn tại -> dừng lại ngay).
+2. Tăng tồn kho: `INCRBY flash_sale:stock:{itemId} {reservedQuantity}`.
+3. Trả lại giới hạn mua: `DECRBY flash_sale:user_limit:{slotId}:{userId}:{itemId} {reservedQuantity}`.
+4. Đánh dấu marker: `SET rollback:{orderId}:{itemId} "DONE" EX 86400` (TTL 1 ngày).
+
+## Bù trừ giữa Redis và Cơ sở Dữ liệu (Redis -> Database Compensation)
+
+Nếu việc trừ tồn kho trên Redis thành công nhưng thao tác tạo đơn hàng trong Database thất bại (do lỗi ràng buộc, timeout, deadlock), hệ thống sẽ gặp tình trạng bất đồng bộ dữ liệu.
+
+### Luồng xử lý khi gặp sự cố (Failure Flow)
+
+```text
+Redis giữ chỗ thành công
+ \-- Database thất bại (vi phạm ràng buộc / timeout / deadlock)
+ \-- Kích hoạt bù trừ trên Redis (chạy rollback_stock.lua)
+ \-- Hoàn trả chính xác số lượng tồn kho đã giữ
+```
+
+### Quy tắc
+
+- **Không triển khai Saga Pattern hoặc Two-Phase Commit (2PC)** cho phạm vi hiện tại nhằm tránh phức tạp hóa kiến trúc.
+- Khối try-catch bù trừ **bắt buộc phải chống bù trừ lặp lại (double compensation)** bằng marker idempotent.
+- Cả hai phía (Redis và Database) đều phải có cơ chế đánh dấu riêng biệt:
+  - Phía Redis: Khóa `rollback:{orderId}:{itemId}` (TTL 1 ngày).
+  - Phía DB: Kiểm tra chuyển đổi trạng thái đơn hàng hợp lệ (`PENDING_PAYMENT` -> `CANCELLED_TIMEOUT` chỉ thực hiện đúng 1 lần).

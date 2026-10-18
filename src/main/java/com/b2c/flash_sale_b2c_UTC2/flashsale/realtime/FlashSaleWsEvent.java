@@ -53,6 +53,15 @@ public class FlashSaleWsEvent {
     /** Số lượng stock đã restore (cho STOCK_RESTORED) */
     private Integer restoredQuantity;
 
+    /** Trạng thái đơn hàng mới (cho ORDER_STATUS_CHANGED) */
+    private String orderStatus;
+
+    /** Phương thức thanh toán (cho PAYMENT_STATUS_CHANGED: ZALOPAY / COD) */
+    private String paymentMethod;
+
+    /** Trạng thái thanh toán mới (cho PAYMENT_STATUS_CHANGED: PENDING / CONFIRMED) */
+    private String paymentStatus;
+
     // ── Meta ─────────────────────────────────────────────────────
     private Instant occurredAt;
 
@@ -81,6 +90,12 @@ public class FlashSaleWsEvent {
         ORDER_RESERVED,
 
         /** Đơn hết hạn giữ chỗ bị hủy (gửi riêng user) */
-        ORDER_CANCELLED_TIMEOUT
+        ORDER_CANCELLED_TIMEOUT,
+
+        /** Trạng thái đơn hàng thay đổi — gửi riêng buyer khi seller đổi trạng thái */
+        ORDER_STATUS_CHANGED,
+
+        /** Trạng thái thanh toán thay đổi — gửi riêng buyer khi tạo payment / confirm COD */
+        PAYMENT_STATUS_CHANGED
     }
 }

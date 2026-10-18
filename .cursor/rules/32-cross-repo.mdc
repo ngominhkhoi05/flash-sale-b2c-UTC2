@@ -1,0 +1,20 @@
+---
+description: Bố cục liên kết giữa 3 kho mã nguồn (Backend, Frontend, Deploy) và các quy tắc ràng buộc lẫn nhau.
+globs: always
+---
+
+# Bố cục Liên kết giữa các Kho Mã nguồn (Cross-Repo Layout)
+
+Không gian làm việc hiện tại bao gồm 3 repository liên kết mật thiết:
+
+| Repository | Thư mục trên máy | Vai trò đảm nhiệm |
+|---|---|---|
+| `flash-sale-b2c-UTC2` | `d:\flash-sale-b2c-UTC2` | **Spring Boot backend** (repo hiện tại) |
+| `flash-sale-b2c-fe` | `d:\flash-sale-b2c-fe` | Giao diện Next.js frontend (sử dụng API từ backend) |
+| `deploy-b2c-utc2` | `d:\deploy-b2c-utc2` | Cấu hình Docker compose, Nginx reverse proxy, scripts triển khai |
+
+## Quy tắc ràng buộc khi phát triển
+
+- Mọi thay đổi ở Backend làm thay đổi cấu trúc dữ liệu hoặc URL của API **bắt buộc phải đồng bộ** sang tài liệu `docs/api/api-document.md` để phía Frontend nắm được hợp đồng giao tiếp (Contract).
+- Không commit các cấu hình mang tính cục bộ của máy cá nhân làm ảnh hưởng đến kịch bản đóng gói trong repo `deploy-b2c-utc2`.
+- Luôn kiểm tra tính tương thích giữa phiên bản API của backend và mã nguồn tiêu thụ phía frontend.

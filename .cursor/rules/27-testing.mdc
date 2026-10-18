@@ -1,0 +1,58 @@
+---
+description: Quy chuẩn kiểm thử - Unit, Integration, Concurrency, WebSocket test, Testcontainers và dọn dẹp DB.
+globs: src/test/**, build.gradle.kts
+---
+
+# Quy chuẩn Kiểm thử (Testing)
+
+## Sau mỗi task hoàn thành
+
+1. Build toàn bộ dự án để kiểm tra cú pháp và tích hợp.
+2. Chạy toàn bộ test suite có liên quan đến các module vừa chỉnh sửa.
+3. Nếu có test bị fail, **bắt buộc phải sửa dứt điểm** trước khi chuyển sang bước tiếp theo hoặc tạo commit.
+
+## Phân loại kiểm thử
+
+- **Loại kiểm thử**:
+  - **Unit Test**: Dành cho logic nghiệp vụ thuần túy (validation, kiểm tra quyền sở hữu, máy trạng thái state machine).
+  - **Integration Test**: Dành cho các luồng có đọc/ghi vào **Database**, **Redis**, hoặc gọi **Client bên ngoài**.
+- **Quy tắc độ bao phủ (Coverage)**:
+  - Bắt buộc bao phủ luồng chuẩn (Happy Path) + tối thiểu 1 trường hợp biên ngoại lệ (Edge Case: boundary, null/rỗng, dữ liệu không hợp lệ).
+  - Viết test cho các nhánh lỗi khi tầng Service ném ngoại lệ `BusinessException` kèm mã lỗi `*ErrorCode`.
+- Những task chỉ chỉnh sửa file cấu hình / tài liệu docs / quy ước mà không thay đổi mã nguồn nghiệp vụ -> KHÔNG bắt buộc viết thêm test mới.
+- Báo cáo cuối task phải nêu rõ:
+  - Số lượng test được thêm mới hoặc chỉnh sửa.
+  - Kết quả chạy lệnh `gradlew test` (số test passed, failed trên tổng số).
+  - Độ bao phủ (Coverage delta) nếu có công cụ đo lường (JaCoCo).
+
+## Cơ chế hoàn nguyên Cơ sở Dữ liệu sau Integration Test
+
+Integration test có thể làm thay đổi dữ liệu thật trong DB. BẮT BUỘC phải đảm bảo cơ sở dữ liệu được hoàn nguyên về trạng thái ban đầu sau khi kiểm thử kết thúc.
+
+### Các cơ chế hoàn nguyên (ưu tiên theo thứ tự từ trên xuống)
+
+1. **Sử dụng `@Transactional` trên phương thức kiểm thử** (Spring Test):
+   - Spring Framework sẽ tự động rollback toàn bộ dữ liệu sau khi method test kết thúc (áp dụng cho cả khi test pass hay fail).
+   - Phù hợp nhất khi bài test chỉ thực hiện ghi dữ liệu trong một transaction đơn lẻ.
+   - KHÔNG dùng nếu bài test cần commit thật vào DB (ví dụ: test trigger, test job bất đồng bộ async, test scheduler).
+
+2. **Dọn dẹp bằng script `@Sql`** (ở cuối method test):
+   - Áp dụng khi `@Transactional` không phù hợp (ví dụ: cần commit dữ liệu thật để kiểm tra ràng buộc constraint, trigger hoặc scheduler).
+   - Đặt script rollback (`TRUNCATE TABLE ...`, `DELETE FROM ...`) trong `src/test/resources/cleanup.sql` và tham chiếu qua annotation `@Sql`.
+
+3. **Sử dụng Testcontainers** (chuẩn mặc định cho kiểm thử tích hợp backend):
+   - Mỗi test class khởi chạy một container PostgreSQL cô lập riêng biệt (thông qua `@Container` + `@Testcontainers`).
+   - Container sẽ tự động bị tiêu hủy sau khi test suite kết thúc -> đảm bảo DB hoàn toàn sạch cho các bài test tiếp theo.
+   - Tận dụng `@DynamicPropertySource` để ghi đè cấu hình `spring.datasource.*` kết nối trực tiếp vào container.
+
+4. **Dọn dẹp thủ công trong `@AfterEach`** (chỉ dùng khi 3 phương án trên không khả thi):
+   - Sử dụng `JdbcTemplate` hoặc `TestEntityManager` để chủ động xóa các dòng dữ liệu đã chèn.
+   - Không khuyến khích áp dụng phương pháp này vì dễ để sót dữ liệu và không bắt được lỗi xảy ra giữa chừng.
+
+### Quy tắc chung khi viết test
+
+- Test tuyệt đối không được để lại dữ liệu rác trong cơ sở dữ liệu sau khi chạy xong.
+- Test không được phụ thuộc vào dữ liệu có sẵn trong cơ sở dữ liệu thật (môi trường dev / staging).
+- Nếu bài test bắt buộc phải dùng dữ liệu seed cố định -> hãy khởi tạo trong `@BeforeEach` và dọn dẹp sạch trong `@AfterEach`.
+- Khi test gặp lỗi giữa chừng -> logic dọn dẹp **vẫn bắt buộc phải chạy** (JUnit đảm bảo method `@AfterEach` luôn luôn được gọi, kể cả khi phương thức test bị fail).
+- Báo cáo tổng kết sau task cần ghi rõ bài test tích hợp đang áp dụng cơ chế hoàn nguyên nào.

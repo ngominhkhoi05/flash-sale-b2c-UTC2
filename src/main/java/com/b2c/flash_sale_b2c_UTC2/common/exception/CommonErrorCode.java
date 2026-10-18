@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 public enum CommonErrorCode implements ErrorCode {
 
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "SYS_400", "Dữ liệu yêu cầu không hợp lệ"),
+    MALFORMED_JSON_REQUEST(HttpStatus.BAD_REQUEST, "SYS_400_MALFORMED_JSON", "Body request không phải JSON hợp lệ"),
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "AUTH_401", "Chưa xác thực hoặc token không hợp lệ"),
     FORBIDDEN(HttpStatus.FORBIDDEN, "AUTH_403", "Không có quyền truy cập tài nguyên"),
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "SYS_404", "Không tìm thấy tài nguyên yêu cầu"),

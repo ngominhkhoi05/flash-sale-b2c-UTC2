@@ -1,0 +1,24 @@
+---
+description: Quy tắc đơn hàng Multi-Vendor - mỗi đơn hàng thuộc về đúng một cửa hàng (Store).
+globs: order/**, cart/**
+---
+
+# Đơn hàng Đa Cửa hàng (Multi-Vendor Order)
+
+Mỗi **Order** bắt buộc thuộc về **một Store duy nhất** (nguyên tắc single-vendor per Order).
+
+Nếu trong Giỏ hàng (Cart) chứa sản phẩm của nhiều Store:
+
+```text
+Cart
+ |-- Store A -> Tạo Order A
+ |-- Store B -> Tạo Order B
+ \-- Store C -> Tạo Order C
+```
+
+Khi tiến hành Checkout, hệ thống bắt buộc phải **tách giỏ hàng theo Store trước khi tạo các Order**. Mỗi Order có `store_id` riêng, đồng thời tính toán phí vận chuyển, áp dụng voucher và hoa hồng (commission) hoàn toàn độc lập.
+
+## Quy tắc
+
+- Tuyệt đối không tạo các bảng trung gian như Parent Order / Seller Order chỉ để xử lý đa cửa hàng.
+- Mỗi Order sở hữu `store_id` riêng; phí ship, voucher, hoa hồng được tính toán độc lập cho từng Order.

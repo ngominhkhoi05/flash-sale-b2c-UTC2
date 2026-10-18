@@ -1,0 +1,31 @@
+---
+description: Vòng đời Flash Sale - các bất biến dữ liệu, thao tác idempotent và các tác vụ định kỳ.
+globs: flashsale/**, **/scheduler/**
+---
+
+# Vòng đời Flash Sale (Flash Sale Lifecycle)
+
+Mọi thao tác quan trọng trong vòng đời Flash Sale đều phải **đảm bảo tính Idempotent** (xem `25-idempotency.mdc`):
+
+- Làm nóng dữ liệu trước (Pre-warm Redis).
+- Hoàn kho khi quá hạn (Timeout rollback).
+- Quyết toán khi kết thúc phiên (Sale-end settlement).
+- Tiếp nhận kết quả thanh toán (Payment callback).
+
+## Các bất biến dữ liệu (Invariants)
+
+1. `0 <= available_stock <= allocated_stock`.
+2. `allocated_stock` không được vượt quá số lượng tồn kho có thể phân bổ của sản phẩm.
+3. Người bán không được làm hụt tồn kho đã phân bổ khi cập nhật số lượng tồn kho gốc.
+4. Quá hạn thanh toán phải hoàn trả chính xác số lượng đã giữ trước (`reservedQuantity`).
+5. Quyết toán kết thúc phiên chỉ tạo ra một hiệu ứng duy nhất (dùng chuyển đổi trạng thái `slot.status` kết hợp khóa tác vụ).
+6. Quá trình làm nóng dữ liệu (Pre-warm) không làm nhân đôi số lượng tồn kho trên Redis (sử dụng lệnh `SETNX`).
+7. Khi Redis hoặc DB gặp lỗi, luôn có cơ chế bù trừ thích hợp.
+8. Giới hạn mua của người dùng có vòng đời độc lập với thời gian giữ chỗ (Reservation TTL).
+
+## Các tác vụ định kỳ chạy nền (Schedulers)
+
+- `processExpiredReservations`: Chu kỳ 15 giây, quét các đơn hàng ở trạng thái `PENDING_PAYMENT` quá 300 giây, chuyển trạng thái sang `CANCELLED_TIMEOUT` và hoàn kho.
+- `processEndedSlotsAndReturnUnsoldStock`: Chu kỳ 30 giây, đóng các phiên Flash Sale đã kết thúc (`ENDED`), hoàn trả số lượng tồn kho chưa bán hết (`available_stock`) về kho gốc.
+
+Tất cả các method định kỳ đều sử dụng annotation `@Scheduled(fixedDelayString = "...")`.

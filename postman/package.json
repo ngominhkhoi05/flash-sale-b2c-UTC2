@@ -1,0 +1,24 @@
+{
+  "name": "postman",
+  "version": "1.0.0",
+  "description": "Collection + environment de test toan bo REST API cua backend `flash-sale-b2c-UTC2`.",
+  "main": "extract-paths-v3.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "newman": "newman run Flash-Sale-B2C.postman_collection.json -e Flash-Sale-B2C.postman_environment.json --reporters cli,html --reporter-html-export report.html",
+    "newman:auth": "newman run Flash-Sale-B2C.postman_collection.json -e Flash-Sale-B2C.postman_environment.json --folder \"00_Auth_Setup\"",
+    "newman:buyer": "newman run Flash-Sale-B2C.postman_collection.json -e Flash-Sale-B2C.postman_environment.json --folder \"01_Public_Catalog\" --folder \"05_Cart\" --folder \"06_Order_Buyer\" --folder \"07_Payment\"",
+    "newman:seller": "newman run Flash-Sale-B2C.postman_collection.json -e Flash-Sale-B2C.postman_environment.json --folder \"10_Store_Seller\" --folder \"11_Product_Seller\" --folder \"12_FlashSale_Seller\"",
+    "newman:admin": "newman run Flash-Sale-B2C.postman_collection.json -e Flash-Sale-B2C.postman_environment.json --folder \"15_Admin_Category\" --folder \"16_Admin_Store\" --folder \"17_Admin_FlashSale\" --folder \"19_Admin_Banner\"",
+    "newman:neg": "newman run Flash-Sale-B2C.postman_collection.json -e Flash-Sale-B2C.postman_environment.json --folder \"20_Negative_Tests\" --folder \"20b_Negative_Tests_Auth\" --folder \"20c_Negative_Tests_Expanded\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "newman": "^4.6.1",
+    "newman-reporter-html": "^1.0.5",
+    "newman-reporter-junitfull": "^1.1.1"
+  }
+}

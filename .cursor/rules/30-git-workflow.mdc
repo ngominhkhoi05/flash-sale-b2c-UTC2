@@ -1,0 +1,69 @@
+---
+description: Quy trình làm việc với Git - Mô hình phân nhánh, cấm agent tự ý add, commit và push, quy ước commit message gợi ý cho user.
+globs: always
+---
+
+# Quy trình Làm việc với Git (Git Workflow)
+
+## Mô hình Phân nhánh (Branching Model)
+
+- `main`: Nhánh production-ready, được bảo vệ nghiêm ngặt, chỉ nhận code thông qua Pull Request (PR).
+- `dev`: Nhánh tích hợp chính, là nhánh gốc (base) cho mọi nhánh làm việc mới.
+- `feature/{mô-tả-ngắn}`: Phát triển tính năng mới (ví dụ: `feature/order-module`).
+- `fix/{mô-tả-ngắn}`: Sửa lỗi thông thường (ví dụ: `fix/auth-401-loop`).
+- `hotfix/{mô-tả-ngắn}`: Sửa lỗi khẩn cấp, tạo từ nhánh `main`, sau đó merge vào cả `main` lẫn `dev`.
+- `refactor/{mô-tả-ngắn}`: Tái cấu trúc mã nguồn (ví dụ: `refactor/extract-flashsale-order-port`).
+- `chore/{mô-tả-ngắn}`: Tác vụ bảo trì, cấu hình (ví dụ: `chore/init-project-structure`).
+- `docs/{mô-tả-ngắn}`: Cập nhật tài liệu (ví dụ: `docs/sync-api-document`).
+
+### Phân biệt giữa fix/ và hotfix/
+
+- `fix/x`: Lỗi thông thường phát hiện trong quá trình phát triển sprint, tạo nhánh từ `dev` và merge ngược vào `dev`.
+- `hotfix/x`: Lỗi nghiêm trọng phát sinh trực tiếp trên môi trường production, tạo nhánh từ `main`, merge trực tiếp vào `main` rồi cherry-pick hoặc merge ngược lại về `dev`.
+
+## Quy trình BẮT BUỘC trước khi thực hiện mọi task
+
+1. `git checkout dev`
+2. `git pull origin dev`
+3. `git checkout -b type/mo-ta-ngan`
+4. Thực hiện công việc của task (chỉnh sửa mã nguồn, viết test, kiểm tra biên dịch).
+5. **DỪNG LẠI - TUYỆT ĐỐI KHÔNG CHẠY `git add`, `git commit` HAY `git push`.** Báo cáo kết quả công việc và gợi ý mẫu commit message để user tự kiểm tra và commit.
+
+## Điều cấm: TUYỆT ĐỐI KHÔNG TỰ Ý ADD, COMMIT VÀ PUSH
+
+- Agent **TUYỆT ĐỐI KHÔNG** được phép tự ý chạy các lệnh:
+  - `git add` (bao gồm `git add .`, `git add -A`, hoặc add từng file riêng lẻ).
+  - `git commit` (dưới bất kỳ hình thức hoặc cờ tham số nào).
+  - `git push` (dưới bất kỳ hình thức nào).
+- Toàn bộ quyền đưa file vào staging (`git add`), tạo commit và đẩy mã nguồn (`git push`) hoàn toàn thuộc về người dùng (user).
+- Sau khi hoàn thành công việc và kiểm thử, Agent chỉ rà soát diff (`git status`, `git diff`), tóm tắt thay đổi và gợi ý commit message chuẩn Conventional Commits để user tham khảo khi tự commit.
+
+## Quy ước Đặt tên Commit Message (Gợi ý cho User)
+
+Khi gợi ý trong báo cáo hoặc khi user thực hiện commit, commit message cần ngắn gọn, phản ánh chính xác thay đổi, tuân theo chuẩn Conventional Commits (viết bằng tiếng Anh):
+
+- `feat: implement flash sale reservation`
+- `fix: restore exact reserved stock on timeout`
+- `chore: initialize project structure`
+- `docs: update API endpoint for image module`
+- `refactor: extract FlashSaleOrderPort interface`
+- `hotfix: patch payment callback signature mismatch`
+
+- 1 commit chỉ phục vụ đúng 1 mục tiêu (single concern).
+- Phần nội dung (body) giải thích rõ lý do tại sao thay đổi, không diễn giải lại những gì đã hiển thị trong diff.
+
+## Xử lý Xung đột Mã nguồn (Conflict Resolution)
+
+1. Agent chạy lệnh `git status` để liệt kê danh sách các file đang bị xung đột.
+2. Agent TUYỆT ĐỐI KHÔNG tự ý giải quyết xung đột bằng các lệnh như `git checkout --theirs/--ours` hoặc tự sửa mà chưa hỏi ý kiến.
+3. Agent đọc kỹ từng file bị conflict, tóm tắt bản chất xung đột cho user.
+4. Agent sử dụng công cụ hỏi đáp tương tác để user quyết định phương án xử lý.
+5. Sau khi nhận được sự phê duyệt của user, agent hỗ trợ xử lý conflict trong mã nguồn, sau đó dừng lại để user tự kiểm tra, tự thực hiện `git add` và `git commit`.
+
+## Pull Request (PR)
+
+- 1 PR tương ứng với 1 mối quan tâm duy nhất.
+- Mô tả PR súc tích: thay đổi những gì, lý do thực hiện, ảnh hưởng tới hệ thống ra sao.
+- Nếu có migration cơ sở dữ liệu: ghi rõ phiên bản và phương án rollback dự phòng.
+- Nếu có breaking change ở API: bắt buộc phải nêu bật rõ ràng trong phần mô tả của PR.
+

@@ -126,6 +126,73 @@ coverage/
 .stylelintcache
 *.tsbuildinfo
 
+### --- 4b. Python (Data Seeding / ETL scripts trong `script_python/`) ---
+# Virtual environment
+.venv/
+venv/
+env/
+ENV/
+**/.venv/
+**/venv/
+
+# Python bytecode + cache
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Testing
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+htmlcov/
+.pyre/
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+dmypy.json
+
+# Jupyter
+.ipynb_checkpoints
+profile_default/
+
+# Environment variables (Supabase DB URL, secrets)
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# IDE Python-specific
+.idea/  # PyCharm
+*.swp
+*.swo
+
 ### --- 5. Flutter & Dart (Mobile App Quản Trị) ---
 # Dart / Flutter build artifacts
 .dart_tool/

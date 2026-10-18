@@ -148,14 +148,14 @@ public class AuthServiceImpl implements AuthService {
         User user;
         if (input.contains("@")) {
             String normalizedEmail = input.toLowerCase();
-            user = userRepository.findByEmail(normalizedEmail)
-                    .orElseThrow(() -> new BusinessException(AuthErrorCode.USER_NOT_FOUND));
+            user = userRepository.findByEmail(normalizedEmail).orElse(null);
         } else {
-            user = userRepository.findByPhone(input)
-                    .orElseThrow(() -> new BusinessException(AuthErrorCode.USER_NOT_FOUND));
+            user = userRepository.findByPhone(input).orElse(null);
         }
 
-        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+        // Gộp 2 case "user không tồn tại" + "password sai" thành INVALID_CREDENTIALS (401)
+        // để tránh user enumeration vulnerability.
+        if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             throw new BusinessException(AuthErrorCode.INVALID_CREDENTIALS);
         }
 

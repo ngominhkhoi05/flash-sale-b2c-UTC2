@@ -1,0 +1,56 @@
+---
+description: Định dạng báo cáo kết quả bắt buộc sau khi hoàn thành công việc (Changes / Implementation / Database / Tests / Notes / Issues).
+globs: always
+---
+
+# Định dạng Báo cáo Kết quả (Required Final Response Format)
+
+Sau khi hoàn tất công việc, agent bắt buộc phải trình bày báo cáo theo cấu trúc chuẩn sau:
+
+## 1. Thay đổi Mã nguồn (Changes)
+
+- Liệt kê danh sách các file đã tạo mới, chỉnh sửa hoặc xóa bỏ kèm theo kiểu thay đổi.
+
+## 2. Chi tiết Triển khai (Implementation)
+
+- Tóm tắt ngắn gọn các giải pháp logic và quyết định thiết kế chính đã áp dụng.
+- Dẫn nguồn liên kết đến các rule liên quan nếu có (ví dụ: xem `16-flashsale-rollback.mdc`).
+
+## 3. Cơ sở Dữ liệu (Database)
+
+- Liệt kê các bản migration mới được bổ sung: `V{n}__{mô_tả}.sql` kèm tóm tắt nội dung.
+- Nêu rõ danh sách các tài liệu docs cần đồng bộ (theo bảng `42-migration-impact-matrix.mdc`).
+
+## 4. Giao diện Lập trình & Sự kiện (API / WebSocket)
+
+- Các endpoint API mới tạo hoặc có sửa đổi.
+- Các sự kiện WebSocket mới bổ sung (nếu có).
+- Cảnh báo về các thay đổi gây phá vỡ tương thích (breaking changes) nếu có.
+
+## 5. Kết quả Kiểm thử (Tests)
+
+- Phiên bản Java xác nhận từ lệnh `java -version`.
+- Các câu lệnh kiểm thử đã chạy: `gradlew compileJava`, `gradlew test`, `gradlew build`.
+- Kết quả thực tế: Số lượng bài test passed, failed trên tổng số test.
+- Thay đổi độ bao phủ kiểm thử (Coverage delta) nếu có công cụ đo lường.
+
+## 6. Ghi chú Bổ sung (Notes)
+
+- Các điểm hạn chế kỹ thuật hiện tại còn tồn đọng (nếu có).
+- Các vấn đề phát hiện thêm trong quá trình làm việc nhưng chưa nằm trong phạm vi xử lý.
+- Danh mục tài liệu cần cập nhật tiếp theo.
+
+## 7. Các lỗi phát sinh chưa giải quyết (Issues)
+
+- Nếu có lỗi phát sinh: Nêu rõ vị trí file, số dòng và nguyên nhân kỹ thuật cụ thể.
+
+## Quy tắc khi lập báo cáo
+
+- **Tuyệt đối KHÔNG sử dụng các từ ngữ phóng đại** như:
+  - "Hoàn hảo tuyệt đối" (perfect)
+  - "An toàn 100%" (100% safe)
+  - "Không bao giờ bán lố 0%" (0% overselling)
+  - "Đảm bảo tuyệt đối" (guaranteed)
+  - "Đạt điểm 10/10" (10/10)
+- Phải mô tả trung thực và khách quan phạm vi đã kiểm thử, kết quả đo đạc thực tế và những giới hạn còn tồn tại.
+- Trình bày mạch lạc, sử dụng đúng cú pháp định dạng Markdown, bảng biểu và khối code khi cần thiết.

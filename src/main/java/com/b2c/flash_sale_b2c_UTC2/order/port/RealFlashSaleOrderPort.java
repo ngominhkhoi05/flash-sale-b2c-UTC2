@@ -128,6 +128,7 @@ public class RealFlashSaleOrderPort implements FlashSaleOrderPort {
                 Long itemId = first.getFlashSaleItem() != null ? first.getFlashSaleItem().getId() : null;
                 result.add(new ExpiredOrderRef(
                         o.getId(),
+                        o.getOrderCode(),
                         itemId,
                         o.getSlot() != null ? o.getSlot().getId() : null,
                         o.getBuyer().getId(),

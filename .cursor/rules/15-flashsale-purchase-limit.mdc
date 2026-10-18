@@ -1,0 +1,27 @@
+---
+description: Phân biệt rõ giữa Reservation TTL (300 giây) và Vòng đời Giới hạn mua (Purchase Limit Lifecycle).
+globs: flashsale/**, src/main/resources/lua/**
+---
+
+# Giới hạn Lượt mua Flash Sale (Flash Sale Purchase Limit)
+
+Cần phân biệt rõ ràng giữa **2 cơ chế hoàn toàn khác nhau**:
+
+## 1. Thời gian giữ chỗ (Reservation TTL)
+
+- Dùng để **giới hạn thời gian giữ hàng tồn kho** cho các lượt đặt chỗ (reservation) / đơn hàng chưa hoàn tất thanh toán.
+- Redis Key: `reservation:{orderId}`.
+- Thời gian sống mặc định: **300 giây (5 phút)**.
+- Khi hết thời hạn TTL -> tác vụ nền `processExpiredReservations` sẽ tự động hủy đơn và hoàn trả lại số lượng tồn kho.
+
+## 2. Vòng đời Giới hạn mua (Purchase Limit Lifecycle)
+
+- Dùng để **kiểm soát số lượng tối đa một khách hàng được mua** trong suốt phiên Flash Sale (ví dụ: tối đa 2 sản phẩm / người dùng / slot).
+- Redis Key: `flash_sale:user_limit:{slotId}:{userId}:{itemId}`.
+- **Có vòng đời riêng biệt** - tồn tại cho tới khi phiên Flash Sale chuyển sang trạng thái `ENDED`, tuyệt đối không bị xóa theo Reservation TTL.
+
+## Quy tắc
+
+- **Không dùng** Reservation TTL (300s) làm thời gian sống cho purchase limit.
+- Mọi thao tác giữ chỗ đều phải kiểm tra giới hạn mua của người dùng trước khi tiến hành giảm (`DECR`) tồn kho.
+- Khi hoàn kho (rollback), phải hoàn trả lại đúng số lượng lượt mua tương ứng (`DECRBY` trên Redis).

@@ -33,16 +33,27 @@ public class SellerOrderController {
 
     private final OrderService orderService;
 
-    @Operation(summary = "Lấy danh sách đơn hàng của shop", description = "Seller xem danh sách đơn hàng thuộc shop của mình kèm phân trang")
+    @Operation(summary = "Lấy danh sách đơn hàng của shop", description = "Seller xem danh sách đơn hàng thuộc shop của mình kèm phân trang và lọc trạng thái")
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<OrderResponse>>> getMyStoreOrders(
             @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        PageResponse<OrderResponse> response = orderService.getSellerOrders(userDetails.getUser().getId(), pageable);
+        PageResponse<OrderResponse> response = orderService.getSellerOrders(userDetails.getUser().getId(), status, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách đơn hàng gian hàng thành công", response));
+    }
+
+    @Operation(summary = "Lấy chi tiết đơn hàng của shop", description = "Seller xem chi tiết đơn hàng thuộc shop của mình")
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<OrderResponse>> getOrderDetail(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("id") Long id
+    ) {
+        OrderResponse response = orderService.getSellerOrderDetail(userDetails.getUser().getId(), id);
+        return ResponseEntity.ok(ApiResponse.success("Lấy thông tin đơn hàng thành công", response));
     }
 
     @Operation(summary = "Cập nhật trạng thái đơn hàng", description = "Seller cập nhật trạng thái đơn hàng (ví dụ: SHIPPED, COMPLETED, CANCELLED)")

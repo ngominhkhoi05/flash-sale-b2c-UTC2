@@ -1,0 +1,42 @@
+---
+description: Quy tắc xóa liên hoàn (Cascade Delete) - Đảm bảo tính toàn vẹn giữa các thực thể liên quan và dọn dẹp tài nguyên rác.
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/**/entity/**/*.{java,kt}
+---
+
+# Quy tắc Xóa Liên hoàn (Cascade Delete)
+
+Khi một thực thể chủ quản (Owner Entity) bị xóa bỏ khỏi hệ thống, toàn bộ các thực thể con phụ thuộc bắt buộc phải được xử lý xóa theo cơ chế liên hoàn (Cascade) nhằm tránh sinh ra các bản ghi mồ côi (orphan records).
+
+## Mô hình Thiết kế
+
+- Kết hợp cả hai tầng bảo vệ: Cơ chế JPA Cascade kết hợp với ràng buộc khóa ngoại cơ sở dữ liệu `ON DELETE CASCADE`.
+- Ngăn ngừa bản ghi mồ côi bằng các biện pháp:
+  - Thiết lập thuộc tính `orphanRemoval = true` cho các quan hệ cha - con một - nhiều (ví dụ: `Cart` -> `CartItem`).
+  - Thiết lập ràng buộc khóa ngoại cấp Database với thuộc tính `ON DELETE CASCADE`.
+  - Sử dụng Sự kiện Spring (`@PreRemove`, `ApplicationEvent`) để tiến hành giải phóng các tài nguyên bên ngoài DB (ví dụ: xóa file ảnh vật lý trên Cloudinary).
+
+## Các mối quan hệ Cascade Cốt lõi
+
+### 1. User -> Address, Cart, Image (USER)
+- Khi Người dùng (User) bị xóa: Toàn bộ địa chỉ liên kết (`addresses.user_id`), giỏ hàng (`carts.user_id`) và hình ảnh (`owner_type = USER`) bắt buộc phải bị xóa theo cascade.
+- Ví điện tử (`Wallet`) chỉ được xóa nếu chưa từng phát sinh bất kỳ giao dịch nào. Nếu đã có lịch sử dòng tiền -> áp dụng cơ chế Xóa mềm (Soft Delete) đối với User, tuyệt đối không xóa cứng ví.
+
+### 2. Store -> Product, WarehouseAddress, Image (STORE), Voucher, Wallet
+- Khi Cửa hàng (Store) bị đóng hoặc xóa: Sản phẩm, địa chỉ kho hàng, hình ảnh đại diện cửa hàng và voucher cửa hàng phải bị xóa theo cascade.
+- Sản phẩm -> FlashSaleItem: Chỉ cascade khi chưa từng có đơn hàng nào tham chiếu tới.
+- Sản phẩm -> Image (PRODUCT, VARIANT): Tự động xóa liên hoàn toàn bộ hình ảnh.
+
+### 3. Cart -> CartItem
+- Khi Giỏ hàng bị xóa: Toàn bộ các món hàng bên trong (`cart_items`) phải tự động bị xóa theo (`orphanRemoval = true`).
+
+### 4. Order -> OrderItem, Payment, VoucherUsage, WalletTransaction
+- Khi Đơn hàng bị xóa: Các chi tiết đơn hàng (`order_items`), bản ghi thanh toán (`payments`) và lịch sử dùng voucher (`voucher_usages`) phải được xử lý cascade.
+- Lưu ý: Bản ghi `WalletTransaction` **KHÔNG ĐƯỢC XÓA** để phục vụ kiểm toán tài chính - chỉ đặt `order_id = NULL` hoặc giữ nguyên làm dữ liệu lịch sử.
+
+### 5. FlashSaleSlot -> FlashSaleItem
+- Khi một khung giờ Flash Sale bị xóa: Toàn bộ các đăng ký mặt hàng bên trong (`flash_sale_items`) phải bị xóa theo cascade.
+- `FlashSaleItem` tuyệt đối không được xóa cứng nếu đã phát sinh đơn hàng tham chiếu.
+
+### 6. Dọn dẹp Tài nguyên Hình ảnh (Image Cleanup)
+- Khi thực thể chủ quản bị xóa, hình ảnh bắt buộc phải bị xóa đồng thời ở 2 nơi: Bản ghi trong cơ sở dữ liệu và file vật lý lưu trên đám mây Cloudinary.
+- Triển khai thông qua sự kiện Spring: Khi đối tượng bị xóa -> phát sự kiện `ImageCleanupEvent` -> `ImageEventListener` lắng nghe và gọi Cloudinary API để tiêu hủy file.

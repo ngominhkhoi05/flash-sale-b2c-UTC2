@@ -1,0 +1,57 @@
+---
+description: Hợp đồng API các module Giỏ hàng, Đơn hàng, Mã giảm giá và Banner quảng cáo (Cart, Order, Voucher, Banner).
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/{cart,order,voucher,banner}/**/controller/**/*.{java,kt}
+---
+
+# Hợp đồng API: Cart, Order, Voucher, Banner
+
+> Phần này là **Hợp đồng API (API Contract)** chuẩn dành cho phía Frontend.
+
+## Giỏ hàng (Cart) - `/api/v1/cart`
+
+| Phương thức | Đường dẫn | Quyền truy cập | Mô tả chi tiết |
+|---|---|---|---|
+| GET    | `/api/v1/cart` | Người mua | Lấy thông tin giỏ hàng hiện tại kèm chi tiết các món hàng |
+| POST   | `/api/v1/cart/items` | Người mua | Thêm biến thể sản phẩm vào giỏ hàng |
+| PUT    | `/api/v1/cart/items/{id}` | Người mua | Cập nhật số lượng sản phẩm trong giỏ |
+| DELETE | `/api/v1/cart/items/{id}` | Người mua | Xóa một mặt hàng khỏi giỏ |
+| DELETE | `/api/v1/cart` | Người mua | Xóa sạch toàn bộ giỏ hàng |
+| POST   | `/api/v1/cart/checkout` | Người mua | Tách giỏ theo từng Cửa hàng và tạo danh sách Đơn hàng |
+
+## Đơn hàng (Order) - `/api/v1/orders` & `/api/v1/seller/orders`
+
+| Phương thức | Đường dẫn | Quyền truy cập | Mô tả chi tiết |
+|---|---|---|---|
+| POST  | `/api/v1/orders` | Người mua | Tạo đơn hàng mới từ quy trình thanh toán |
+| GET   | `/api/v1/orders/me` | Người mua | Danh sách các đơn hàng của tôi (hỗ trợ phân trang) |
+| GET   | `/api/v1/orders/{id}` | Người mua | Chi tiết một đơn hàng cụ thể (kiểm tra quyền sở hữu) |
+| PATCH | `/api/v1/orders/{id}/cancel` | Người mua | Hủy đơn hàng (khi đang ở PENDING_PAYMENT hoặc CONFIRMED) |
+| GET   | `/api/v1/seller/orders` | Người bán | Danh sách đơn hàng thuộc cửa hàng của mình |
+| GET   | `/api/v1/seller/orders/{id}` | Người bán | Chi tiết đơn hàng thuộc cửa hàng quản lý |
+| PATCH | `/api/v1/seller/orders/{id}/ship` | Người bán | Xác nhận chuyển trạng thái đơn hàng sang Đang giao |
+| PATCH | `/api/v1/seller/orders/{id}/complete` | Người bán | Xác nhận đơn hàng đã giao thành công |
+
+## Mã giảm giá (Voucher) - `/api/v1/vouchers`
+
+| Phương thức | Đường dẫn | Quyền truy cập | Mô tả chi tiết |
+|---|---|---|---|
+| GET    | `/api/v1/vouchers` | Người mua | Danh sách mã giảm giá khả dụng có thể lưu/áp dụng |
+| POST   | `/api/v1/vouchers` | Người mua | Thu thập (claim) mã giảm giá vào ví voucher |
+| GET    | `/api/v1/seller/vouchers` | Người bán | Danh sách mã giảm giá do cửa hàng phát hành |
+| POST   | `/api/v1/seller/vouchers` | Người bán | Tạo mới mã giảm giá áp dụng cho cửa hàng |
+| PUT    | `/api/v1/seller/vouchers/{id}` | Người bán | Cập nhật thông tin mã giảm giá cửa hàng |
+| DELETE | `/api/v1/seller/vouchers/{id}` | Người bán | Vô hiệu hóa hoặc xóa mã giảm giá |
+| GET    | `/api/v1/admin/vouchers` | Quản trị viên | Danh sách mã giảm giá áp dụng trên quy mô toàn sàn |
+| POST   | `/api/v1/admin/vouchers` | Quản trị viên | Tạo mới mã giảm giá cấp Sàn |
+
+## Banner Quảng cáo (Banner) - `/api/v1/banners`
+
+| Phương thức | Đường dẫn | Quyền truy cập | Mô tả chi tiết |
+|---|---|---|---|
+| GET    | `/api/v1/banners/home` | Công khai | Lấy banner trang chủ (Hero Slider và Side Banners) |
+| GET    | `/api/v1/banners/position/{position}` | Công khai | Lấy banner đang hoạt động theo vị trí hiển thị |
+| GET    | `/api/v1/admin/banners` | Quản trị viên | Danh sách banner trong hệ thống (phân trang, lọc trạng thái) |
+| POST   | `/api/v1/admin/banners` | Quản trị viên | Tạo mới một banner quảng cáo |
+| PUT    | `/api/v1/admin/banners/{id}` | Quản trị viên | Cập nhật thông tin banner |
+| PATCH  | `/api/v1/admin/banners/{id}/status` | Quản trị viên | Bật/Tắt trạng thái hoạt động của banner |
+| DELETE | `/api/v1/admin/banners/{id}` | Quản trị viên | Xóa mềm banner quảng cáo |

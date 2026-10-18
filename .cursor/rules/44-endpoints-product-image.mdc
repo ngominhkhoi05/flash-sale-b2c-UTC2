@@ -1,0 +1,38 @@
+---
+description: Hợp đồng API các module Danh mục, Sản phẩm và Quản lý Hình ảnh (Category, Product, Image).
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/{category,product,image}/**/controller/**/*.{java,kt}
+---
+
+# Hợp đồng API: Category, Product, Image
+
+> Phần này là **Hợp đồng API (API Contract)** chuẩn dành cho phía Frontend.
+
+## Module Danh mục (Category) - `/api/v1/categories`
+
+| Phương thức | Đường dẫn | Quyền truy cập | Mô tả chi tiết |
+|---|---|---|---|
+| GET    | `/api/v1/categories` | Công khai | Lấy cây danh mục sản phẩm |
+| GET    | `/api/v1/categories/{id}` | Công khai | Lấy thông tin chi tiết một danh mục |
+| POST   | `/api/v1/admin/categories` | Quản trị viên | Tạo mới danh mục sản phẩm |
+| PUT    | `/api/v1/admin/categories/{id}` | Quản trị viên | Cập nhật danh mục sản phẩm |
+| DELETE | `/api/v1/admin/categories/{id}` | Quản trị viên | Xóa danh mục (chỉ khi không có sản phẩm liên kết) |
+
+## Module Sản phẩm (Product & Variant) - `/api/v1/products`
+
+| Phương thức | Đường dẫn | Quyền truy cập | Mô tả chi tiết |
+|---|---|---|---|
+| GET    | `/api/v1/products` | Công khai | Danh sách sản phẩm (tìm kiếm, lọc, phân trang) |
+| GET    | `/api/v1/products/{id}` | Công khai | Chi tiết sản phẩm kèm danh sách biến thể SKU |
+| POST   | `/api/v1/seller/products` | Người bán | Tạo mới sản phẩm SPU và các biến thể SKU |
+| PUT    | `/api/v1/seller/products/{id}` | Người bán | Cập nhật thông tin sản phẩm (kiểm tra quyền sở hữu) |
+| DELETE | `/api/v1/seller/products/{id}` | Người bán | Xóa sản phẩm (soft delete hoặc kiểm tra đơn hàng) |
+| PATCH  | `/api/v1/seller/products/variants/{id}/stock` | Người bán | Điều chỉnh số lượng tồn kho của biến thể SKU |
+
+## Module Hình ảnh Đa hình (Image) - `/api/v1/images`
+
+| Phương thức | Đường dẫn | Quyền truy cập | Mô tả chi tiết |
+|---|---|---|---|
+| POST   | `/api/v1/images/upload` | Đã xác thực | Tải hình ảnh lên Cloudinary và lưu vào bảng đa hình |
+| GET    | `/api/v1/images/{ownerType}/{ownerId}` | Công khai | Lấy toàn bộ danh sách ảnh của một chủ thể |
+| PATCH  | `/api/v1/images/{id}/primary` | Đã xác thực | Đặt ảnh này làm ảnh đại diện chính |
+| DELETE | `/api/v1/images/{id}` | Đã xác thực | Xóa ảnh khỏi DB và xóa file vật lý trên Cloudinary |

@@ -1,0 +1,36 @@
+---
+description: Quy tắc module Mã giảm giá (Voucher) - Phân biệt voucher cửa hàng và sàn, bất biến sử dụng và hoàn voucher khi hủy đơn.
+globs: src/main/java/com/b2c/flash_sale_b2c_UTC2/voucher/**/*.{java,kt}
+---
+
+# Module Mã giảm giá (Voucher)
+
+## Bất biến dữ liệu đối với Voucher Cửa hàng (Store Voucher)
+
+- Thuộc tính `store_id` **bắt buộc NOT NULL** đối với các voucher do người bán (Seller) phát hành.
+- Người bán tuyệt đối không được phép tạo các mã giảm giá áp dụng trên quy mô toàn sàn (Platform Voucher).
+- Mã voucher của cửa hàng chỉ được phép áp dụng giảm giá trên các sản phẩm thuộc quyền sở hữu của chính cửa hàng đó.
+- Voucher cấp Sàn (Platform Voucher): `store_id = NULL`, chỉ có tài khoản Quản trị viên (Admin) mới có quyền tạo và phát hành.
+
+## Bất biến khi áp dụng Mã giảm giá
+
+```text
+0 <= current_usage <= max_usage
+0 <= current_usage_per_user <= max_usage_per_user
+```
+
+- Bắt buộc kiểm tra điều kiện giá trị đơn hàng tối thiểu `min_order_value` trước khi cho phép áp dụng mã giảm giá.
+- Kiểm tra tính hợp lệ về mặt thời gian: Thời điểm sử dụng phải nằm trong khoảng `[start_date, end_date]`.
+- Kiểm tra trạng thái hoạt động: `is_active = true`.
+
+## Hoàn trả Mã giảm giá khi Hủy đơn (Rollback on Cancel)
+
+- Khi một đơn hàng bị hủy bỏ (trạng thái `CANCELLED_TIMEOUT`, `CANCELLED_BY_BUYER`, v.v.):
+  - Giảm số lượng lượt đã sử dụng: Giảm `current_usage` đi 1 đơn vị.
+  - Xóa hoặc cập nhật bản ghi trong bảng `voucher_usages` để trả lại quyền sử dụng cho khách hàng.
+- Quá trình hoàn trả mã giảm giá phải đảm bảo **tính Idempotent** (chỉ hoàn trả duy nhất 1 lần cho mỗi đơn hàng bị hủy).
+
+## Ranh giới Giao dịch (Transaction)
+
+- Sử dụng `@Transactional` để đảm bảo thao tác kiểm tra tính hợp lệ, tăng `current_usage` và ghi nhận bản ghi vào `voucher_usages` diễn ra hoàn toàn nguyên tử.
+- Áp dụng khóa bi quan `@Lock(LockModeType.PESSIMISTIC_WRITE)` khi voucher có số lượng phát hành có hạn và có nhiều khách hàng cùng tranh chấp sử dụng mã giảm giá đồng thời.

@@ -1,0 +1,50 @@
+---
+description: Quy ước tính Idempotent - Header Idempotency-Key, lưu trữ Redis TTL 24h, luồng IN_PROGRESS / COMPLETED / FAILED.
+globs: **/controller/**, **/service/**
+---
+
+# Quy ước Tính Idempotent (Idempotency Convention)
+
+Áp dụng cho mọi tác vụ có cơ chế thử lại (retry) hoặc có nguy cơ bị client gọi lặp do mạng chập chờn:
+
+- Đặt chỗ tồn kho Flash Sale (Reservation).
+- Tạo đơn hàng (Order Creation).
+- Hoàn kho khi quá hạn (Timeout Rollback).
+- Callback từ cổng thanh toán (Payment Callback).
+- Quyết toán phiên Flash Sale (Sale-end Settlement).
+
+## Cơ chế Header Idempotency-Key
+
+Khuyến nghị sử dụng HTTP Header:
+
+```text
+Idempotency-Key: <UUID-v4>
+```
+
+- Phía Client chủ động sinh UUID v4 cho mỗi thao tác gửi yêu cầu (mutation request).
+- Phía Server lưu trữ trạng thái xử lý vào Redis với thời gian sống `TTL = 24 giờ`:
+  - `key`: `idempotency:{module}:{key}`.
+  - `value`: `{ status: IN_PROGRESS | COMPLETED | FAILED, response: ... }`.
+
+## Luồng xử lý Idempotency chuẩn
+
+```text
+Nhận request có Header Idempotency-Key
+ |-- SETNX idempotency:{key} "IN_PROGRESS" EX 60
+ |    |-- Thất bại (Key đã tồn tại)
+ |    |    |-- Kiểm tra value:
+ |    |    |    |-- IN_PROGRESS -> Trả về HTTP 409 Conflict ("Đang xử lý, vui lòng chờ")
+ |    |    |    \-- COMPLETED   -> Trả về kết quả đã cache trước đó (HTTP 200/201) kèm header Idempotent-Replayed: true
+ |    \-- Thành công -> Tiếp tục thực thi nghiệp vụ
+ \-- Thực thi xong nghiệp vụ:
+      |-- Thành công -> Cập nhật key sang COMPLETED + lưu trữ kết quả response (TTL 24h)
+      \-- Thất bại   -> Xóa key hoặc cập nhật sang FAILED để cho phép client thử lại
+```
+
+## Các tác vụ nội bộ không qua HTTP (Internal Operations)
+
+Đối với các tác vụ không đi qua HTTP (như Scheduler, Event Listener, Timeout Rollback):
+
+- Tự tạo key nội bộ dựa trên dữ liệu nghiệp vụ: `rollback:{orderId}:{itemId}`, `settlement:{slotId}`.
+- Kiểm tra sự tồn tại của key bằng lệnh `SETNX` trước khi thực thi.
+- Đảm bảo mỗi sự kiện chỉ được xử lý đúng một lần duy nhất (Exactly-Once processing semantics).

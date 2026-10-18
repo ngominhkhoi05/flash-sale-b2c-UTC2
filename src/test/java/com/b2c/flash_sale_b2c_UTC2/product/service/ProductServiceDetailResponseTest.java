@@ -42,12 +42,17 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for ProductServiceImpl.buildProductDetailResponse() new fields.
- * Subplan 2: ratingAvg, ratingCount, soldCount, minPrice, maxPrice, discountPercent, images.
+ * Unit tests for ProductServiceImpl.buildProductDetailResponse():
+ * - Rating fields (ratingAvg, ratingCount, soldCount)
+ * - Price range fields (minPrice, maxPrice)
+ * - Discount percent from FlashSale
+ * - Images list
+ * - Empty-over-null contract: all nullable JSONB fields default to [] / {} / 0 instead of null
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-class ProductDetailResponseNewFieldsTest {
+class ProductServiceDetailResponseTest {
+
 
     @Mock
     private ProductRepository productRepository;
@@ -135,7 +140,6 @@ class ProductDetailResponseNewFieldsTest {
     private void defaultMocks(Long productId) {
         when(productReviewRepository.avgRatingByProductId(productId)).thenReturn(null);
         when(productReviewRepository.countByProductIdAndVisible(productId)).thenReturn(0L);
-        when(productRepository.findPriceRangeByProductId(productId)).thenReturn(null);
         when(flashSaleItemRepository.findActiveByProductId(productId)).thenReturn(List.of());
         when(imageService.getPrimaryImage(any(), eq(productId))).thenReturn(null);
         when(imageService.listImages(any(), eq(productId))).thenReturn(List.of());
@@ -161,7 +165,6 @@ class ProductDetailResponseNewFieldsTest {
                     .thenReturn(List.of());
             when(productReviewRepository.avgRatingByProductId(productId)).thenReturn(4.5);
             when(productReviewRepository.countByProductIdAndVisible(productId)).thenReturn(10L);
-            when(productRepository.findPriceRangeByProductId(productId)).thenReturn(null);
             when(flashSaleItemRepository.findActiveByProductId(productId)).thenReturn(List.of());
             when(imageService.getPrimaryImage(any(), eq(productId))).thenReturn(null);
             when(imageService.listImages(any(), eq(productId))).thenReturn(List.of());
@@ -206,14 +209,17 @@ class ProductDetailResponseNewFieldsTest {
         void threeActiveVariants_PriceRangeCorrect() {
             Long productId = 200L;
             Product product = makeProduct(productId, 0);
+            List<ProductVariant> variants = List.of(
+                    makeVariant(1L, productId, new BigDecimal("100000")),
+                    makeVariant(2L, productId, new BigDecimal("200000")),
+                    makeVariant(3L, productId, new BigDecimal("300000"))
+            );
             when(productRepository.findByIdWithStoreAndCategory(productId))
                     .thenReturn(java.util.Optional.of(product));
             when(productVariantRepository.findByProductIdAndStatus(productId, "ACTIVE"))
-                    .thenReturn(List.of());
+                    .thenReturn(variants);
             when(productReviewRepository.avgRatingByProductId(productId)).thenReturn(null);
             when(productReviewRepository.countByProductIdAndVisible(productId)).thenReturn(0L);
-            when(productRepository.findPriceRangeByProductId(productId))
-                    .thenReturn(new Object[]{new BigDecimal("100000"), new BigDecimal("300000")});
             when(flashSaleItemRepository.findActiveByProductId(productId)).thenReturn(List.of());
             when(imageService.getPrimaryImage(any(), eq(productId))).thenReturn(null);
             when(imageService.listImages(any(), eq(productId))).thenReturn(List.of());
@@ -223,6 +229,84 @@ class ProductDetailResponseNewFieldsTest {
             assertNotNull(result);
             assertEquals(new BigDecimal("100000"), result.getMinPrice());
             assertEquals(new BigDecimal("300000"), result.getMaxPrice());
+        }
+
+        @Test
+        @DisplayName("Edge: 1 ACTIVE variant priced 500k -> minPrice=maxPrice=500k")
+        void singleActiveVariant_PriceEqualsMinAndMax() {
+            Long productId = 201L;
+            Product product = makeProduct(productId, 0);
+            List<ProductVariant> variants = List.of(
+                    makeVariant(10L, productId, new BigDecimal("500000"))
+            );
+            when(productRepository.findByIdWithStoreAndCategory(productId))
+                    .thenReturn(java.util.Optional.of(product));
+            when(productVariantRepository.findByProductIdAndStatus(productId, "ACTIVE"))
+                    .thenReturn(variants);
+            when(productReviewRepository.avgRatingByProductId(productId)).thenReturn(null);
+            when(productReviewRepository.countByProductIdAndVisible(productId)).thenReturn(0L);
+            when(flashSaleItemRepository.findActiveByProductId(productId)).thenReturn(List.of());
+            when(imageService.getPrimaryImage(any(), eq(productId))).thenReturn(null);
+            when(imageService.listImages(any(), eq(productId))).thenReturn(List.of());
+
+            ProductDetailResponse result = productService.getPublicProductDetail(productId);
+
+            assertNotNull(result);
+            assertEquals(new BigDecimal("500000"), result.getMinPrice());
+            assertEquals(new BigDecimal("500000"), result.getMaxPrice());
+        }
+
+        @Test
+        @DisplayName("Edge: 0 ACTIVE variants -> minPrice=maxPrice=ZERO (Empty-over-Null contract)")
+        void noActiveVariants_BothZero() {
+            Long productId = 202L;
+            Product product = makeProduct(productId, 0);
+            when(productRepository.findByIdWithStoreAndCategory(productId))
+                    .thenReturn(java.util.Optional.of(product));
+            when(productVariantRepository.findByProductIdAndStatus(productId, "ACTIVE"))
+                    .thenReturn(List.of());
+            when(productReviewRepository.avgRatingByProductId(productId)).thenReturn(null);
+            when(productReviewRepository.countByProductIdAndVisible(productId)).thenReturn(0L);
+            when(flashSaleItemRepository.findActiveByProductId(productId)).thenReturn(List.of());
+            when(imageService.getPrimaryImage(any(), eq(productId))).thenReturn(null);
+            when(imageService.listImages(any(), eq(productId))).thenReturn(List.of());
+
+            ProductDetailResponse result = productService.getPublicProductDetail(productId);
+
+            assertNotNull(result);
+            assertEquals(BigDecimal.ZERO, result.getMinPrice());
+            assertEquals(BigDecimal.ZERO, result.getMaxPrice());
+        }
+
+        @Test
+        @DisplayName("Edge: mixed ACTIVE+INACTIVE -> only ACTIVE variant counted (100k, not 999k)")
+        void mixedActiveInactive_OnlyActiveConsidered() {
+            Long productId = 203L;
+            Product product = makeProduct(productId, 0);
+            // Build ACTIVE list passed by repository — INACTIVE variants are NOT in the list
+            // (controller flow filters via findByProductIdAndStatus(productId, "ACTIVE")).
+            // Defensive test: even if an INACTIVE slips in, it must be ignored by service.
+            ProductVariant active = makeVariant(20L, productId, new BigDecimal("100000"));
+            active.setStatus("ACTIVE");
+            ProductVariant inactive = makeVariant(21L, productId, new BigDecimal("999000"));
+            inactive.setStatus("INACTIVE");
+            List<ProductVariant> variants = List.of(active, inactive);
+
+            when(productRepository.findByIdWithStoreAndCategory(productId))
+                    .thenReturn(java.util.Optional.of(product));
+            when(productVariantRepository.findByProductIdAndStatus(productId, "ACTIVE"))
+                    .thenReturn(variants);
+            when(productReviewRepository.avgRatingByProductId(productId)).thenReturn(null);
+            when(productReviewRepository.countByProductIdAndVisible(productId)).thenReturn(0L);
+            when(flashSaleItemRepository.findActiveByProductId(productId)).thenReturn(List.of());
+            when(imageService.getPrimaryImage(any(), eq(productId))).thenReturn(null);
+            when(imageService.listImages(any(), eq(productId))).thenReturn(List.of());
+
+            ProductDetailResponse result = productService.getPublicProductDetail(productId);
+
+            assertNotNull(result);
+            assertEquals(new BigDecimal("100000"), result.getMinPrice());
+            assertEquals(new BigDecimal("100000"), result.getMaxPrice());
         }
     }
 
@@ -301,4 +385,49 @@ class ProductDetailResponseNewFieldsTest {
             assertEquals(0, result.getImages().size());
         }
     }
+
+    @Nested
+    @DisplayName("Empty Over Null Contract")
+    class EmptyOverNullContract {
+
+        @Test
+        @DisplayName("Product with null JSONB fields -> returns empty lists, empty map, and 0s, NEVER null")
+        void nullFields_ReturnEmptyOverNull() {
+            Long productId = 300L;
+            Product product = makeProduct(productId, 0);
+            product.setSlug(null);
+            product.setDescriptionRich(null);
+            product.setSpecs(null);
+            product.setFeatures(null);
+            product.setCommitments(null);
+            product.setSizeChart(null);
+            product.setTierVariationConfigs(null);
+
+            when(productRepository.findByIdWithStoreAndCategory(productId))
+                    .thenReturn(java.util.Optional.of(product));
+            when(productVariantRepository.findByProductIdAndStatus(productId, "ACTIVE"))
+                    .thenReturn(List.of());
+            defaultMocks(productId);
+
+            ProductDetailResponse result = productService.getPublicProductDetail(productId);
+
+            assertNotNull(result);
+            assertEquals("", result.getSlug());
+            assertNotNull(result.getDescriptionRich());
+            assertNotNull(result.getSpecs());
+            assertNotNull(result.getFeatures());
+            assertNotNull(result.getCommitments());
+            assertNotNull(result.getSizeChart());
+            assertNotNull(result.getVouchers());
+            assertNotNull(result.getRelatedSameStore());
+            assertNotNull(result.getRelatedBestSellers());
+            assertNotNull(result.getTierVariationConfigs());
+            assertNotNull(result.getRatingDistribution());
+            assertEquals(0, result.getQuestionCount());
+            assertEquals(0.0, result.getRatingAvg());
+            assertEquals(0, result.getRatingCount());
+            assertEquals(0, result.getSoldCount());
+        }
+    }
 }
+

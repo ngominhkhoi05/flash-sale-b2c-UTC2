@@ -81,8 +81,11 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         // Public endpoints: Auth APIs
                         .requestMatchers("/api/v1/auth/**").permitAll()
+                        // Public endpoint: ZaloPay server callback (signed by MAC, khong can JWT)
+                        .requestMatchers("/api/v1/payments/zalopay/callback").permitAll()
                         // Public endpoints: Xem công khai Store, Category, Product
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/stores/{id:[0-9]+}").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/stores/featured").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/categories/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/products/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/flash-sales/**").permitAll()

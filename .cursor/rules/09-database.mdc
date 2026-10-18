@@ -1,0 +1,50 @@
+---
+description: Cơ sở dữ liệu, Flyway migration, Hibernate ddl-auto=validate và các loại ràng buộc.
+globs: **/db/migration/**, application*.yaml, application*.yml
+---
+
+# Cơ sở Dữ liệu (Database)
+
+## Hệ quản trị cơ sở dữ liệu
+
+PostgreSQL.
+
+## Quản lý Migration
+
+- **Flyway** là nguồn quản lý schema cơ sở dữ liệu duy nhất.
+- Vị trí: `classpath:db/migration`.
+- Quy tắc đặt tên: `V{n}__{mô_tả}.sql` (`V1`, `V2`, ...).
+- **Tuyệt đối không sửa file migration đã áp dụng** trong môi trường dùng chung nếu không có lý do đặc biệt.
+- Nếu buộc phải sửa, sử dụng lệnh `repair` của Flyway và báo trước cho user.
+
+## Các bản migration hiện tại
+
+```text
+V1__init_schema.sql                      # Khởi tạo 24 bảng cốt lõi
+V2__add_version_to_product_variants.sql  # Thêm cột version hỗ trợ Optimistic Lock
+V3__create_images_table.sql              # Bảng lưu trữ hình ảnh đa hình (Polymorphic)
+V4__drop_legacy_image_columns.sql        # Loại bỏ 5 cột ảnh cũ không còn sử dụng
+```
+
+## Cấu hình Hibernate
+
+```yaml
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+```
+
+- **Không dùng** `create`, `create-drop`, hoặc `update` làm cơ chế quản lý schema chính thức.
+- Cấu hình `open-in-view: false` (đã kích hoạt).
+
+## Khởi tạo dữ liệu (Init data)
+
+- Có thể dùng `data.sql` (Spring Boot) để chèn dữ liệu mẫu (seed data) **chỉ trong profile local**.
+- Tuyệt đối không commit dữ liệu seed production vào repo.
+
+## Phân biệt 3 loại quy tắc (Rules)
+
+1. **Ràng buộc Cơ sở Dữ liệu (Database Constraint)**: Đảm bảo tính toàn vẹn dữ liệu ở cấp DB. Khi vi phạm constraint sẽ ném lỗi SQL, tuyệt đối không nuốt lỗi ở tầng Service.
+2. **Quy tắc Nghiệp vụ Service (Service Business Rule)**: Đảm bảo luồng nghiệp vụ. Các kiểm tra phức tạp (nhiều bảng, nhiều bước) phải được đặt ở tầng Service.
+3. **Quy tắc Xử lý Đồng thời Redis (Redis Concurrency Rule)**: Đảm bảo tính nguyên tử (atomicity) và xử lý đồng thời trong Flash Sale. Redis là nguồn chân lý tại thời gian chạy (runtime) cho tồn kho và giới hạn lượt mua.

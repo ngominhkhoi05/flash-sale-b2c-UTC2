@@ -84,4 +84,15 @@ public final class WsDestinations {
     public static String orderUpdates(String orderCode) {
         return QUEUE_PREFIX + "/orders/" + orderCode + "/updates";
     }
+
+    // ── Order private destinations (alias of orderUpdates for clarity) ───
+
+    /**
+     * Trạng thái đơn hàng thay đổi (seller đổi / payment update).
+     * Chính là {@link #orderUpdates(String)} — dùng alias này cho rõ nghiệp vụ.
+     * Spring tự đổi thành {@code /user/{username}/queue/flash-sale/orders/{orderCode}/status}.
+     */
+    public static String orderStatusUpdate(String orderCode) {
+        return QUEUE_PREFIX + "/orders/" + orderCode + "/status";
+    }
 }

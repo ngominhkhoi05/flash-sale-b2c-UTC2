@@ -5,6 +5,7 @@ import com.b2c.flash_sale_b2c_UTC2.cart.repository.CartItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.cart.repository.CartRepository;
 import com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse;
 import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.realtime.FlashSaleWsBroadcaster;
 import com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType;
 import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
 import com.b2c.flash_sale_b2c_UTC2.order.dto.CheckoutItemRequest;
@@ -78,6 +79,9 @@ public class OrderServiceImpl implements OrderService {
     private final CartItemRepository cartItemRepository;
     private final ImageService imageService;
     private final OrderMapper orderMapper;
+
+    // WebSocket broadcaster — optional, gracefully no-op if null (e.g. in tests)
+    private final FlashSaleWsBroadcaster wsBroadcaster;
 
     @Override
     @Transactional
@@ -282,12 +286,40 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<OrderResponse> getSellerOrders(Long sellerUserId, Pageable pageable) {
+        return getSellerOrders(sellerUserId, null, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<OrderResponse> getSellerOrders(Long sellerUserId, String status, Pageable pageable) {
         Store store = storeRepository.findByUserId(sellerUserId)
                 .orElseThrow(() -> new BusinessException(StoreErrorCode.STORE_NOT_FOUND));
 
-        Page<Order> page = orderRepository.findByStoreId(store.getId(), pageable);
+        Page<Order> page;
+        if (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status.trim())) {
+            page = orderRepository.findByStoreIdAndStatus(store.getId(), status.trim().toUpperCase(), pageable);
+        } else {
+            page = orderRepository.findByStoreId(store.getId(), pageable);
+        }
+
         List<OrderResponse> content = page.getContent().stream().map(this::enrichOrderResponse).toList();
         return PageResponse.of(page, content);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public OrderResponse getSellerOrderDetail(Long sellerUserId, Long orderId) {
+        Store store = storeRepository.findByUserId(sellerUserId)
+                .orElseThrow(() -> new BusinessException(StoreErrorCode.STORE_NOT_FOUND));
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
+
+        if (!order.getStore().getId().equals(store.getId())) {
+            throw new BusinessException(OrderErrorCode.ORDER_ACCESS_DENIED);
+        }
+
+        return enrichOrderResponse(order);
     }
 
     @Override
@@ -331,6 +363,18 @@ public class OrderServiceImpl implements OrderService {
         order = orderRepository.save(order);
 
         log.info("Seller storeId={} cập nhật trạng thái đơn hàng id={} thành {}", store.getId(), orderId, newStatus);
+
+        // Push trạng thái đơn mới tới buyer qua WebSocket
+        if (wsBroadcaster != null) {
+            try {
+                String buyerUsername = order.getBuyer().getEmail();
+                wsBroadcaster.sendOrderStatusUpdateToUser(buyerUsername, order.getOrderCode(),
+                        order.getId(), newStatus);
+            } catch (Exception e) {
+                log.warn("[WS] Failed to send ORDER_STATUS_CHANGED for orderId={}: {}", orderId, e.getMessage());
+            }
+        }
+
         return enrichOrderResponse(order);
     }
 

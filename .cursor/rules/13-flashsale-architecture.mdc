@@ -1,0 +1,46 @@
+---
+description: Kiến trúc Flash Sale - PostgreSQL + Redis + Lua Script + Redisson, quy tắc ranh giới giữa các module.
+globs: flashsale/**, docs/03_system_design.md
+---
+
+# Kiến trúc Flash Sale (Flash Sale Architecture)
+
+Hệ thống Flash Sale kết hợp:
+
+```text
+PostgreSQL    # Nguồn dữ liệu bền vững (durable source of truth)
++
+Redis         # Nguồn dữ liệu runtime kiểm soát tồn kho / giới hạn mua
++
+Lua Script    # Đảm bảo tính nguyên tử (atomic reservation)
++
+Redisson      # Chiến lược phân tán dự phòng (dùng để so sánh / benchmark)
+```
+
+- Redis chịu trách nhiệm xử lý tồn kho và đồng thời cực nhanh trong khung giờ diễn ra Flash Sale.
+- PostgreSQL là nguồn lưu trữ dữ liệu bền vững cuối cùng.
+- **Không coi Redis là cơ sở dữ liệu chính** thay thế cho PostgreSQL.
+- **Không coi WebSocket là nguồn chân lý** - WebSocket chỉ đóng vai trò kênh thông báo tức thời (xem `28-websocket.mdc`).
+
+## Quy tắc ranh giới giữa các Module (Boundary Rule)
+
+- Chỉ duy nhất module `flashsale` được phép **đọc + ghi** vào các bảng thuộc domain Flash Sale và Redis keys liên quan.
+- Các module khác như `order`, `store`, `voucher`, `cart`, `payment`, `wallet` chỉ có quyền **đọc (read-only)** đối với domain Flash Sale.
+- Việc tích hợp giữa module `flashsale` và module `order` bắt buộc phải thông qua interface `FlashSaleOrderPort` (in-module port, triển khai mặc định là `InMemoryFlashSaleOrderPort`).
+
+## Tính nhất quán giữa Flash Sale Item và Order Item
+
+**Không tin tưởng hoàn toàn các ID Flash Sale do client gửi lên.** Tầng Service bắt buộc phải tải `FlashSaleItem` từ cơ sở dữ liệu và tự suy ra các thông tin:
+
+```text
+slot_id, variant_id, product_id, price (flash_sale_price)
+```
+
+từ `FlashSaleItem` (tuyệt đối không lấy trực tiếp từ client).
+
+### Quy tắc
+
+- Phía Client chỉ gửi `flash_sale_item_id` (hoặc `slot_id` + `item_id`).
+- Service nạp entity `FlashSaleItem` từ cơ sở dữ liệu rồi trích xuất `variant_id` từ đó.
+- Kiểm tra khung giờ (slot) đang ở trạng thái `ACTIVE` và thời gian hiện tại nằm trong khoảng `[start_time, end_time]`.
+- Tránh over-engineering bằng composite Foreign Key nếu việc kiểm tra ở tầng Service đã đáp ứng đầy đủ yêu cầu.

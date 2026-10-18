@@ -180,7 +180,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("Đăng nhập thất bại khi email không tồn tại trên hệ thống (404)")
+    @DisplayName("Đăng nhập thất bại khi email không tồn tại trên hệ thống (401 - A4 fix)")
     void login_ShouldThrowException_WhenEmailNotFound() {
         LoginRequest request = LoginRequest.builder()
                 .usernameOrEmail("notfound@example.com")
@@ -190,12 +190,12 @@ class AuthServiceTest {
         when(userRepository.findByEmail("notfound@example.com")).thenReturn(Optional.empty());
 
         BusinessException exception = assertThrows(BusinessException.class, () -> authService.login(request));
-        assertEquals(AuthErrorCode.USER_NOT_FOUND.getCode(), exception.getErrorCode().getCode());
-        assertEquals(org.springframework.http.HttpStatus.NOT_FOUND, exception.getErrorCode().getHttpStatus());
+        assertEquals(AuthErrorCode.INVALID_CREDENTIALS.getCode(), exception.getErrorCode().getCode());
+        assertEquals(org.springframework.http.HttpStatus.UNAUTHORIZED, exception.getErrorCode().getHttpStatus());
     }
 
     @Test
-    @DisplayName("Đăng nhập thất bại khi số điện thoại không tồn tại trên hệ thống (404)")
+    @DisplayName("Đăng nhập thất bại khi số điện thoại không tồn tại trên hệ thống (401 - A4 fix)")
     void login_ShouldThrowException_WhenPhoneNotFound() {
         LoginRequest request = LoginRequest.builder()
                 .usernameOrEmail("0988776655")
@@ -205,8 +205,8 @@ class AuthServiceTest {
         when(userRepository.findByPhone("0988776655")).thenReturn(Optional.empty());
 
         BusinessException exception = assertThrows(BusinessException.class, () -> authService.login(request));
-        assertEquals(AuthErrorCode.USER_NOT_FOUND.getCode(), exception.getErrorCode().getCode());
-        assertEquals(org.springframework.http.HttpStatus.NOT_FOUND, exception.getErrorCode().getHttpStatus());
+        assertEquals(AuthErrorCode.INVALID_CREDENTIALS.getCode(), exception.getErrorCode().getCode());
+        assertEquals(org.springframework.http.HttpStatus.UNAUTHORIZED, exception.getErrorCode().getHttpStatus());
     }
 
     @Test

@@ -12,6 +12,7 @@ import com.b2c.flash_sale_b2c_UTC2.image.dto.ImageResponse;
 import com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType;
 import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -62,7 +63,10 @@ public class SellerProductController {
     @Operation(summary = "Danh sách sản phẩm của người bán", description = "Xem danh sách sản phẩm thuộc gian hàng của seller hiện tại")
     public ResponseEntity<ApiResponse<PageResponse<ProductSummaryResponse>>> getSellerProducts(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @RequestParam(required = false) String status,
+            @Parameter(description = "Lọc theo trạng thái sản phẩm: ACTIVE | INACTIVE | OUT_OF_STOCK. Bỏ trống = tất cả.",
+                    example = "ACTIVE")
+            @RequestParam(value = "status", required = false) String status,
+            @Parameter(description = "Phân trang (page=0, size=20, sort=createdAt,DESC mặc định)")
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         PageResponse<ProductSummaryResponse> response = productService.getSellerProducts(

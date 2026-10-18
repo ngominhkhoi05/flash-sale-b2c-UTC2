@@ -1,0 +1,30 @@
+---
+description: Java 25 toolchain là bắt buộc. Quy tắc kiểm tra Java 25 trước khi chạy gradlew.
+globs: build.gradle.kts, build.gradle, gradle/wrapper/**, **/*.java
+---
+
+# Java 25 - Bắt buộc (Mandatory)
+
+## Khai báo Toolchain
+
+`build.gradle.kts` PHẢI khai báo:
+
+```kotlin
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+```
+
+## Quy tắc build / test
+
+- Máy phát triển có thể mặc định Java 21 - phải dùng `java25` (alias trong PATH) trước khi build/test/run.
+- Trước khi build/test/run: chạy `java25` rồi `java -version` để xác nhận đúng Java 25.
+- Nếu `java -version` không phải Java 25 -> **dừng lại và báo lỗi**.
+
+## Điều cấm
+
+- KHÔNG dùng tính năng thử nghiệm `--enable-preview` trừ khi user yêu cầu rõ ràng.
+- KHÔNG gán cứng (hardcode) `JAVA_HOME` trong mã nguồn.
+- Gradle wrapper tự động tải JDK 25 thông qua toolchain -> tin tưởng toolchain, không ghi đè cấu hình.

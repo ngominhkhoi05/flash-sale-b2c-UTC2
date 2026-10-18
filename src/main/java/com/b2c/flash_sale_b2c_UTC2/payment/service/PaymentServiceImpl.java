@@ -1,21 +1,29 @@
 package com.b2c.flash_sale_b2c_UTC2.payment.service;
 
 import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
+import com.b2c.flash_sale_b2c_UTC2.common.exception.CommonErrorCode;
+import com.b2c.flash_sale_b2c_UTC2.config.ZaloPayProperties;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.realtime.FlashSaleWsBroadcaster;
 import com.b2c.flash_sale_b2c_UTC2.order.entity.Order;
 import com.b2c.flash_sale_b2c_UTC2.order.exception.OrderErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.order.repository.OrderRepository;
 import com.b2c.flash_sale_b2c_UTC2.payment.dto.PaymentResponse;
+import com.b2c.flash_sale_b2c_UTC2.payment.dto.ZaloPayCallbackDto;
+import com.b2c.flash_sale_b2c_UTC2.payment.dto.ZaloPayCreateOrderRequest;
+import com.b2c.flash_sale_b2c_UTC2.payment.dto.ZaloPayCreateOrderResponse;
 import com.b2c.flash_sale_b2c_UTC2.payment.entity.Payment;
 import com.b2c.flash_sale_b2c_UTC2.payment.repository.PaymentRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -24,18 +32,20 @@ public class PaymentServiceImpl implements PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
+    private final ZaloPayClient zaloPayClient;
+    private final ZaloPayProperties zaloPayProperties;
+    private final ObjectMapper objectMapper;
+    private final FlashSaleWsBroadcaster wsBroadcaster;
 
     @Override
     @Transactional(readOnly = true)
     public PaymentResponse getOrderPayment(Long buyerId, Long orderId) {
         Order order = validateBuyerOrder(buyerId, orderId);
-
         List<Payment> payments = paymentRepository.findByOrderId(orderId);
         if (payments != null && !payments.isEmpty()) {
             Payment latest = payments.get(payments.size() - 1);
             return mapToResponse(latest, order);
         }
-
         return PaymentResponse.builder()
                 .orderId(order.getId())
                 .orderCode(order.getOrderCode())
@@ -50,28 +60,71 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional
     public PaymentResponse createZaloPayPayment(Long buyerId, Long orderId) {
         Order order = validateBuyerOrder(buyerId, orderId);
-
         if ("CANCELLED".equalsIgnoreCase(order.getStatus()) || "COMPLETED".equalsIgnoreCase(order.getStatus())) {
             throw new BusinessException(OrderErrorCode.INVALID_STATUS_TRANSITION);
         }
 
-        String transactionCode = "ZP_" + order.getOrderCode() + "_" + System.currentTimeMillis();
-        String paymentUrl = "https://qc.zalopay.vn/pay?order=" + order.getOrderCode() + "&amount=" + order.getTotalAmount();
-        String qrCodeUrl = "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=" + URLEncoder.encode(paymentUrl, StandardCharsets.UTF_8);
+        long now = System.currentTimeMillis();
+        String appTransId = "ZP" + now + "_" + order.getId();
+        String embedData = "{\"orderId\":" + order.getId() + ",\"orderCode\":\"" + order.getOrderCode() + "\"}";
+        String item = "[]";
+        long amount = order.getTotalAmount().longValue();
+
+        ZaloPayCreateOrderRequest req = ZaloPayCreateOrderRequest.builder()
+                .appId(zaloPayProperties.getAppId())
+                .appTransId(appTransId)
+                .appUser(zaloPayProperties.getAppUser())
+                .amount(amount)
+                .appTime(now)
+                .embedData(embedData)
+                .item(item)
+                .description("Thanh toan don hang " + order.getOrderCode())
+                .bankCode("")
+                .callbackUrl(zaloPayProperties.getCallbackUrl())
+                .build();
+
+        ZaloPayCreateOrderResponse zpResp = zaloPayClient.createOrder(req);
+        if (zpResp.getReturnCode() == null || zpResp.getReturnCode() != 1) {
+            log.error("ZaloPay /v2/create failed: return_code={} message={}",
+                    zpResp.getReturnCode(), zpResp.getReturnMessage());
+            throw new BusinessException(CommonErrorCode.INTERNAL_SERVER_ERROR);
+        }
+
+        String zpPayloadJson;
+        try {
+            Map<String, Object> payloadMap = new HashMap<>();
+            payloadMap.put("app_trans_id", appTransId);
+            payloadMap.put("zp_trans_token", zpResp.getZpTransToken());
+            payloadMap.put("order_token", zpResp.getOrderToken());
+            payloadMap.put("amount", amount);
+            zpPayloadJson = objectMapper.writeValueAsString(payloadMap);
+        } catch (Exception e) {
+            log.warn("Failed to serialize ZaloPay response payload", e);
+            zpPayloadJson = "{}";
+        }
 
         Payment payment = Payment.builder()
                 .order(order)
                 .paymentMethod("ZALOPAY")
-                .transactionCode(transactionCode)
+                .transactionCode(appTransId)
                 .amount(order.getTotalAmount())
-                .paymentUrl(paymentUrl)
-                .qrCodeData(qrCodeUrl)
+                .paymentUrl(zpResp.getOrderUrl())
+                .qrCodeData(zpResp.getQrCode())
                 .status("PENDING")
+                .callbackPayload(zpPayloadJson)
                 .createdAt(Instant.now())
                 .build();
 
         payment = paymentRepository.save(payment);
-        log.info("Created ZaloPay payment intent for orderId={}, transactionCode={}", orderId, transactionCode);
+        log.info("Created ZaloPay payment for orderId={}, transactionCode={}", orderId, appTransId);
+
+        try {
+            wsBroadcaster.sendPaymentResultToUser(order.getBuyer().getEmail(), order.getOrderCode(),
+                    order.getId(), "ZALOPAY", "PENDING");
+        } catch (Exception e) {
+            log.warn("[WS] Failed to send PAYMENT_STATUS_CHANGED for orderId={}: {}", orderId, e.getMessage());
+        }
+
         return mapToResponse(payment, order);
     }
 
@@ -79,13 +132,11 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional
     public PaymentResponse confirmCodPayment(Long buyerId, Long orderId) {
         Order order = validateBuyerOrder(buyerId, orderId);
-
         if (!"PENDING_PAYMENT".equalsIgnoreCase(order.getStatus()) && !"CREATED".equalsIgnoreCase(order.getStatus())) {
             throw new BusinessException(OrderErrorCode.INVALID_STATUS_TRANSITION);
         }
 
         String transactionCode = "COD_" + order.getOrderCode() + "_" + System.currentTimeMillis();
-
         Payment payment = Payment.builder()
                 .order(order)
                 .paymentMethod("COD")
@@ -94,22 +145,159 @@ public class PaymentServiceImpl implements PaymentService {
                 .status("PENDING")
                 .createdAt(Instant.now())
                 .build();
-
         payment = paymentRepository.save(payment);
 
-        // Chuyen trang thai don hang thanh CONFIRMED sau khi chon COD
         order.setStatus("CONFIRMED");
         order.setUpdatedAt(Instant.now());
         orderRepository.save(order);
 
-        log.info("Confirmed COD payment for orderId={}, order transitioned to CONFIRMED", orderId);
+        log.info("Confirmed COD payment for orderId={}", orderId);
+
+        try {
+            wsBroadcaster.sendPaymentResultToUser(order.getBuyer().getEmail(), order.getOrderCode(),
+                    order.getId(), "COD", "CONFIRMED");
+        } catch (Exception e) {
+            log.warn("[WS] Failed to send PAYMENT_STATUS_CHANGED for orderId={}: {}", orderId, e.getMessage());
+        }
+
         return mapToResponse(payment, order);
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> handleZaloPayCallback(ZaloPayCallbackDto cb) {
+        log.info("Received ZaloPay callback: type={}", cb.getType());
+
+        if (!zaloPayClient.verifyCallbackMac(cb)) {
+            log.error("ZaloPay callback MAC verification FAILED");
+            return Map.of("return_code", -1, "return_message", "mac not equal");
+        }
+
+        ZaloPayCallbackDto.ZaloPayCallbackData data;
+        try {
+            data = zaloPayClient.parseCallbackData(cb.getData());
+        } catch (Exception e) {
+            log.error("Failed to parse ZaloPay callback data: {}", e.getMessage());
+            return Map.of("return_code", 0, "return_message", "invalid data: " + e.getMessage());
+        }
+
+        String appTransId = data.getAppTransId();
+        if (appTransId == null || appTransId.isBlank()) {
+            return Map.of("return_code", 0, "return_message", "missing app_trans_id");
+        }
+
+        Optional<Payment> optPayment = paymentRepository.findByTransactionCode(appTransId);
+        if (optPayment.isEmpty()) {
+            log.error("ZaloPay callback: payment not found for app_trans_id={}", appTransId);
+            return Map.of("return_code", 0, "return_message", "payment not found");
+        }
+
+        Payment payment = optPayment.get();
+
+        if ("SUCCESS".equalsIgnoreCase(payment.getStatus())) {
+            log.info("ZaloPay callback: payment {} already SUCCESS, skip (idempotent)", appTransId);
+            return Map.of("return_code", 1, "return_message", "Success");
+        }
+
+        payment.setStatus("SUCCESS");
+        payment.setPaidAt(Instant.now());
+        if (data.getZpTransId() != null) {
+            payment.setGatewayTransId(data.getZpTransId());
+        }
+        try {
+            Map<String, Object> raw = new HashMap<>();
+            raw.put("data", data);
+            raw.put("mac", cb.getMac());
+            raw.put("type", cb.getType());
+            raw.put("received_at", Instant.now().toString());
+            payment.setCallbackPayload(objectMapper.writeValueAsString(raw));
+        } catch (Exception e) {
+            log.warn("Failed to serialize callback audit payload", e);
+        }
+        payment = paymentRepository.save(payment);
+
+        Order order = payment.getOrder();
+        if ("PENDING_PAYMENT".equalsIgnoreCase(order.getStatus())) {
+            order.setStatus("CONFIRMED");
+            order.setUpdatedAt(Instant.now());
+            orderRepository.save(order);
+            log.info("Order {} transitioned to CONFIRMED via ZaloPay callback", order.getOrderCode());
+        }
+
+        try {
+            wsBroadcaster.sendPaymentResultToUser(order.getBuyer().getEmail(), order.getOrderCode(),
+                    order.getId(), "ZALOPAY", "SUCCESS");
+        } catch (Exception e) {
+            log.warn("[WS] Failed to send PAYMENT_STATUS_CHANGED for orderId={}: {}",
+                    order.getId(), e.getMessage());
+        }
+
+        return Map.of("return_code", 1, "return_message", "Success");
+    }
+
+    @Override
+    @Transactional
+    public PaymentResponse queryZaloPayPayment(Long buyerId, Long orderId) {
+        Order order = validateBuyerOrder(buyerId, orderId);
+        List<Payment> payments = paymentRepository.findByOrderId(orderId);
+        if (payments == null || payments.isEmpty()) {
+            throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);
+        }
+
+        Payment latest = payments.stream()
+                .filter(p -> "ZALOPAY".equalsIgnoreCase(p.getPaymentMethod()))
+                .reduce((a, b) -> a.getCreatedAt().isAfter(b.getCreatedAt()) ? a : b)
+                .orElse(payments.get(payments.size() - 1));
+
+        if ("SUCCESS".equalsIgnoreCase(latest.getStatus())) {
+            return mapToResponse(latest, order);
+        }
+
+        try {
+            Map<String, Object> zpResult = zaloPayClient.queryOrder(latest.getTransactionCode());
+            Object returnCodeObj = zpResult.get("return_code");
+            int returnCode = returnCodeObj instanceof Number ? ((Number) returnCodeObj).intValue() : 0;
+
+            if (returnCode == 1) {
+                Object isProcessing = zpResult.get("is_processing");
+                Object zpTransId = zpResult.get("zp_trans_id");
+                Object amountPaid = zpResult.get("amount");
+
+                if (Boolean.FALSE.equals(isProcessing) && amountPaid instanceof Number
+                        && ((Number) amountPaid).longValue() > 0) {
+                    log.info("ZaloPay query fallback: app_trans_id={} reported as paid", latest.getTransactionCode());
+                    latest.setStatus("SUCCESS");
+                    latest.setPaidAt(Instant.now());
+                    if (zpTransId != null) {
+                        latest.setGatewayTransId(String.valueOf(zpTransId));
+                    }
+                    latest = paymentRepository.save(latest);
+
+                    if ("PENDING_PAYMENT".equalsIgnoreCase(order.getStatus())) {
+                        order.setStatus("CONFIRMED");
+                        order.setUpdatedAt(Instant.now());
+                        orderRepository.save(order);
+                    }
+
+                    try {
+                        wsBroadcaster.sendPaymentResultToUser(order.getBuyer().getEmail(), order.getOrderCode(),
+                                order.getId(), "ZALOPAY", "SUCCESS");
+                    } catch (Exception e) {
+                        log.warn("[WS] Failed to send PAYMENT_STATUS_CHANGED on query fallback: {}",
+                                e.getMessage());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("ZaloPay query fallback failed for orderId={}: {}", orderId, e.getMessage());
+        }
+
+        return mapToResponse(latest, order);
     }
 
     private Order validateBuyerOrder(Long buyerId, Long orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
-
         if (!order.getBuyer().getId().equals(buyerId)) {
             throw new BusinessException(OrderErrorCode.ORDER_ACCESS_DENIED);
         }

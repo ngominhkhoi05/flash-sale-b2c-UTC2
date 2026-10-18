@@ -8,6 +8,7 @@ import com.b2c.flash_sale_b2c_UTC2.flashsale.port.FlashSaleOrderPort;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.repository.FlashSaleItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.repository.FlashSaleSlotRepository;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.service.FlashSaleExpirationScheduler;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.service.FlashSaleSlotCloseService;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.Category;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.Product;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.ProductVariant;
@@ -41,6 +42,7 @@ class FlashSaleSlotLifecycleIT extends AbstractPostgresIT {
     @Autowired private FlashSaleSlotRepository slotRepository;
     @Autowired private FlashSaleItemRepository itemRepository;
     @Autowired private FlashSaleExpirationScheduler scheduler;
+    @Autowired private FlashSaleSlotCloseService slotCloseService;
     @Autowired private FlashSaleOrderPort orderPort;
     @Autowired private UserRepository userRepository;
     @Autowired private StoreRepository storeRepository;
@@ -122,8 +124,8 @@ class FlashSaleSlotLifecycleIT extends AbstractPostgresIT {
                 .createdAt(Instant.now())
                 .build());
 
-        // Gọi trực tiếp closeSlotAndReturnStock (workaround self-invocation)
-        scheduler.closeSlotAndReturnStock(slot);
+        // Gọi qua FlashSaleSlotCloseService (transaction boundary honored by AOP proxy)
+        slotCloseService.closeAndReturnStock(slot);
 
         FlashSaleSlot reloaded = slotRepository.findById(slot.getId()).orElseThrow();
         assertEquals("ENDED", reloaded.getStatus(),
@@ -205,8 +207,8 @@ class FlashSaleSlotLifecycleIT extends AbstractPostgresIT {
         System.out.println("[DEBUG] Before scheduler: status=" + beforeScheduler.getStatus()
                 + " endTime=" + beforeScheduler.getEndTime());
 
-        // Gọi trực tiếp closeSlotAndReturnStock (workaround self-invocation issue)
-        scheduler.closeSlotAndReturnStock(beforeScheduler);
+        // Gọi qua FlashSaleSlotCloseService (transaction boundary honored by AOP proxy)
+        slotCloseService.closeAndReturnStock(beforeScheduler);
 
         // Assert: slot ENDED
         FlashSaleSlot reloadedSlot = slotRepository.findById(slot.getId()).orElseThrow();

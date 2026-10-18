@@ -1,0 +1,41 @@
+---
+description: Xử lý đồng thời cao - Sử dụng Lua Script, chiến lược Redisson và khóa bi quan PESSIMISTIC_WRITE.
+globs: flashsale/**, **/service/**, flashsale/strategy/**
+---
+
+# Xử lý Đồng thời (Concurrency)
+
+## Anti-pattern cần tránh
+
+Tuyệt đối không sử dụng mô hình đọc - kiểm tra - trừ:
+
+```text
+read stock
+-> if stock > 0
+-> decrement
+```
+
+trong môi trường Flash Sale có mức độ chịu tải và tương tranh cao.
+
+## Chiến lược ưu tiên
+
+```text
+Redis Lua Script
+```
+
+dành cho mọi thao tác đòi hỏi tính nguyên tử tuyệt đối (Atomicity).
+
+## Chiến lược linh hoạt (Pluggable Strategy)
+
+Package `flashsale/strategy/` hỗ trợ 2 chiến lược giữ chỗ:
+
+- `LuaScriptStockReservationStrategy`: Mặc định, cho hiệu năng cao nhất.
+- `RedissonLockStockReservationStrategy`: Dự phòng, phục vụ kiểm thử so sánh và đo điểm chuẩn (benchmark).
+
+Lựa chọn chiến lược thông qua cấu hình trong file properties (ví dụ: `flashsale.strategy=lua` hoặc `redisson`).
+
+## Quy tắc
+
+- Không tự ý thêm cơ chế khóa phân tán phức tạp nếu Redis kết hợp Lua Script đã giải quyết triệt để vấn đề.
+- Không sử dụng từ khóa `synchronized` của Java cho các trạng thái cần đồng bộ xuyên suốt nhiều instance.
+- Khóa cơ sở dữ liệu (`@Lock(LockModeType.PESSIMISTIC_WRITE)`) chỉ dùng trong trường hợp thực sự cần thiết (ví dụ: thanh toán ví điện tử của 2 người dùng diễn ra đồng thời).

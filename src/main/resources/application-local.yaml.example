@@ -63,4 +63,31 @@ cloudinary:
 # TODO: Tao chuoi random >= 64 ky tu (vd: (hs256) ...).
 # Hoac export JWT_SECRET trong terminal thay vi commit secret vao file.
 jwt:
-  secret:037f7fe6a78573fa5da54a56894babbc65a04cd73beb0fd7e37891658ffe668d65ae4ab65d3f74a7f60b0b98773307c1d8f870c21d33f4c82af0be34d7c11a7e
+  secret: 037f7fe6a78573fa5da54a56894babbc65a04cd73beb0fd7e37891658ffe668d65ae4ab65d3f74a7f60b0b98773307c1d8f870c21d33f4c82af0be34d7c11a7e
+
+# --- ZaloPay Open API v2 (Payment Module - sandbox placeholder) ---
+# TODO: Dang ky merchant ZaloPay sandbox tai https://docs.zalopay.vn/v2/general/overview.html
+# Hoac dat env var ZALOPAY_APP_ID, ZALOPAY_KEY1, ZALOPAY_KEY2, ZALOPAY_CALLBACK_URL khi run app.
+# callback-url phai la public URL (su dung ngrok cho local dev).
+zalopay:
+  app-id: YOUR_ZALOPAY_APP_ID
+  key1: YOUR_ZALOPAY_KEY1
+  key2: YOUR_ZALOPAY_KEY2
+  endpoint: https://sb-openapi.zalopay.vn/v2/create
+  callback-url: https://YOUR_NGROK_HOST.ngrok-free.dev/api/v1/payments/zalopay/callback
+  app-user: FlashSaleB2C
+
+# --- Google OAuth2 (Authorization Code flow cho /api/v1/auth/google/*) ---
+# TODO: Dang ky OAuth client tai https://console.cloud.google.com/apis/credentials
+# roi dien 3 bien sau. Authorized redirect URI o Google Console phai khop voi
+# redirect-uri ben duoi. Hoac dat env var GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+# OAUTH2_REDIRECT_URI khi run app.
+google:
+  oauth2:
+    client-id: YOUR_GOOGLE_CLIENT_ID
+    client-secret: YOUR_GOOGLE_CLIENT_SECRET
+    redirect-uri: http://localhost:3000/oauth2/redirect
+    token-endpoint: https://oauth2.googleapis.com/token
+    user-info-endpoint: https://www.googleapis.com/oauth2/v3/userinfo
+    jwks-uri: https://www.googleapis.com/oauth2/v3/certs
+    issuer: https://accounts.google.com

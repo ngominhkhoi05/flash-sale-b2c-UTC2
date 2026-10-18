@@ -1,0 +1,13 @@
+---
+description: Phân trang chuẩn với PageResponse, mặc định page=0, size=20, MAX=100, cấm nạp toàn bộ bảng vào bộ nhớ.
+globs: **/controller/**, **/repository/**
+---
+
+# Quy tắc Phân trang (Pagination)
+
+- Mọi API trả về danh sách có khả năng chứa tập dữ liệu lớn **bắt buộc phải** hỗ trợ phân trang.
+- Sử dụng class `PageResponse<T>` chuẩn của dự án (xem `07-api-conventions.mdc`).
+- Giá trị mặc định: `page = 0`, `size = 20`, giới hạn tối đa `MAX_PAGE_SIZE = 100`.
+- Thứ tự sắp xếp mặc định: `createdAt DESC` (hoặc theo đặc thù nghiệp vụ của từng thực thể).
+- **Tuyệt đối không nạp toàn bộ dữ liệu của một bảng** vào bộ nhớ nếu không có lý do bất khả kháng.
+- Các phép tính toán tổng hợp (như `count`, `sum`) bắt buộc phải dùng hàm tổng hợp của DB, không được nạp toàn bộ danh sách lên Java để tính toán.

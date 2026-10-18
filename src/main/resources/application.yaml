@@ -83,6 +83,37 @@ cloudinary:
   api-secret: ${CLOUDINARY_API_SECRET:}
   folder: ${CLOUDINARY_FOLDER:flash-sale-b2c/local}
 
+# --- ZaloPay Open API v2 (Payment Module - sandbox + production) ---
+# Secret read from env var (AGENTS.md muc #39).
+#   ZALOPAY_APP_ID    : Application ID (sandbox = 2554, production = merchant dang ky)
+#   ZALOPAY_KEY1      : Key for MAC signing of /v2/create and /v2/query requests
+#   ZALOPAY_KEY2      : Key for MAC verification of ZaloPay callback
+#   ZALOPAY_ENDPOINT  : URL Open API (default: sandbox)
+#   ZALOPAY_CALLBACK_URL : Public URL ZaloPay calls when user completes payment
+zalopay:
+  app-id: ${ZALOPAY_APP_ID:}
+  key1: ${ZALOPAY_KEY1:}
+  key2: ${ZALOPAY_KEY2:}
+  endpoint: ${ZALOPAY_ENDPOINT:https://sb-openapi.zalopay.vn/v2/create}
+  callback-url: ${ZALOPAY_CALLBACK_URL:}
+  app-user: ${ZALOPAY_APP_USER:FlashSaleB2C}
+
+# --- Google OAuth2 (Authorization Code flow cho /api/v1/auth/google/*) ---
+# Bắt buộc set 3 biến GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OAUTH2_REDIRECT_URI
+# ở môi trường runtime. Đăng ký OAuth client tại
+# https://console.cloud.google.com/apis/credentials và set Authorized redirect
+# URI khớp với OAUTH2_REDIRECT_URI.
+google:
+  oauth2:
+    client-id: ${GOOGLE_CLIENT_ID:}
+    client-secret: ${GOOGLE_CLIENT_SECRET:}
+    redirect-uri: ${OAUTH2_REDIRECT_URI:}
+    # Các endpoint Google chuẩn — thường không cần override
+    token-endpoint: https://oauth2.googleapis.com/token
+    user-info-endpoint: https://www.googleapis.com/oauth2/v3/userinfo
+    jwks-uri: https://www.googleapis.com/oauth2/v3/certs
+    issuer: https://accounts.google.com
+
 # --- CORS: đọc từ env var CORS_ALLOWED_ORIGINS (comma-separated) ---
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000}

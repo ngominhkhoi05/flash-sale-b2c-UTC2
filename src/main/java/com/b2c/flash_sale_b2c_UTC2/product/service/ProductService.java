@@ -23,7 +23,11 @@ public interface ProductService {
 
     PageResponse<ProductSummaryResponse> getPublicProducts(ProductFilterRequest filter, Pageable pageable);
 
-        ProductDetailResponse getPublicProductDetail(Long productId);
+    com.b2c.flash_sale_b2c_UTC2.product.dto.SearchResponse searchProducts(
+            com.b2c.flash_sale_b2c_UTC2.product.dto.SearchRequest request,
+            Pageable pageable);
+
+    ProductDetailResponse getPublicProductDetail(Long productId);
 
     ProductDetailResponse getPublicProductDetailBySlug(String slug);
 

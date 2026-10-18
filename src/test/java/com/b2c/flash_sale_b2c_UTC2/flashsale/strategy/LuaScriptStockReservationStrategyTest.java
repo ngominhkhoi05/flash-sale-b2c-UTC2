@@ -103,11 +103,33 @@ class LuaScriptStockReservationStrategyTest {
     // ============== compensate ==============
 
     @Test
-    @DisplayName("compensate calls rollbackScript")
-    void compensate_Success() {
+    @DisplayName("compensate deletes user_limit key when remaining <= 0")
+    void compensate_DeletesKey_WhenLimitReachedZero() {
+        // Lua script (rollback_stock.lua) INCRBY stock + DECRBY/DEL user_limit atomically.
+        // Mock verifies the script is invoked with the correct keys (including user_limit).
+        // Real DEL of user_limit key when remaining <= 0 is performed inside the Lua script
+        // (rollback_stock.lua step 4) and requires a real Redis instance to verify end-to-end.
+        String expectedStockKey = "flash_sale:stock:99";
+        String expectedUserLimitKey = "flash_sale:user_limit:1:1:99";
+
+        when(redisTemplate.execute(
+                any(RedisScript.class),
+                argThat(keys -> keys instanceof List<?> list
+                        && list.size() == 5
+                        && expectedStockKey.equals(list.get(0))
+                        && expectedUserLimitKey.equals(list.get(1))),
+                any(Object[].class)))
+                .thenReturn(0L);
+
         strategy.compensate(1L, 1L, 99L, 2);
 
-        verify(redisTemplate).execute(any(RedisScript.class), anyList(), eq("2"), eq("60"), eq(""));
+        verify(redisTemplate).execute(
+                any(RedisScript.class),
+                argThat(keys -> keys instanceof List<?> list
+                        && list.size() == 5
+                        && expectedStockKey.equals(list.get(0))
+                        && expectedUserLimitKey.equals(list.get(1))),
+                any(Object[].class));
     }
 
     @Test

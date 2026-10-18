@@ -1,0 +1,70 @@
+---
+description: Danh sách kiểm tra thực thi công việc (Task Execution Checklist) - Các bước kiểm tra trước, trong và sau khi code.
+globs: always
+---
+
+# Danh sách Kiểm tra Thực thi Task (Task Checklist)
+
+## Giai đoạn Tìm hiểu (Trước khi code)
+
+- [ ] Đã đọc kỹ tài liệu yêu cầu liên quan (`docs/02_requirement_analysis.md`).
+- [ ] Đã đọc tài liệu thiết kế liên quan (`docs/03_system_design.md`, `docs/api/api-document.md`).
+- [ ] Đã đọc kỹ các rule tương ứng trong thư mục `.cursor/rules/`.
+- [ ] Đã kiểm tra trực tiếp mã nguồn hiện tại trong codebase (không chỉ tin tưởng tài liệu).
+- [ ] Đã xác định rõ module và tầng kiến trúc sẽ triển khai (`05-project-structure.mdc`).
+
+## Giai đoạn Triển khai (Implementation)
+
+- [ ] Đặt đúng module (trong số 15 module nghiệp vụ + 2 module dùng chung).
+- [ ] Đặt đúng tầng kiến trúc (`controller`, `service`, `repository`, `entity`, `dto`, `mapper`, `exception`).
+- [ ] TUYỆT ĐỐI KHÔNG viết logic nghiệp vụ trong Controller.
+- [ ] TUYỆT ĐỐI KHÔNG viết logic nghiệp vụ trong Repository.
+- [ ] Mapper tuân thủ đúng quy ước MapStruct và được Spring quản lý như một Bean.
+- [ ] Mã lỗi tuân thủ đúng tiền tố (prefix) của từng module (`08-error-codes.mdc`).
+- [ ] Nếu có gửi thông báo WebSocket -> bắt buộc gọi qua `FlashSaleWsBroadcaster` (`28-websocket.mdc`).
+- [ ] Nếu cần cơ chế chống gọi lặp -> tuân thủ quy ước Idempotent (`25-idempotency.mdc`).
+- [ ] Nếu liên quan đến bảo mật và xác thực -> tuân thủ quy tắc Security (`22-security.mdc`).
+
+## Cơ sở Dữ liệu
+
+- [ ] Ràng buộc được thiết kế chuẩn xác (Foreign Key, UNIQUE, NOT NULL, CHECK, Index).
+- [ ] Tạo file migration mới nếu có thay đổi schema (`V{n}__*.sql`).
+- [ ] TUYỆT ĐỐI KHÔNG sửa các file migration cũ đã áp dụng.
+- [ ] Không tự ý sửa đổi file trong thư mục `docs/` nếu chưa có yêu cầu của user.
+- [ ] Đã rà soát bảng ma trận tác động `42-migration-impact-matrix.mdc` khi có migration mới.
+
+## Miền nghiệp vụ Flash Sale
+
+- [ ] Mọi thao tác kiểm tra và trừ tồn kho trên Redis đều đảm bảo tính nguyên tử (dùng Lua Script).
+- [ ] Phân định rõ ràng giữa thời gian giữ chỗ (Reservation TTL 300s) và giới hạn mua của người dùng.
+- [ ] Quá trình hoàn kho (Rollback) hoàn trả chính xác số lượng hàng đã giữ và có tính Idempotent.
+- [ ] Có khối xử lý bù trừ (Compensation) khi thao tác lưu vào Database gặp sự cố.
+- [ ] Các tác vụ quản lý vòng đời phiên Flash Sale đều đảm bảo tính Idempotent.
+
+## Quản lý Hình ảnh (Image Module)
+
+- [ ] Xác định đúng loại đối tượng sở hữu (`USER`, `STORE`, `PRODUCT`, `VARIANT`, `REVIEW`).
+- [ ] Kiểm tra quyền sở hữu trước mọi thao tác cập nhật (PATCH) hoặc xóa (DELETE).
+- [ ] Có cơ chế xóa liên hoàn (Cascade Delete) khi đối tượng sở hữu bị xóa.
+- [ ] Đảm bảo mỗi đối tượng chỉ có duy nhất 1 ảnh đại diện chính (`is_primary = true`).
+
+## Bảo mật & Quyền riêng tư
+
+- [ ] Không gán cứng bất kỳ thông tin nhạy cảm nào trong mã nguồn.
+- [ ] Phân quyền chuẩn xác theo vai trò (`hasRole`) hoặc quyền hạn cụ thể.
+- [ ] Luôn kiểm tra quyền sở hữu tài nguyên (ví dụ: `address.user_id == current_user.id`).
+- [ ] Không bao giờ vượt rào hoặc tắt cơ chế bảo mật.
+
+## Kiểm thử & Đóng gói (Build / Test)
+
+- [ ] Đã xác nhận phiên bản Java 25 đang được kích hoạt thông qua lệnh `java -version`.
+- [ ] Chạy lệnh `gradlew compileJava` và `gradlew test` thành công không phát sinh lỗi.
+- [ ] Đã tự rà soát lại toàn bộ khác biệt mã nguồn thông qua lệnh `git diff`.
+- [ ] Đã viết bổ sung bài kiểm thử (tối thiểu 1 test cho tầng Service vừa xử lý).
+
+## Hoàn tất & Bàn giao (Handoff)
+
+- [ ] Tự rà soát toàn bộ diff bằng lệnh `git status` và `git diff`.
+- [ ] Gợi ý commit message bằng tiếng Anh, tuân thủ đúng chuẩn Conventional Commits trong báo cáo cuối.
+- [ ] **DỪNG LẠI - TUYỆT ĐỐI KHÔNG CHẠY `git add`, `git commit` HAY `git push`.** Toàn bộ quyền staging, commit và push thuộc về user.
+

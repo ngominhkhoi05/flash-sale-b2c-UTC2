@@ -7,6 +7,7 @@ import com.b2c.flash_sale_b2c_UTC2.order.entity.OrderItem;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.Product;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.ProductVariant;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductRepository;
+import com.b2c.flash_sale_b2c_UTC2.store.entity.Store;
 import com.b2c.flash_sale_b2c_UTC2.review.dto.ProductReviewResponse;
 import com.b2c.flash_sale_b2c_UTC2.review.dto.ProductReviewsPageResponse;
 import com.b2c.flash_sale_b2c_UTC2.review.dto.RatingDistributionDto;
@@ -57,6 +58,9 @@ class ReviewServiceTest {
     @Mock
     private com.b2c.flash_sale_b2c_UTC2.user.repository.UserRepository userRepository;
 
+    @Mock
+    private com.b2c.flash_sale_b2c_UTC2.store.repository.StoreRepository storeRepository;
+
     private com.b2c.flash_sale_b2c_UTC2.review.service.ReviewServiceImpl reviewService;
 
     private Product activeProduct;
@@ -72,7 +76,7 @@ class ReviewServiceTest {
     void setUp() {
         // Manually instantiate to avoid InjectMocks issues
         reviewService = new com.b2c.flash_sale_b2c_UTC2.review.service.ReviewServiceImpl(
-                productReviewRepository, productRepository, imageRepository, userRepository);
+                productReviewRepository, productRepository, imageRepository, userRepository, storeRepository);
 
         user1 = User.builder().id(1L).fullName("User One").build();
         user2 = User.builder().id(2L).fullName("User Two").build();
@@ -266,6 +270,83 @@ class ReviewServiceTest {
                     reviewService.getProductReviews(999L, null, null, PageRequest.of(0, 10)));
 
             assertEquals(ReviewErrorCode.REVIEW_PRODUCT_NOT_FOUND, ex.getErrorCode());
+        }
+    }
+
+    @Nested
+    @DisplayName("Seller Reviews Tests")
+    class SellerReviewsTests {
+
+        @Test
+        @DisplayName("getSellerReviewSummary - Thành công tính tổng, trung bình sao và phân bổ")
+        void getSellerReviewSummary_Success() {
+            Store store = Store.builder().id(50L).build();
+            when(storeRepository.findByUserId(10L)).thenReturn(java.util.Optional.of(store));
+            when(productReviewRepository.countByStoreId(50L)).thenReturn(10L);
+            when(productReviewRepository.avgRatingByStoreId(50L)).thenReturn(4.6);
+            when(productReviewRepository.countRepliedByStoreId(50L)).thenReturn(8L);
+            when(productReviewRepository.countByRatingGroupedForStore(50L)).thenReturn(List.of(
+                    new Object[]{(short) 5, 6L},
+                    new Object[]{(short) 4, 4L}
+            ));
+
+            com.b2c.flash_sale_b2c_UTC2.review.dto.SellerReviewSummaryResponse summary =
+                    reviewService.getSellerReviewSummary(10L);
+
+            assertNotNull(summary);
+            assertEquals(10L, summary.getTotalReviews());
+            assertEquals(4.6, summary.getAverageRating());
+            assertEquals(2L, summary.getUnrepliedCount());
+            assertEquals(6L, summary.getRatingBreakdown().get(5));
+            assertEquals(4L, summary.getRatingBreakdown().get(4));
+        }
+
+        @Test
+        @DisplayName("replySellerReview - Thành công lưu phản hồi người bán")
+        void replySellerReview_Success() {
+            Store store = Store.builder().id(50L).build();
+            Product product = Product.builder().id(100L).store(store).name("Áo thun").build();
+            ProductReview review = ProductReview.builder()
+                    .id(1L)
+                    .product(product)
+                    .user(user1)
+                    .rating((short) 5)
+                    .comment("Sản phẩm tốt")
+                    .build();
+
+            when(storeRepository.findByUserId(10L)).thenReturn(java.util.Optional.of(store));
+            when(productReviewRepository.findById(1L)).thenReturn(java.util.Optional.of(review));
+            when(productReviewRepository.save(any(ProductReview.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            com.b2c.flash_sale_b2c_UTC2.review.dto.ReplyReviewRequest request =
+                    com.b2c.flash_sale_b2c_UTC2.review.dto.ReplyReviewRequest.builder()
+                            .replyText("Cảm ơn bạn đã ủng hộ shop!")
+                            .build();
+
+            com.b2c.flash_sale_b2c_UTC2.review.dto.SellerReviewItemResponse response =
+                    reviewService.replySellerReview(10L, 1L, request);
+
+            assertNotNull(response);
+            assertEquals(1L, response.getId());
+            assertNotNull(response.getSellerReply());
+            assertEquals("Cảm ơn bạn đã ủng hộ shop!", response.getSellerReply().getReplyText());
+        }
+
+        @Test
+        @DisplayName("replySellerReview - Ném REVIEW_ACCESS_DENIED khi review không thuộc shop")
+        void replySellerReview_AccessDenied() {
+            Store myStore = Store.builder().id(50L).build();
+            Store otherStore = Store.builder().id(99L).build();
+            Product product = Product.builder().id(100L).store(otherStore).build();
+            ProductReview review = ProductReview.builder().id(1L).product(product).build();
+
+            when(storeRepository.findByUserId(10L)).thenReturn(java.util.Optional.of(myStore));
+            when(productReviewRepository.findById(1L)).thenReturn(java.util.Optional.of(review));
+
+            com.b2c.flash_sale_b2c_UTC2.review.dto.ReplyReviewRequest request =
+                    com.b2c.flash_sale_b2c_UTC2.review.dto.ReplyReviewRequest.builder().replyText("Rep").build();
+
+            assertThrows(BusinessException.class, () -> reviewService.replySellerReview(10L, 1L, request));
         }
     }
 }
