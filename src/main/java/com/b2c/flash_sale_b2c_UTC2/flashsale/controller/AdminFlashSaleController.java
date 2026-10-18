@@ -2,8 +2,12 @@ package com.b2c.flash_sale_b2c_UTC2.flashsale.controller;
 
 import com.b2c.flash_sale_b2c_UTC2.common.api.ApiResponse;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.CreateFlashSaleSlotRequest;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.EmergencyPauseRequest;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.EmergencyPauseResponse;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.FlashSaleItemResponse;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.FlashSaleSlotResponse;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.LiveSkuInventoryResponse;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.RealtimeTelemetryResponse;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.UpdateFlashSaleSlotRequest;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.service.FlashSaleItemService;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.service.FlashSaleSlotService;
@@ -102,5 +106,29 @@ public class AdminFlashSaleController {
     ) {
         var response = itemService.batchApproveItems(request);
         return ResponseEntity.ok(ApiResponse.success("Duyệt hàng loạt sản phẩm Flash Sale thành công", response));
+    }
+
+    @GetMapping("/slots/{id}/telemetry")
+    @Operation(summary = "Giám sát Telemetry phiên Flash Sale Realtime", description = "Lấy các chỉ số kỹ thuật của phiên Flash Sale theo thời gian thực")
+    public ResponseEntity<ApiResponse<RealtimeTelemetryResponse>> getSlotTelemetry(@PathVariable Long id) {
+        RealtimeTelemetryResponse response = slotService.getSlotTelemetry(id);
+        return ResponseEntity.ok(ApiResponse.success("Lấy telemetry phiên Flash Sale thành công", response));
+    }
+
+    @PostMapping("/slots/{id}/emergency-pause")
+    @Operation(summary = "Tạm dừng khẩn cấp phiên Flash Sale", description = "Admin kích hoạt dừng khẩn cấp phiên đang chạy và hoàn kho")
+    public ResponseEntity<ApiResponse<EmergencyPauseResponse>> emergencyPause(
+            @PathVariable Long id,
+            @Valid @RequestBody EmergencyPauseRequest request
+    ) {
+        EmergencyPauseResponse response = slotService.emergencyPauseSlot(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Dừng khẩn cấp phiên Flash Sale thành công", response));
+    }
+
+    @GetMapping("/slots/{id}/skus")
+    @Operation(summary = "Lấy danh sách Live SKUs của phiên Flash Sale", description = "Xem tồn kho trực tiếp trên Redis của các SKU trong phiên")
+    public ResponseEntity<ApiResponse<List<LiveSkuInventoryResponse>>> getLiveSkus(@PathVariable Long id) {
+        List<LiveSkuInventoryResponse> response = slotService.getLiveSkus(id);
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách Live SKUs thành công", response));
     }
 }

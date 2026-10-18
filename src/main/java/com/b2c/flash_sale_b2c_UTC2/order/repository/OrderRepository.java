@@ -41,6 +41,15 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT COUNT(o) FROM Order o WHERE o.slot.id = :slotId AND o.status = 'PENDING_PAYMENT'")
     long countPendingBySlotId(@Param("slotId") Long slotId);
 
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.slot.id = :slotId AND o.status NOT IN ('PENDING_PAYMENT', 'CANCELLED', 'CANCELLED_TIMEOUT')")
+    long countSuccessfulOrdersBySlotId(@Param("slotId") Long slotId);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.slot.id = :slotId AND o.status NOT IN ('PENDING_PAYMENT', 'CANCELLED', 'CANCELLED_TIMEOUT')")
+    BigDecimal sumTotalRevenueBySlotId(@Param("slotId") Long slotId);
+
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.slot.id = :slotId AND o.status = 'CANCELLED_TIMEOUT'")
+    long countExpiredOrdersBySlotId(@Param("slotId") Long slotId);
+
     /**
      * Count orders by store ID and status.
      */
