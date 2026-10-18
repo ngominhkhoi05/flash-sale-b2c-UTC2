@@ -18,4 +18,6 @@ public interface UserVoucherRepository extends JpaRepository<UserVoucher, Long> 
 
     @Query("SELECT uv FROM UserVoucher uv JOIN FETCH uv.voucher v LEFT JOIN FETCH v.store WHERE uv.user.id = :userId ORDER BY uv.savedAt DESC")
     List<UserVoucher> findAllByUserIdWithVoucherAndStore(@Param("userId") Long userId);
+
+    void deleteByVoucherId(Long voucherId);
 }
