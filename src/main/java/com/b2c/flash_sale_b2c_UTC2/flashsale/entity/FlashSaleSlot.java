@@ -47,6 +47,10 @@ public class FlashSaleSlot {
     @Builder.Default
     private String status = "UPCOMING";
 
+    @Column(name = "is_stock_rolled_back")
+    @Builder.Default
+    private Boolean isStockRolledBack = false;
+
     @Column(name = "created_at")
     private Instant createdAt;
 }
