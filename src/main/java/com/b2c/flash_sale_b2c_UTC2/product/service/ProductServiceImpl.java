@@ -522,13 +522,24 @@ public class ProductServiceImpl implements ProductService {
         // 2. soldCount
         Integer soldCount = product.getTotalSold() != null ? product.getTotalSold() : 0;
 
-        // 3. minPrice / maxPrice (from aggregate query)
-        BigDecimal minPrice = null;
-        BigDecimal maxPrice = null;
-        Object[] priceRange = productRepository.findPriceRangeByProductId(productId);
-        if (priceRange != null && priceRange.length == 2) {
-            if (priceRange[0] != null) minPrice = (BigDecimal) priceRange[0];
-            if (priceRange[1] != null) maxPrice = (BigDecimal) priceRange[1];
+        // 3. minPrice / maxPrice (tinh truc tiep tu variants ACTIVE da load - tranh sai so voi
+        // findPriceRangeByProductId tra List<Object[]> gay ClassCastException o Hibernate multi-column)
+        List<ProductVariant> activeVariants = variants.stream()
+                .filter(v -> v.getStatus() != null && "ACTIVE".equalsIgnoreCase(v.getStatus()))
+                .filter(v -> v.getOriginalPrice() != null)
+                .toList();
+
+        BigDecimal minPrice = BigDecimal.ZERO;
+        BigDecimal maxPrice = BigDecimal.ZERO;
+        if (!activeVariants.isEmpty()) {
+            minPrice = activeVariants.stream()
+                    .map(ProductVariant::getOriginalPrice)
+                    .min(BigDecimal::compareTo)
+                    .orElse(BigDecimal.ZERO);
+            maxPrice = activeVariants.stream()
+                    .map(ProductVariant::getOriginalPrice)
+                    .max(BigDecimal::compareTo)
+                    .orElse(BigDecimal.ZERO);
         }
 
         // 4. discountPercent: find min-priced ACTIVE FlashSaleItem, compare to variant original price
