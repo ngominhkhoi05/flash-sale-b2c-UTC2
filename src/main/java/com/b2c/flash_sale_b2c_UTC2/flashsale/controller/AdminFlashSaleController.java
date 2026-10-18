@@ -72,4 +72,35 @@ public class AdminFlashSaleController {
         itemService.preWarmRedisForSlot(id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
+
+    @GetMapping("/slots/{slotId}/items")
+    @Operation(summary = "Lấy danh sách SKU đăng ký theo slot", description = "Admin xem danh sách các SKU đăng ký trong khung giờ có lọc và phân trang")
+    public ResponseEntity<ApiResponse<com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse<FlashSaleItemResponse>>> getSlotItems(
+            @PathVariable Long slotId,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String search,
+            @org.springframework.data.web.PageableDefault(size = 15, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) org.springframework.data.domain.Pageable pageable
+    ) {
+        var response = itemService.getAdminSlotItems(slotId, status, search, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách sản phẩm đăng ký thành công", response));
+    }
+
+    @PatchMapping("/items/{id}/reject")
+    @Operation(summary = "Từ chối duyệt SKU Flash Sale", description = "Admin từ chối biến thể SKU kèm lý do")
+    public ResponseEntity<ApiResponse<FlashSaleItemResponse>> rejectItem(
+            @PathVariable Long id,
+            @Valid @RequestBody com.b2c.flash_sale_b2c_UTC2.flashsale.dto.RejectFlashSaleItemRequest request
+    ) {
+        FlashSaleItemResponse response = itemService.rejectItem(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Từ chối duyệt sản phẩm Flash Sale thành công", response));
+    }
+
+    @PostMapping("/items/batch-approve")
+    @Operation(summary = "Duyệt hàng loạt SKU Flash Sale", description = "Admin duyệt hàng loạt danh sách SKU đã chọn")
+    public ResponseEntity<ApiResponse<com.b2c.flash_sale_b2c_UTC2.flashsale.dto.BatchApproveFlashSaleItemsResponse>> batchApprove(
+            @Valid @RequestBody com.b2c.flash_sale_b2c_UTC2.flashsale.dto.BatchApproveFlashSaleItemsRequest request
+    ) {
+        var response = itemService.batchApproveItems(request);
+        return ResponseEntity.ok(ApiResponse.success("Duyệt hàng loạt sản phẩm Flash Sale thành công", response));
+    }
 }
