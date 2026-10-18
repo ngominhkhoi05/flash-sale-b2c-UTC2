@@ -16,7 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -114,5 +117,33 @@ class OrderRepositoryIT extends AbstractPostgresIT {
         assertEquals(10, page1.getContent().size());
         assertEquals(10, page2.getContent().size());
         assertEquals(5, page3.getContent().size());
+    }
+
+    @Test
+    @DisplayName("countOrdersByBuyerIds returns [buyerId, count] rows for batch sidebar summary")
+    void countOrdersByBuyerIds_ReturnsMap() {
+        // Buyer 1: 2 orders
+        User buyer1 = persistUser("cb1@x.com");
+        Store store1 = persistStore("S-Buyer-Count-1", buyer1);
+        persistOrder("C-B1-1", buyer1, store1, "PENDING_PAYMENT");
+        persistOrder("C-B1-2", buyer1, store1, "COMPLETED");
+
+        // Buyer 2: 1 order
+        User buyer2 = persistUser("cb2@x.com");
+        Store store2 = persistStore("S-Buyer-Count-2", buyer2);
+        persistOrder("C-B2-1", buyer2, store2, "PENDING_PAYMENT");
+
+        // Buyer 3: 0 orders (not included in result per query semantics)
+        User buyer3 = persistUser("cb3@x.com");
+
+        List<Object[]> rows = orderRepository.countOrdersByBuyerIds(
+                List.of(buyer1.getId(), buyer2.getId(), buyer3.getId()));
+
+        Map<Long, Long> counts = rows.stream()
+                .collect(Collectors.toMap(r -> (Long) r[0], r -> (Long) r[1]));
+
+        assertEquals(2L, counts.get(buyer1.getId()));
+        assertEquals(1L, counts.get(buyer2.getId()));
+        assertTrue(!counts.containsKey(buyer3.getId()), "buyer with 0 orders should not appear");
     }
 }
