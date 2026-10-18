@@ -224,6 +224,10 @@ public class OrderServiceImpl implements OrderService {
 
             createdOrders.add(response);
             log.info("Tạo thành công đơn hàng orderCode={} cho storeId={}", orderCode, store.getId());
+
+            if (wsBroadcaster != null) {
+                wsBroadcaster.broadcastNewOrderToStore(store.getId(), response);
+            }
         }
 
         return createdOrders;
@@ -375,7 +379,16 @@ public class OrderServiceImpl implements OrderService {
             }
         }
 
-        return enrichOrderResponse(order);
+        OrderResponse enriched = enrichOrderResponse(order);
+        if (wsBroadcaster != null) {
+            try {
+                wsBroadcaster.broadcastNewOrderToStore(store.getId(), enriched);
+            } catch (Exception e) {
+                log.warn("[WS] Failed to broadcast order update to store {}: {}", store.getId(), e.getMessage());
+            }
+        }
+
+        return enriched;
     }
 
     private OrderResponse enrichOrderResponse(Order order) {
