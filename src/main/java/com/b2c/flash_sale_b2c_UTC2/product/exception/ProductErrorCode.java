@@ -22,7 +22,8 @@ public enum ProductErrorCode implements ErrorCode {
     INVALID_PRODUCT_PRICE(HttpStatus.BAD_REQUEST, "PROD_400_INVALID_PRICE", "Giá bán của biến thể phải lớn hơn 0"),
     INVALID_STOCK_QUANTITY(HttpStatus.BAD_REQUEST, "PROD_400_INVALID_STOCK", "Số lượng tồn kho không được nhỏ hơn 0"),
     DUPLICATE_SKU_IN_REQUEST(HttpStatus.BAD_REQUEST, "PROD_400_DUPLICATE_SKU", "Mã SKU không được trùng lặp trong cùng sản phẩm"),
-    VARIANT_IN_ACTIVE_FLASH_SALE(HttpStatus.CONFLICT, "PROD_409_VARIANT_IN_ACTIVE_FLASH_SALE", "Không thể chỉnh sửa giá hoặc tồn kho của biến thể đang tham gia Flash Sale đang hoạt động");
+    VARIANT_IN_ACTIVE_FLASH_SALE(HttpStatus.CONFLICT, "PROD_409_VARIANT_IN_ACTIVE_FLASH_SALE", "Không thể chỉnh sửa giá hoặc tồn kho của biến thể đang tham gia Flash Sale đang hoạt động"),
+    INVALID_STATUS(HttpStatus.BAD_REQUEST, "PROD_400_INVALID_STATUS", "Trạng thái sản phẩm không hợp lệ (chỉ chấp nhận ACTIVE, INACTIVE, BANNED)");
 
     private final HttpStatus httpStatus;
     private final String code;
