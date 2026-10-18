@@ -24,6 +24,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Page<Order> findByBuyerId(Long buyerId, Pageable pageable);
     Page<Order> findByBuyerIdAndStatus(Long buyerId, String status, Pageable pageable);
     Page<Order> findByStoreId(Long storeId, Pageable pageable);
+    Page<Order> findByStoreIdAndStatus(Long storeId, String status, Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints({@QueryHint(name = "jakarta.persistence.lock.timeout", value = "-2")})
