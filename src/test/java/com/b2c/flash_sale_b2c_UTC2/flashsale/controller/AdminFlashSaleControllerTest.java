@@ -163,6 +163,35 @@ class AdminFlashSaleControllerTest {
     }
 
     @Test
+    @DisplayName("POST /api/v1/admin/flash-sales/items/batch-approve - Returns structured failedReasons")
+    void batchApproveItems_WithFailedReasons() throws Exception {
+        BatchApproveFlashSaleItemsRequest request = new BatchApproveFlashSaleItemsRequest();
+        request.setItemIds(List.of(101L, 103L));
+
+        BatchApproveFlashSaleItemsResponse response = BatchApproveFlashSaleItemsResponse.builder()
+                .approvedItemIds(List.of(101L))
+                .failedReasons(List.of(
+                        com.b2c.flash_sale_b2c_UTC2.flashsale.dto.BatchApproveFailedItem.builder()
+                                .itemId(103L)
+                                .reason("Item không tồn tại hoặc đã được duyệt")
+                                .build()
+                ))
+                .build();
+
+        when(itemService.batchApproveItems(any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/admin/flash-sales/items/batch-approve")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.approvedItemIds[0]").value(101))
+                .andExpect(jsonPath("$.data.failedReasons[0].itemId").value(103))
+                .andExpect(jsonPath("$.data.failedReasons[0].reason").value("Item không tồn tại hoặc đã được duyệt"));
+    }
+
+    @Test
     @DisplayName("GET /api/v1/admin/flash-sales/slots/5/items - 403 Forbidden for SELLER")
     void getSlotItems_Forbidden_ForSeller() throws Exception {
         mockMvc.perform(get("/api/v1/admin/flash-sales/slots/5/items")

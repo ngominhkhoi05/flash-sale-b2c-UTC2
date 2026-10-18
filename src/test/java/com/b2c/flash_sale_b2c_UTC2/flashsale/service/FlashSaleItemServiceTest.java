@@ -211,5 +211,33 @@ class FlashSaleItemServiceTest {
 
         assertEquals(1, res.getApprovedItemIds().size());
         assertEquals(1L, res.getApprovedItemIds().get(0));
+        assertEquals(0, res.getFailedReasons().size());
+    }
+
+    @Test
+    @DisplayName("batchApproveItems: xu ly lo chua item hop le va item khong hop le (best-effort)")
+    void batchApproveItems_PartialSuccessAndFailedReasons() {
+        when(itemRepository.findById(1L)).thenReturn(java.util.Optional.of(item));
+        when(variantRepository.deductStockQuantityConditionally(1000L, 10)).thenReturn(1);
+        when(itemRepository.save(org.mockito.ArgumentMatchers.any())).thenReturn(item);
+        when(itemMapper.toResponse(org.mockito.ArgumentMatchers.any())).thenReturn(
+                com.b2c.flash_sale_b2c_UTC2.flashsale.dto.FlashSaleItemResponse.builder()
+                        .id(1L)
+                        .status("APPROVED")
+                        .build()
+        );
+
+        // Item 2L khong ton tai
+        when(itemRepository.findById(2L)).thenReturn(java.util.Optional.empty());
+
+        var res = itemServiceWithoutRedis.batchApproveItems(
+                new com.b2c.flash_sale_b2c_UTC2.flashsale.dto.BatchApproveFlashSaleItemsRequest(java.util.List.of(1L, 2L))
+        );
+
+        assertEquals(1, res.getApprovedItemIds().size());
+        assertEquals(1L, res.getApprovedItemIds().get(0));
+        assertEquals(1, res.getFailedReasons().size());
+        assertEquals(2L, res.getFailedReasons().get(0).getItemId());
+        org.junit.jupiter.api.Assertions.assertNotNull(res.getFailedReasons().get(0).getReason());
     }
 }
