@@ -830,9 +830,23 @@ def make_product_description_rich(description: str) -> str:
 
 # ---------------------------------------------------------------------------
 
-def main() -> int:
+def main_with_output(out: Path, seed: int = 42) -> int:
+    """Sinh CSV vao `out` voi `seed`. Tra ve exit code.
 
+    Refactored tu main() de pytest co the goi truc tiep ma khong
+    phai qua argparse hoac stdout.
+    """
+    args = argparse.Namespace(out=out, seed=seed)
+    return _run(args)
+
+
+def main() -> int:
+    """CLI entry point: parse args roi goi main_with_output."""
     args = parse_args()
+    return main_with_output(args.out, args.seed)
+
+
+def _run(args: argparse.Namespace) -> int:
 
     random.seed(args.seed)
 
@@ -982,6 +996,16 @@ def main() -> int:
 
     for i, (btype, pos, img, alt, href, text) in enumerate(BANNER_DATA, start=1):
 
+        # Banner image_url: dung link picsum.photos that (1400x400,
+
+        # seed = type+pos) thay vi path local "/banners/xxx.jpg" gia dinh.
+
+        # URL < 60 ky tu, vua VARCHAR(500) trong V5__create_banners_table.sql.
+
+        slug_seed = f"{btype.lower().replace('_', '-')}-{pos}"
+
+        real_image_url = f"https://picsum.photos/seed/{slug_seed}/1400/400"
+
         # start_date = now, end_date = now + random(7-30 days)
 
         end = (datetime.datetime.now() + datetime.timedelta(
@@ -990,7 +1014,9 @@ def main() -> int:
 
         start = now
 
-        banner_rows.append([i, btype, pos, img, alt, href, text, True, start, end, now])
+        banner_rows.append([i, btype, pos, real_image_url, alt, href, text,
+
+                             True, start, end, now])
 
     write_csv(out / "banners.csv",
 
