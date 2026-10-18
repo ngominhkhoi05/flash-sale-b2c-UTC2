@@ -153,4 +153,7 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
            "  WHERE v.product.id = p.id AND fsi.status = 'APPROVED' AND sl.status = 'ACTIVE'" +
            ")")
     Page<Product> findProductsWithActiveFlashSaleByCategory(@Param("categoryId") Integer categoryId, Pageable pageable);
+
+    @Query("SELECT p.store.id, count(p) FROM Product p WHERE p.store.id IN :storeIds GROUP BY p.store.id")
+    List<Object[]> countProductsByStoreIds(@Param("storeIds") List<Long> storeIds);
 }

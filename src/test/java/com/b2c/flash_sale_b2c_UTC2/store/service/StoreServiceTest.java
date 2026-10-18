@@ -69,6 +69,18 @@ class StoreServiceTest {
     @Mock
     private AddressMapper addressMapper;
 
+    @Mock
+    private com.b2c.flash_sale_b2c_UTC2.image.repository.ImageRepository imageRepository;
+
+    @Mock
+    private com.b2c.flash_sale_b2c_UTC2.product.repository.ProductRepository productRepository;
+
+    @Mock
+    private com.b2c.flash_sale_b2c_UTC2.order.repository.OrderRepository orderRepository;
+
+    @Mock
+    private com.b2c.flash_sale_b2c_UTC2.review.repository.ProductReviewRepository productReviewRepository;
+
     @InjectMocks
     private StoreServiceImpl storeService;
 
@@ -311,5 +323,35 @@ class StoreServiceTest {
 
         assertEquals("REJECTED", response.getStatus());
         verify(userRoleRepository, never()).save(any(UserRole.class));
+    }
+
+    @Test
+    @DisplayName("Admin lấy danh sách gian hàng với thông tin tổng hợp thành công")
+    void getAdminStores_Success() {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 10);
+        org.springframework.data.domain.Page<Store> storePage = new org.springframework.data.domain.PageImpl<>(
+                java.util.List.of(sampleStore), pageable, 1);
+
+        when(storeRepository.findAdminStores("PENDING", "Coolmate", pageable)).thenReturn(storePage);
+        when(imageRepository.findByOwnerTypeAndOwnerIdIn(eq(com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType.STORE), any()))
+                .thenReturn(java.util.Collections.emptyList());
+        when(productRepository.countProductsByStoreIds(any()))
+                .thenReturn(java.util.List.<Object[]>of(new Object[]{10L, 25L}));
+        when(orderRepository.countOrdersByStoreIds(any()))
+                .thenReturn(java.util.List.<Object[]>of(new Object[]{10L, 100L}));
+        when(productReviewRepository.avgRatingsByStoreIds(any()))
+                .thenReturn(java.util.List.<Object[]>of(new Object[]{10L, 4.9}));
+
+        var result = storeService.getAdminStores("PENDING", "Coolmate", pageable);
+
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+        assertEquals(1, result.getItems().size());
+        var item = result.getItems().get(0);
+        assertEquals("Shop Cong Nghe UTC2", item.getStoreName());
+        assertEquals("Shop Cong Nghe UTC2", item.getName());
+        assertEquals(25L, item.getProductsCount());
+        assertEquals(100L, item.getOrdersCount());
+        assertEquals(4.9, item.getRatingAvg());
     }
 }

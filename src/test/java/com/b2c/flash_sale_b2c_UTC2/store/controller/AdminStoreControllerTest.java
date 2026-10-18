@@ -141,4 +141,67 @@ class AdminStoreControllerTest {
                 .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data.status").value("APPROVED"));
     }
+
+    @Test
+    @DisplayName("Chưa đăng nhập lấy danh sách gian hàng trả về 401 Unauthorized")
+    void getAdminStores_Unauthenticated_ShouldReturn401() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/v1/admin/stores"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(401));
+    }
+
+    @Test
+    @DisplayName("Buyer gọi API lấy danh sách gian hàng của Admin bị 403 Forbidden")
+    void getAdminStores_BuyerForbidden_ShouldReturn403() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/v1/admin/stores")
+                        .header("Authorization", "Bearer " + buyerToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(403));
+    }
+
+    @Test
+    @DisplayName("Seller gọi API lấy danh sách gian hàng của Admin bị 403 Forbidden")
+    void getAdminStores_SellerForbidden_ShouldReturn403() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/v1/admin/stores")
+                        .header("Authorization", "Bearer " + sellerToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(403));
+    }
+
+    @Test
+    @DisplayName("Admin lấy danh sách gian hàng thành công trả về 200 OK và PageResponse")
+    void getAdminStores_Admin_ShouldReturn200() throws Exception {
+        var storeItem = com.b2c.flash_sale_b2c_UTC2.store.dto.AdminStoreResponse.builder()
+                .id(1L)
+                .storeName("Anker Store")
+                .name("Anker Store")
+                .status("PENDING")
+                .ownerEmail("seller@example.com")
+                .productsCount(12L)
+                .ordersCount(45L)
+                .ratingAvg(4.8)
+                .build();
+        var pageResponse = com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse.<com.b2c.flash_sale_b2c_UTC2.store.dto.AdminStoreResponse>builder()
+                .items(java.util.List.of(storeItem))
+                .pageNumber(0)
+                .pageSize(10)
+                .totalElements(1)
+                .totalPages(1)
+                .isFirst(true)
+                .isLast(true)
+                .build();
+
+        when(storeService.getAdminStores(eq("PENDING"), eq("Anker"), any())).thenReturn(pageResponse);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/v1/admin/stores")
+                        .param("status", "PENDING")
+                        .param("search", "Anker")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.items[0].id").value(1))
+                .andExpect(jsonPath("$.data.items[0].storeName").value("Anker Store"))
+                .andExpect(jsonPath("$.data.items[0].name").value("Anker Store"))
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
 }

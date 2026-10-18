@@ -99,4 +99,7 @@ public interface ProductReviewRepository extends JpaRepository<ProductReview, Lo
 
     @Query("SELECT COUNT(r) FROM ProductReview r WHERE r.product.store.id = :storeId AND r.sellerReply IS NOT NULL")
     long countRepliedByStoreId(@Param("storeId") Long storeId);
+
+    @Query("SELECT r.product.store.id, AVG(r.rating) FROM ProductReview r WHERE r.product.store.id IN :storeIds AND r.status = 'VISIBLE' GROUP BY r.product.store.id")
+    List<Object[]> avgRatingsByStoreIds(@Param("storeIds") List<Long> storeIds);
 }
