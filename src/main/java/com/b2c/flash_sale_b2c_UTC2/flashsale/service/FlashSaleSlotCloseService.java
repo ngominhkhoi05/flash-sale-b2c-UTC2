@@ -55,6 +55,18 @@ public class FlashSaleSlotCloseService {
             }
         }
 
+        if (Boolean.TRUE.equals(slot.getIsStockRolledBack())) {
+            log.info("Slot ID: {} already had stock rolled back. Skipping rollback to prevent double replenishment.", slot.getId());
+            slot.setStatus("ENDED");
+            slotRepository.save(slot);
+            try {
+                wsBroadcaster.broadcastSlotStatus(slot.getId(), "ENDED");
+            } catch (Exception e) {
+                log.warn("[WS] Failed to broadcast slot ENDED for slotId={}: {}", slot.getId(), e.getMessage());
+            }
+            return;
+        }
+
         log.info("Closing FlashSaleSlot ID: {} and returning unsold stock...", slot.getId());
         List<FlashSaleItem> items = itemRepository.findBySlotId(slot.getId());
 

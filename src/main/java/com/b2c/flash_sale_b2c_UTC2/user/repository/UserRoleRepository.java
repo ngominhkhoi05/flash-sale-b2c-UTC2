@@ -10,4 +10,7 @@ import java.util.List;
 public interface UserRoleRepository extends JpaRepository<UserRole, Long> {
     List<UserRole> findByUserId(Long userId);
     boolean existsByUserIdAndRoleId(Long userId, Short roleId);
+
+    @org.springframework.data.jpa.repository.Query("SELECT ur FROM UserRole ur JOIN FETCH ur.role r WHERE ur.user.id IN :userIds")
+    List<UserRole> findByUserIdsWithRole(@org.springframework.data.repository.query.Param("userIds") List<Long> userIds);
 }

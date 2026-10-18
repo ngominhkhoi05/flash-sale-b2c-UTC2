@@ -71,6 +71,7 @@ public class StoreController {
 
     @Operation(summary = "Cập nhật thông tin gian hàng của tôi", description = "Seller cập nhật tên, logo, mô tả gian hàng")
     @PutMapping("/me")
+    @PreAuthorize("hasRole('SELLER')")
     public ResponseEntity<ApiResponse<StoreResponse>> updateMyStore(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @Valid @RequestBody UpdateStoreRequest request
@@ -99,6 +100,7 @@ public class StoreController {
 
     @Operation(summary = "Lấy danh sách địa chỉ kho của gian hàng", description = "Seller lấy danh sách địa chỉ kho lấy hàng của shop")
     @GetMapping("/me/addresses")
+    @PreAuthorize("hasRole('SELLER')")
     public ResponseEntity<ApiResponse<List<AddressResponse>>> getStoreAddresses(
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
@@ -108,6 +110,7 @@ public class StoreController {
 
     @Operation(summary = "Thêm địa chỉ kho cho gian hàng", description = "Seller thêm mới địa chỉ kho lấy hàng")
     @PostMapping("/me/addresses")
+    @PreAuthorize("hasRole('SELLER')")
     public ResponseEntity<ApiResponse<AddressResponse>> createStoreAddress(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @Valid @RequestBody CreateAddressRequest request
@@ -119,6 +122,7 @@ public class StoreController {
 
     @Operation(summary = "Cập nhật địa chỉ kho của gian hàng", description = "Seller cập nhật thông tin địa chỉ kho")
     @PutMapping("/me/addresses/{addressId}")
+    @PreAuthorize("hasRole('SELLER')")
     public ResponseEntity<ApiResponse<AddressResponse>> updateStoreAddress(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @PathVariable("addressId") Long addressId,
@@ -130,6 +134,7 @@ public class StoreController {
 
     @Operation(summary = "Xóa địa chỉ kho của gian hàng", description = "Seller xóa địa chỉ kho")
     @DeleteMapping("/me/addresses/{addressId}")
+    @PreAuthorize("hasRole('SELLER')")
     public ResponseEntity<ApiResponse<Void>> deleteStoreAddress(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @PathVariable("addressId") Long addressId
@@ -140,6 +145,7 @@ public class StoreController {
 
     @Operation(summary = "Đặt địa chỉ kho làm mặc định", description = "Đặt một địa chỉ kho làm kho lấy hàng chính")
     @PatchMapping("/me/addresses/{addressId}/default")
+    @PreAuthorize("hasRole('SELLER')")
     public ResponseEntity<ApiResponse<AddressResponse>> setDefaultStoreAddress(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @PathVariable("addressId") Long addressId
@@ -150,6 +156,7 @@ public class StoreController {
 
     @Operation(summary = "Upload logo cho gian hàng", description = "Tự động soft-delete logo cũ (1 store = 1 logo ACTIVE).")
     @PostMapping(value = "/me/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('SELLER')")
     public ResponseEntity<ApiResponse<ImageResponse>> uploadLogo(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @RequestPart("file") MultipartFile file

@@ -39,7 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = StoreController.class)
-@Import({SecurityConfig.class, JwtAuthenticationFilter.class, JwtProperties.class})
+@Import({SecurityConfig.class, JwtAuthenticationFilter.class, JwtProperties.class, com.b2c.flash_sale_b2c_UTC2.common.exception.GlobalExceptionHandler.class})
 @TestPropertySource(properties = {
         "jwt.secret=MockSecureSecretForTestingJwtAuthenticationFilter2026"
 })
@@ -63,17 +63,27 @@ class StoreControllerTest {
     private UserDetailsService userDetailsService;
 
     private final String sellerToken = "valid_seller_token";
+    private final String buyerToken = "valid_buyer_token";
     private CustomUserDetails sellerDetails;
+    private CustomUserDetails buyerDetails;
 
     @BeforeEach
     void setUp() {
         User seller = User.builder().id(2L).email("seller@example.com").build();
         sellerDetails = new CustomUserDetails(seller, Collections.singletonList(new SimpleGrantedAuthority("ROLE_SELLER")));
 
+        User buyer = User.builder().id(1L).email("buyer@example.com").build();
+        buyerDetails = new CustomUserDetails(buyer, Collections.singletonList(new SimpleGrantedAuthority("ROLE_BUYER")));
+
         when(jwtService.extractTokenType(sellerToken)).thenReturn("ACCESS");
         when(jwtService.extractUsername(sellerToken)).thenReturn("seller@example.com");
         when(jwtService.isTokenValid(eq(sellerToken), any())).thenReturn(true);
         when(userDetailsService.loadUserByUsername("seller@example.com")).thenReturn(sellerDetails);
+
+        when(jwtService.extractTokenType(buyerToken)).thenReturn("ACCESS");
+        when(jwtService.extractUsername(buyerToken)).thenReturn("buyer@example.com");
+        when(jwtService.isTokenValid(eq(buyerToken), any())).thenReturn(true);
+        when(userDetailsService.loadUserByUsername("buyer@example.com")).thenReturn(buyerDetails);
     }
 
     @Test
@@ -188,5 +198,47 @@ class StoreControllerTest {
                         .header("Authorization", "Bearer " + sellerToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200));
+    }
+
+    @Test
+    @DisplayName("Buyer gọi API cập nhật gian hàng bị chặn với 403 Forbidden")
+    void updateMyStore_BuyerForbidden_ShouldReturn403() throws Exception {
+        UpdateStoreRequest request = UpdateStoreRequest.builder().storeName("Shop Hack").build();
+
+        mockMvc.perform(put("/api/v1/stores/me")
+                        .header("Authorization", "Bearer " + buyerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(403));
+    }
+
+    @Test
+    @DisplayName("Buyer gọi API lấy địa chỉ kho gian hàng bị chặn với 403 Forbidden")
+    void getStoreAddresses_BuyerForbidden_ShouldReturn403() throws Exception {
+        mockMvc.perform(get("/api/v1/stores/me/addresses")
+                        .header("Authorization", "Bearer " + buyerToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(403));
+    }
+
+    @Test
+    @DisplayName("Buyer gọi API thêm địa chỉ kho gian hàng bị chặn với 403 Forbidden")
+    void createStoreAddress_BuyerForbidden_ShouldReturn403() throws Exception {
+        CreateAddressRequest request = CreateAddressRequest.builder()
+                .contactName("Kho Hack")
+                .phone("0912345678")
+                .province("TP.HCM")
+                .district("Thu Duc")
+                .ward("Tang Nhon Phu A")
+                .detailAddress("450 Le Van Viet")
+                .build();
+
+        mockMvc.perform(post("/api/v1/stores/me/addresses")
+                        .header("Authorization", "Bearer " + buyerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(403));
     }
 }

@@ -1036,4 +1036,125 @@ public class ProductServiceImpl implements ProductService {
                 .label(label)
                 .build();
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<com.b2c.flash_sale_b2c_UTC2.product.dto.AdminProductResponse> getAdminProducts(
+            String status,
+            Integer categoryId,
+            String search,
+            Pageable pageable
+    ) {
+        String trimmedStatus = (status != null && !status.trim().isEmpty() && !"ALL".equalsIgnoreCase(status.trim()))
+                ? status.trim().toUpperCase()
+                : null;
+        Integer safeCategoryId = (categoryId != null && categoryId > 0) ? categoryId : null;
+        String trimmedSearch = (search != null && !search.trim().isEmpty()) ? search.trim() : null;
+
+        Page<Product> page = productRepository.findAdminProducts(trimmedStatus, safeCategoryId, trimmedSearch, pageable);
+        if (page.isEmpty()) {
+            return PageResponse.of(page, java.util.Collections.emptyList());
+        }
+
+        List<Long> productIds = page.getContent().stream().map(Product::getId).toList();
+
+        // 1. Batch load variants
+        List<ProductVariant> variants = productVariantRepository.findByProductIdIn(productIds);
+        Map<Long, List<ProductVariant>> variantMap = variants.stream()
+                .collect(Collectors.groupingBy(v -> v.getProduct().getId()));
+
+        // 2. Batch load primary images
+        Map<Long, com.b2c.flash_sale_b2c_UTC2.image.dto.ImageResponse> imageMap =
+                imageService.getPrimaryImagesByOwnerIds(com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType.PRODUCT, productIds);
+
+        List<com.b2c.flash_sale_b2c_UTC2.product.dto.AdminProductResponse> content = page.getContent().stream().map(p -> {
+            Long pid = p.getId();
+            List<ProductVariant> pVariants = variantMap.getOrDefault(pid, java.util.Collections.emptyList());
+            BigDecimal minPrice = null, maxPrice = null;
+            int totalStock = 0;
+            for (ProductVariant v : pVariants) {
+                if (v.getOriginalPrice() != null) {
+                    if (minPrice == null || v.getOriginalPrice().compareTo(minPrice) < 0) minPrice = v.getOriginalPrice();
+                    if (maxPrice == null || v.getOriginalPrice().compareTo(maxPrice) > 0) maxPrice = v.getOriginalPrice();
+                }
+                totalStock += (v.getStockQuantity() != null ? v.getStockQuantity() : 0);
+            }
+            if (minPrice == null) minPrice = BigDecimal.ZERO;
+            if (maxPrice == null) maxPrice = BigDecimal.ZERO;
+
+            var img = imageMap.get(pid);
+            String imgUrl = img != null ? img.getUrl() : null;
+
+            return com.b2c.flash_sale_b2c_UTC2.product.dto.AdminProductResponse.builder()
+                    .id(pid)
+                    .name(p.getName())
+                    .slug(p.getSlug())
+                    .storeId(p.getStore() != null ? p.getStore().getId() : null)
+                    .storeName(p.getStore() != null ? p.getStore().getStoreName() : "")
+                    .categoryId(p.getCategory() != null ? p.getCategory().getId() : null)
+                    .categoryName(p.getCategory() != null ? p.getCategory().getName() : "")
+                    .minPrice(minPrice)
+                    .maxPrice(maxPrice)
+                    .totalStock(totalStock)
+                    .status(p.getStatus())
+                    .primaryImageUrl(imgUrl)
+                    .imageUrl(imgUrl)
+                    .createdAt(p.getCreatedAt())
+                    .build();
+        }).toList();
+
+        return PageResponse.of(page, content);
+    }
+
+    @Override
+    @Transactional
+    public com.b2c.flash_sale_b2c_UTC2.product.dto.AdminProductResponse updateProductStatusForAdmin(
+            Long productId,
+            com.b2c.flash_sale_b2c_UTC2.product.dto.UpdateProductStatusRequest request
+    ) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new BusinessException(ProductErrorCode.PRODUCT_NOT_FOUND));
+
+        String newStatus = request.getStatus().trim().toUpperCase();
+        if (!"ACTIVE".equals(newStatus) && !"INACTIVE".equals(newStatus) && !"BANNED".equals(newStatus)) {
+            throw new BusinessException(ProductErrorCode.INVALID_STATUS);
+        }
+
+        product.setStatus(newStatus);
+        product = productRepository.save(product);
+        log.info("Admin đã cập nhật trạng thái sản phẩm id={} thành {}, lý do: {}", productId, newStatus, request.getReason());
+
+        List<ProductVariant> variants = productVariantRepository.findByProductId(productId);
+        BigDecimal minPrice = null, maxPrice = null;
+        int totalStock = 0;
+        for (ProductVariant v : variants) {
+            if (v.getOriginalPrice() != null) {
+                if (minPrice == null || v.getOriginalPrice().compareTo(minPrice) < 0) minPrice = v.getOriginalPrice();
+                if (maxPrice == null || v.getOriginalPrice().compareTo(maxPrice) > 0) maxPrice = v.getOriginalPrice();
+            }
+            totalStock += (v.getStockQuantity() != null ? v.getStockQuantity() : 0);
+        }
+        if (minPrice == null) minPrice = BigDecimal.ZERO;
+        if (maxPrice == null) maxPrice = BigDecimal.ZERO;
+
+        var img = imageService.getPrimaryImage(com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType.PRODUCT, productId);
+        String imgUrl = img != null ? img.getUrl() : null;
+
+        return com.b2c.flash_sale_b2c_UTC2.product.dto.AdminProductResponse.builder()
+                .id(product.getId())
+                .name(product.getName())
+                .slug(product.getSlug())
+                .storeId(product.getStore() != null ? product.getStore().getId() : null)
+                .storeName(product.getStore() != null ? product.getStore().getStoreName() : "")
+                .categoryId(product.getCategory() != null ? product.getCategory().getId() : null)
+                .categoryName(product.getCategory() != null ? product.getCategory().getName() : "")
+                .minPrice(minPrice)
+                .maxPrice(maxPrice)
+                .totalStock(totalStock)
+                .status(product.getStatus())
+                .primaryImageUrl(imgUrl)
+                .imageUrl(imgUrl)
+                .createdAt(product.getCreatedAt())
+                .build();
+    }
 }

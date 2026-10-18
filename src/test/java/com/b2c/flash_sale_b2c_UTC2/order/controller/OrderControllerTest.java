@@ -193,7 +193,7 @@ class OrderControllerTest {
                 OrderResponse.builder().id(1000L).orderCode("ORD-SELLER-1").build()
         )));
 
-        when(orderService.getSellerOrders(eq(2L), any(Pageable.class))).thenReturn(pageResponse);
+        when(orderService.getSellerOrders(eq(2L), any(), any(Pageable.class))).thenReturn(pageResponse);
 
         mockMvc.perform(get("/api/v1/seller/orders")
                         .header("Authorization", "Bearer " + sellerToken)

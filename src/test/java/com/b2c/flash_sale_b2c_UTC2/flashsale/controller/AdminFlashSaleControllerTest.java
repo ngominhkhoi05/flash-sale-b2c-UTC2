@@ -163,10 +163,184 @@ class AdminFlashSaleControllerTest {
     }
 
     @Test
+    @DisplayName("POST /api/v1/admin/flash-sales/items/batch-approve - Returns structured failedReasons")
+    void batchApproveItems_WithFailedReasons() throws Exception {
+        BatchApproveFlashSaleItemsRequest request = new BatchApproveFlashSaleItemsRequest();
+        request.setItemIds(List.of(101L, 103L));
+
+        BatchApproveFlashSaleItemsResponse response = BatchApproveFlashSaleItemsResponse.builder()
+                .approvedItemIds(List.of(101L))
+                .failedReasons(List.of(
+                        com.b2c.flash_sale_b2c_UTC2.flashsale.dto.BatchApproveFailedItem.builder()
+                                .itemId(103L)
+                                .reason("Item không tồn tại hoặc đã được duyệt")
+                                .build()
+                ))
+                .build();
+
+        when(itemService.batchApproveItems(any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/admin/flash-sales/items/batch-approve")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.approvedItemIds[0]").value(101))
+                .andExpect(jsonPath("$.data.failedReasons[0].itemId").value(103))
+                .andExpect(jsonPath("$.data.failedReasons[0].reason").value("Item không tồn tại hoặc đã được duyệt"));
+    }
+
+    @Test
     @DisplayName("GET /api/v1/admin/flash-sales/slots/5/items - 403 Forbidden for SELLER")
     void getSlotItems_Forbidden_ForSeller() throws Exception {
         mockMvc.perform(get("/api/v1/admin/flash-sales/slots/5/items")
                         .header("Authorization", "Bearer " + sellerToken))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/admin/flash-sales/slots/{id}/telemetry - 200 Success for ADMIN")
+    void getSlotTelemetry_Success() throws Exception {
+        com.b2c.flash_sale_b2c_UTC2.flashsale.dto.RealtimeTelemetryResponse telemetry =
+                com.b2c.flash_sale_b2c_UTC2.flashsale.dto.RealtimeTelemetryResponse.builder()
+                        .slotId(1L)
+                        .status("ACTIVE")
+                        .isPaused(false)
+                        .currentRps(150L)
+                        .totalRequests(5000L)
+                        .activeLocks(12L)
+                        .successfulOrders(340L)
+                        .totalRevenue(new java.math.BigDecimal("34000000"))
+                        .failedRequests(5L)
+                        .expiredReleases(2L)
+                        .oversoldIncidents(0)
+                        .redisLatencyMs(1.1)
+                        .systemHealth("OPTIMAL")
+                        .build();
+
+        when(slotService.getSlotTelemetry(1L)).thenReturn(telemetry);
+
+        mockMvc.perform(get("/api/v1/admin/flash-sales/slots/1/telemetry")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.slotId").value(1))
+                .andExpect(jsonPath("$.data.currentRps").value(150))
+                .andExpect(jsonPath("$.data.isPaused").value(false))
+                .andExpect(jsonPath("$.data.oversoldIncidents").value(0));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/admin/flash-sales/slots/{id}/telemetry - 404 when slot not found")
+    void getSlotTelemetry_NotFound() throws Exception {
+        when(slotService.getSlotTelemetry(999L))
+                .thenThrow(new com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException(
+                        com.b2c.flash_sale_b2c_UTC2.flashsale.exception.FlashSaleErrorCode.SLOT_NOT_FOUND));
+
+        mockMvc.perform(get("/api/v1/admin/flash-sales/slots/999/telemetry")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/admin/flash-sales/slots/{id}/emergency-pause - 200 Success for ADMIN")
+    void emergencyPause_Success() throws Exception {
+        com.b2c.flash_sale_b2c_UTC2.flashsale.dto.EmergencyPauseRequest request =
+                com.b2c.flash_sale_b2c_UTC2.flashsale.dto.EmergencyPauseRequest.builder()
+                        .reason("High load detected")
+                        .rollbackStock(true)
+                        .build();
+
+        com.b2c.flash_sale_b2c_UTC2.flashsale.dto.EmergencyPauseResponse response =
+                com.b2c.flash_sale_b2c_UTC2.flashsale.dto.EmergencyPauseResponse.builder()
+                        .slotId(1L)
+                        .status("PAUSED")
+                        .isPaused(true)
+                        .stockRolledBack(true)
+                        .rolledBackItemsCount(3)
+                        .totalStockReturned(45)
+                        .message("Đã dừng phiên thành công")
+                        .build();
+
+        when(slotService.emergencyPauseSlot(eq(1L), any(com.b2c.flash_sale_b2c_UTC2.flashsale.dto.EmergencyPauseRequest.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/admin/flash-sales/slots/1/emergency-pause")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.slotId").value(1))
+                .andExpect(jsonPath("$.data.isPaused").value(true))
+                .andExpect(jsonPath("$.data.rolledBackItemsCount").value(3))
+                .andExpect(jsonPath("$.data.totalStockReturned").value(45));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/admin/flash-sales/slots/{id}/emergency-pause - 400 when slot not active")
+    void emergencyPause_NotActive() throws Exception {
+        com.b2c.flash_sale_b2c_UTC2.flashsale.dto.EmergencyPauseRequest request =
+                com.b2c.flash_sale_b2c_UTC2.flashsale.dto.EmergencyPauseRequest.builder()
+                        .reason("Trying to pause already paused slot")
+                        .rollbackStock(true)
+                        .build();
+
+        when(slotService.emergencyPauseSlot(eq(1L), any()))
+                .thenThrow(new com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException(
+                        com.b2c.flash_sale_b2c_UTC2.flashsale.exception.FlashSaleErrorCode.SLOT_NOT_ACTIVE));
+
+        mockMvc.perform(post("/api/v1/admin/flash-sales/slots/1/emergency-pause")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/admin/flash-sales/slots/{id}/emergency-pause - 403 Forbidden for SELLER")
+    void emergencyPause_Forbidden_ForSeller() throws Exception {
+        com.b2c.flash_sale_b2c_UTC2.flashsale.dto.EmergencyPauseRequest request =
+                com.b2c.flash_sale_b2c_UTC2.flashsale.dto.EmergencyPauseRequest.builder()
+                        .reason("Unauthorized attempt")
+                        .rollbackStock(true)
+                        .build();
+
+        mockMvc.perform(post("/api/v1/admin/flash-sales/slots/1/emergency-pause")
+                        .header("Authorization", "Bearer " + sellerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/admin/flash-sales/slots/{id}/skus - 200 Success for ADMIN")
+    void getLiveSkus_Success() throws Exception {
+        com.b2c.flash_sale_b2c_UTC2.flashsale.dto.LiveSkuInventoryResponse item =
+                com.b2c.flash_sale_b2c_UTC2.flashsale.dto.LiveSkuInventoryResponse.builder()
+                        .id(101L)
+                        .skuCode("SKU-101")
+                        .productName("Test Product")
+                        .variantName("Default")
+                        .storeName("Official Store")
+                        .allocatedStock(100)
+                        .availableStock(80)
+                        .holdingStock(0)
+                        .soldStock(20)
+                        .status("SELLING")
+                        .icon("inventory_2")
+                        .build();
+
+        when(slotService.getLiveSkus(1L)).thenReturn(List.of(item));
+
+        mockMvc.perform(get("/api/v1/admin/flash-sales/slots/1/skus")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[0].id").value(101))
+                .andExpect(jsonPath("$.data[0].status").value("SELLING"));
     }
 }

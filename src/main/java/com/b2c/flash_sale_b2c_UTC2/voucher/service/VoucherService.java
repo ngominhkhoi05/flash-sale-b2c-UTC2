@@ -48,4 +48,25 @@ public interface VoucherService {
      * @return Thông tin voucher sau khi lưu
      */
     com.b2c.flash_sale_b2c_UTC2.voucher.dto.UserVoucherResponse saveVoucherToWallet(Long userId, com.b2c.flash_sale_b2c_UTC2.voucher.dto.SaveVoucherRequest request);
+
+    com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse<VoucherResponse> getSellerVouchers(
+            Long sellerUserId,
+            String status,
+            org.springframework.data.domain.Pageable pageable
+    );
+
+    VoucherResponse updateSellerVoucherStatus(
+            Long sellerUserId,
+            Long voucherId,
+            com.b2c.flash_sale_b2c_UTC2.voucher.dto.UpdateVoucherStatusRequest request
+    );
+
+    com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse<VoucherResponse> getAdminVouchers(
+            String scope,
+            String status,
+            String search,
+            org.springframework.data.domain.Pageable pageable
+    );
+
+    com.b2c.flash_sale_b2c_UTC2.voucher.dto.AdminVoucherKpisResponse getAdminVoucherKpis();
 }

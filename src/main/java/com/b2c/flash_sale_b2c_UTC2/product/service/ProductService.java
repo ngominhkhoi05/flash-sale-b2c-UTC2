@@ -34,4 +34,16 @@ public interface ProductService {
     PageResponse<ProductSummaryResponse> getSellerProducts(Long userId, String status, Pageable pageable);
 
     ProductDetailResponse getSellerProductDetail(Long userId, Long productId);
+
+    PageResponse<com.b2c.flash_sale_b2c_UTC2.product.dto.AdminProductResponse> getAdminProducts(
+            String status,
+            Integer categoryId,
+            String search,
+            Pageable pageable
+    );
+
+    com.b2c.flash_sale_b2c_UTC2.product.dto.AdminProductResponse updateProductStatusForAdmin(
+            Long productId,
+            com.b2c.flash_sale_b2c_UTC2.product.dto.UpdateProductStatusRequest request
+    );
 }
