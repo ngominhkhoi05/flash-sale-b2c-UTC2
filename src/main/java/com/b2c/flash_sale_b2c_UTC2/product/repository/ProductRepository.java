@@ -156,4 +156,33 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
 
     @Query("SELECT p.store.id, count(p) FROM Product p WHERE p.store.id IN :storeIds GROUP BY p.store.id")
     List<Object[]> countProductsByStoreIds(@Param("storeIds") List<Long> storeIds);
+
+    /**
+     * Admin product list: status + categoryId + search, paged, with eager store + category.
+     * Mirrors {@link #findSellerProducts(Long, String, Pageable)} but admin-side: searches across
+     * all stores and includes a LIKE-name filter.
+     *
+     * <p>Filters are optional; null/empty/0 means "do not apply". Caller is expected to pre-trim
+     * string inputs (see {@code ProductServiceImpl.listAdminProducts}).
+     */
+    @Query(value = """
+        SELECT p FROM Product p
+        JOIN FETCH p.store s
+        JOIN FETCH p.category c
+        WHERE (:status IS NULL OR p.status = :status)
+        AND (:categoryId IS NULL OR c.id = :categoryId)
+        AND (:search IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%')))
+        """,
+        countQuery = """
+        SELECT count(p) FROM Product p
+        WHERE (:status IS NULL OR p.status = :status)
+        AND (:categoryId IS NULL OR p.category.id = :categoryId)
+        AND (:search IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%')))
+        """)
+    Page<Product> findAdminProducts(
+            @Param("status") String status,
+            @Param("categoryId") Integer categoryId,
+            @Param("search") String search,
+            Pageable pageable
+    );
 }

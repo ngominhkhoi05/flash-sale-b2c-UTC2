@@ -76,4 +76,15 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     @Query("SELECT o.store.id, count(o) FROM Order o WHERE o.store.id IN :storeIds GROUP BY o.store.id")
     List<Object[]> countOrdersByStoreIds(@Param("storeIds") List<Long> storeIds);
+
+    /**
+     * Count orders grouped by buyerId (for admin user list sidebar summary).
+     * Returns rows of {@code [buyerId(Long), orderCount(Long)]} — buyers with zero orders are
+     * NOT included; caller must default missing keys to 0.
+     *
+     * <p>Used by {@code UserServiceImpl.listAdminUsers} to batch-load order counts for many
+     * users at once, avoiding N+1.
+     */
+    @Query("SELECT o.buyerId, count(o) FROM Order o WHERE o.buyerId IN :buyerIds GROUP BY o.buyerId")
+    List<Object[]> countOrdersByBuyerIds(@Param("buyerIds") List<Long> buyerIds);
 }
