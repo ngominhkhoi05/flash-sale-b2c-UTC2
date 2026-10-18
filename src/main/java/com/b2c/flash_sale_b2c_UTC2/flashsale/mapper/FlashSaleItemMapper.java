@@ -10,5 +10,16 @@ public interface FlashSaleItemMapper {
 
     @Mapping(source = "slot.id", target = "slotId")
     @Mapping(source = "variant.id", target = "variantId")
+    @Mapping(source = "slot.title", target = "slotTitle")
+    @Mapping(source = "slot.startTime", target = "slotStartTime")
+    @Mapping(source = "slot.endTime", target = "slotEndTime")
+    @Mapping(source = "slot.status", target = "slotStatus")
+    @Mapping(source = "variant.product.store.id", target = "storeId")
+    @Mapping(source = "variant.product.store.storeName", target = "storeName")
+    @Mapping(source = "variant.product.id", target = "productId")
+    @Mapping(source = "variant.product.name", target = "productName")
+    @Mapping(source = "variant.sku", target = "skuCode")
+    @Mapping(source = "variant.variantName", target = "variantName")
+    @Mapping(source = "variant.originalPrice", target = "originalPrice")
     FlashSaleItemResponse toResponse(FlashSaleItem item);
 }
