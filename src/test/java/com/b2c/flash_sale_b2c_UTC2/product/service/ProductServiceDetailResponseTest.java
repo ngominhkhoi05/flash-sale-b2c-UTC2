@@ -140,7 +140,6 @@ class ProductServiceDetailResponseTest {
     private void defaultMocks(Long productId) {
         when(productReviewRepository.avgRatingByProductId(productId)).thenReturn(null);
         when(productReviewRepository.countByProductIdAndVisible(productId)).thenReturn(0L);
-        when(productRepository.findPriceRangeByProductId(productId)).thenReturn(null);
         when(flashSaleItemRepository.findActiveByProductId(productId)).thenReturn(List.of());
         when(imageService.getPrimaryImage(any(), eq(productId))).thenReturn(null);
         when(imageService.listImages(any(), eq(productId))).thenReturn(List.of());
@@ -166,7 +165,6 @@ class ProductServiceDetailResponseTest {
                     .thenReturn(List.of());
             when(productReviewRepository.avgRatingByProductId(productId)).thenReturn(4.5);
             when(productReviewRepository.countByProductIdAndVisible(productId)).thenReturn(10L);
-            when(productRepository.findPriceRangeByProductId(productId)).thenReturn(null);
             when(flashSaleItemRepository.findActiveByProductId(productId)).thenReturn(List.of());
             when(imageService.getPrimaryImage(any(), eq(productId))).thenReturn(null);
             when(imageService.listImages(any(), eq(productId))).thenReturn(List.of());
@@ -211,14 +209,17 @@ class ProductServiceDetailResponseTest {
         void threeActiveVariants_PriceRangeCorrect() {
             Long productId = 200L;
             Product product = makeProduct(productId, 0);
+            List<ProductVariant> variants = List.of(
+                    makeVariant(1L, productId, new BigDecimal("100000")),
+                    makeVariant(2L, productId, new BigDecimal("200000")),
+                    makeVariant(3L, productId, new BigDecimal("300000"))
+            );
             when(productRepository.findByIdWithStoreAndCategory(productId))
                     .thenReturn(java.util.Optional.of(product));
             when(productVariantRepository.findByProductIdAndStatus(productId, "ACTIVE"))
-                    .thenReturn(List.of());
+                    .thenReturn(variants);
             when(productReviewRepository.avgRatingByProductId(productId)).thenReturn(null);
             when(productReviewRepository.countByProductIdAndVisible(productId)).thenReturn(0L);
-            when(productRepository.findPriceRangeByProductId(productId))
-                    .thenReturn(new Object[]{new BigDecimal("100000"), new BigDecimal("300000")});
             when(flashSaleItemRepository.findActiveByProductId(productId)).thenReturn(List.of());
             when(imageService.getPrimaryImage(any(), eq(productId))).thenReturn(null);
             when(imageService.listImages(any(), eq(productId))).thenReturn(List.of());
@@ -228,6 +229,84 @@ class ProductServiceDetailResponseTest {
             assertNotNull(result);
             assertEquals(new BigDecimal("100000"), result.getMinPrice());
             assertEquals(new BigDecimal("300000"), result.getMaxPrice());
+        }
+
+        @Test
+        @DisplayName("Edge: 1 ACTIVE variant priced 500k -> minPrice=maxPrice=500k")
+        void singleActiveVariant_PriceEqualsMinAndMax() {
+            Long productId = 201L;
+            Product product = makeProduct(productId, 0);
+            List<ProductVariant> variants = List.of(
+                    makeVariant(10L, productId, new BigDecimal("500000"))
+            );
+            when(productRepository.findByIdWithStoreAndCategory(productId))
+                    .thenReturn(java.util.Optional.of(product));
+            when(productVariantRepository.findByProductIdAndStatus(productId, "ACTIVE"))
+                    .thenReturn(variants);
+            when(productReviewRepository.avgRatingByProductId(productId)).thenReturn(null);
+            when(productReviewRepository.countByProductIdAndVisible(productId)).thenReturn(0L);
+            when(flashSaleItemRepository.findActiveByProductId(productId)).thenReturn(List.of());
+            when(imageService.getPrimaryImage(any(), eq(productId))).thenReturn(null);
+            when(imageService.listImages(any(), eq(productId))).thenReturn(List.of());
+
+            ProductDetailResponse result = productService.getPublicProductDetail(productId);
+
+            assertNotNull(result);
+            assertEquals(new BigDecimal("500000"), result.getMinPrice());
+            assertEquals(new BigDecimal("500000"), result.getMaxPrice());
+        }
+
+        @Test
+        @DisplayName("Edge: 0 ACTIVE variants -> minPrice=maxPrice=ZERO (Empty-over-Null contract)")
+        void noActiveVariants_BothZero() {
+            Long productId = 202L;
+            Product product = makeProduct(productId, 0);
+            when(productRepository.findByIdWithStoreAndCategory(productId))
+                    .thenReturn(java.util.Optional.of(product));
+            when(productVariantRepository.findByProductIdAndStatus(productId, "ACTIVE"))
+                    .thenReturn(List.of());
+            when(productReviewRepository.avgRatingByProductId(productId)).thenReturn(null);
+            when(productReviewRepository.countByProductIdAndVisible(productId)).thenReturn(0L);
+            when(flashSaleItemRepository.findActiveByProductId(productId)).thenReturn(List.of());
+            when(imageService.getPrimaryImage(any(), eq(productId))).thenReturn(null);
+            when(imageService.listImages(any(), eq(productId))).thenReturn(List.of());
+
+            ProductDetailResponse result = productService.getPublicProductDetail(productId);
+
+            assertNotNull(result);
+            assertEquals(BigDecimal.ZERO, result.getMinPrice());
+            assertEquals(BigDecimal.ZERO, result.getMaxPrice());
+        }
+
+        @Test
+        @DisplayName("Edge: mixed ACTIVE+INACTIVE -> only ACTIVE variant counted (100k, not 999k)")
+        void mixedActiveInactive_OnlyActiveConsidered() {
+            Long productId = 203L;
+            Product product = makeProduct(productId, 0);
+            // Build ACTIVE list passed by repository — INACTIVE variants are NOT in the list
+            // (controller flow filters via findByProductIdAndStatus(productId, "ACTIVE")).
+            // Defensive test: even if an INACTIVE slips in, it must be ignored by service.
+            ProductVariant active = makeVariant(20L, productId, new BigDecimal("100000"));
+            active.setStatus("ACTIVE");
+            ProductVariant inactive = makeVariant(21L, productId, new BigDecimal("999000"));
+            inactive.setStatus("INACTIVE");
+            List<ProductVariant> variants = List.of(active, inactive);
+
+            when(productRepository.findByIdWithStoreAndCategory(productId))
+                    .thenReturn(java.util.Optional.of(product));
+            when(productVariantRepository.findByProductIdAndStatus(productId, "ACTIVE"))
+                    .thenReturn(variants);
+            when(productReviewRepository.avgRatingByProductId(productId)).thenReturn(null);
+            when(productReviewRepository.countByProductIdAndVisible(productId)).thenReturn(0L);
+            when(flashSaleItemRepository.findActiveByProductId(productId)).thenReturn(List.of());
+            when(imageService.getPrimaryImage(any(), eq(productId))).thenReturn(null);
+            when(imageService.listImages(any(), eq(productId))).thenReturn(List.of());
+
+            ProductDetailResponse result = productService.getPublicProductDetail(productId);
+
+            assertNotNull(result);
+            assertEquals(new BigDecimal("100000"), result.getMinPrice());
+            assertEquals(new BigDecimal("100000"), result.getMaxPrice());
         }
     }
 
