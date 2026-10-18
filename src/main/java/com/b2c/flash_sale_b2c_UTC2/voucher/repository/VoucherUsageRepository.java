@@ -12,6 +12,7 @@ public interface VoucherUsageRepository extends JpaRepository<VoucherUsage, Long
     Optional<VoucherUsage> findByOrderId(Long orderId);
     List<VoucherUsage> findByUserId(Long userId);
     long countByVoucherIdAndUserId(Long voucherId, Long userId);
+    boolean existsByVoucherId(Long voucherId);
 
     @org.springframework.data.jpa.repository.Query("SELECT vu.voucher.id, COUNT(vu.id) FROM VoucherUsage vu WHERE vu.user.id = :userId AND vu.voucher.id IN :voucherIds GROUP BY vu.voucher.id")
     List<Object[]> countByUserIdAndVoucherIdIn(@org.springframework.data.repository.query.Param("userId") Long userId, @org.springframework.data.repository.query.Param("voucherIds") List<Long> voucherIds);

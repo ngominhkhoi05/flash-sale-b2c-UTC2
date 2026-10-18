@@ -19,6 +19,7 @@ import com.b2c.flash_sale_b2c_UTC2.voucher.exception.VoucherErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.voucher.mapper.VoucherMapper;
 import com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse;
 import com.b2c.flash_sale_b2c_UTC2.voucher.dto.AdminVoucherKpisResponse;
+import com.b2c.flash_sale_b2c_UTC2.voucher.dto.UpdateVoucherRequest;
 import com.b2c.flash_sale_b2c_UTC2.voucher.dto.UpdateVoucherStatusRequest;
 import com.b2c.flash_sale_b2c_UTC2.voucher.repository.UserVoucherRepository;
 import com.b2c.flash_sale_b2c_UTC2.voucher.repository.VoucherRepository;
@@ -413,6 +414,111 @@ public class VoucherServiceImpl implements VoucherService {
         voucher = voucherRepository.save(voucher);
         log.info("Seller userId={} cập nhật trạng thái voucher id={} thành {}", sellerUserId, voucherId, targetStatus);
         return voucherMapper.toResponse(voucher);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public VoucherResponse getSellerVoucherDetail(Long sellerUserId, Long voucherId) {
+        Store store = storeRepository.findByUserId(sellerUserId)
+                .orElseThrow(() -> new BusinessException(StoreErrorCode.STORE_NOT_FOUND));
+
+        Voucher voucher = voucherRepository.findById(voucherId)
+                .orElseThrow(() -> new BusinessException(VoucherErrorCode.VOUCHER_NOT_FOUND));
+
+        if (voucher.getStore() == null || !voucher.getStore().getId().equals(store.getId())) {
+            throw new BusinessException(StoreErrorCode.STORE_ACCESS_DENIED);
+        }
+
+        return voucherMapper.toResponse(voucher);
+    }
+
+    @Override
+    @Transactional
+    public VoucherResponse updateSellerVoucher(Long sellerUserId, Long voucherId, UpdateVoucherRequest request) {
+        Store store = storeRepository.findByUserId(sellerUserId)
+                .orElseThrow(() -> new BusinessException(StoreErrorCode.STORE_NOT_FOUND));
+
+        Voucher voucher = voucherRepository.findById(voucherId)
+                .orElseThrow(() -> new BusinessException(VoucherErrorCode.VOUCHER_NOT_FOUND));
+
+        if (voucher.getStore() == null || !voucher.getStore().getId().equals(store.getId())) {
+            throw new BusinessException(StoreErrorCode.STORE_ACCESS_DENIED);
+        }
+
+        if (request.getTotalQuantity() != null) {
+            int used = voucher.getUsedQuantity() != null ? voucher.getUsedQuantity() : 0;
+            if (request.getTotalQuantity() < used) {
+                throw new BusinessException(VoucherErrorCode.INVALID_TOTAL_QUANTITY);
+            }
+            voucher.setTotalQuantity(request.getTotalQuantity());
+        }
+
+        Instant newStart = request.getStartTime() != null ? request.getStartTime() : voucher.getStartTime();
+        Instant newEnd = request.getEndTime() != null ? request.getEndTime() : voucher.getEndTime();
+        if (newStart != null && newEnd != null && !newEnd.isAfter(newStart)) {
+            throw new BusinessException(VoucherErrorCode.INVALID_VOUCHER_DATES);
+        }
+        if (request.getStartTime() != null) {
+            voucher.setStartTime(request.getStartTime());
+        }
+        if (request.getEndTime() != null) {
+            voucher.setEndTime(request.getEndTime());
+        }
+
+        if (request.getDiscountType() != null && !request.getDiscountType().isBlank()) {
+            String dt = request.getDiscountType().trim().toUpperCase();
+            if ("PERCENTAGE".equals(dt)) {
+                dt = "PERCENT";
+            }
+            voucher.setDiscountType(dt);
+        }
+
+        if (request.getDiscountValue() != null) {
+            if ("PERCENT".equalsIgnoreCase(voucher.getDiscountType()) && request.getDiscountValue().compareTo(BigDecimal.valueOf(100)) > 0) {
+                throw new BusinessException(VoucherErrorCode.INVALID_DISCOUNT_PERCENT);
+            }
+            voucher.setDiscountValue(request.getDiscountValue());
+        }
+
+        if (request.getMinOrderAmount() != null) {
+            voucher.setMinOrderAmount(request.getMinOrderAmount());
+        }
+        if (request.getMaxDiscountAmount() != null) {
+            voucher.setMaxDiscountAmount(request.getMaxDiscountAmount());
+        }
+        if (request.getUserUsageLimit() != null) {
+            voucher.setUserUsageLimit(request.getUserUsageLimit());
+        }
+        if (request.getStatus() != null && !request.getStatus().isBlank()) {
+            voucher.setStatus(request.getStatus().trim().toUpperCase());
+        }
+
+        voucher = voucherRepository.save(voucher);
+        log.info("Seller userId={} cập nhật voucher id={}", sellerUserId, voucherId);
+        return voucherMapper.toResponse(voucher);
+    }
+
+    @Override
+    @Transactional
+    public void deleteSellerVoucher(Long sellerUserId, Long voucherId) {
+        Store store = storeRepository.findByUserId(sellerUserId)
+                .orElseThrow(() -> new BusinessException(StoreErrorCode.STORE_NOT_FOUND));
+
+        Voucher voucher = voucherRepository.findById(voucherId)
+                .orElseThrow(() -> new BusinessException(VoucherErrorCode.VOUCHER_NOT_FOUND));
+
+        if (voucher.getStore() == null || !voucher.getStore().getId().equals(store.getId())) {
+            throw new BusinessException(StoreErrorCode.STORE_ACCESS_DENIED);
+        }
+
+        int used = voucher.getUsedQuantity() != null ? voucher.getUsedQuantity() : 0;
+        if (used > 0 || voucherUsageRepository.existsByVoucherId(voucherId)) {
+            throw new BusinessException(VoucherErrorCode.VOUCHER_CANNOT_DELETE);
+        }
+
+        userVoucherRepository.deleteByVoucherId(voucherId);
+        voucherRepository.delete(voucher);
+        log.info("Seller userId={} đã xóa vĩnh viễn voucher id={}", sellerUserId, voucherId);
     }
 
     @Override

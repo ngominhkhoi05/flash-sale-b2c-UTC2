@@ -61,6 +61,22 @@ public interface VoucherService {
             com.b2c.flash_sale_b2c_UTC2.voucher.dto.UpdateVoucherStatusRequest request
     );
 
+    VoucherResponse getSellerVoucherDetail(
+            Long sellerUserId,
+            Long voucherId
+    );
+
+    VoucherResponse updateSellerVoucher(
+            Long sellerUserId,
+            Long voucherId,
+            com.b2c.flash_sale_b2c_UTC2.voucher.dto.UpdateVoucherRequest request
+    );
+
+    void deleteSellerVoucher(
+            Long sellerUserId,
+            Long voucherId
+    );
+
     com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse<VoucherResponse> getAdminVouchers(
             String scope,
             String status,

@@ -7,6 +7,7 @@ import com.b2c.flash_sale_b2c_UTC2.store.repository.StoreRepository;
 import com.b2c.flash_sale_b2c_UTC2.user.entity.User;
 import com.b2c.flash_sale_b2c_UTC2.voucher.dto.ApplyVoucherRequest;
 import com.b2c.flash_sale_b2c_UTC2.voucher.dto.CreateVoucherRequest;
+import com.b2c.flash_sale_b2c_UTC2.voucher.dto.UpdateVoucherRequest;
 import com.b2c.flash_sale_b2c_UTC2.voucher.dto.VoucherCalculationResponse;
 import com.b2c.flash_sale_b2c_UTC2.voucher.dto.VoucherResponse;
 import com.b2c.flash_sale_b2c_UTC2.voucher.entity.Voucher;
@@ -409,6 +410,137 @@ class VoucherServiceTest {
         assertEquals(1, responses.size());
         assertEquals("UTC2DISCOUNT", responses.get(0).getCode());
         assertEquals("ACTIVE", responses.get(0).getStatus());
+    }
+
+    @Test
+    @DisplayName("Seller xem chi tiết voucher của gian hàng mình thành công")
+    void getSellerVoucherDetail_Success() {
+        when(storeRepository.findByUserId(1L)).thenReturn(Optional.of(sampleStore));
+        when(voucherRepository.findById(100L)).thenReturn(Optional.of(sampleVoucher));
+        when(voucherMapper.toResponse(sampleVoucher)).thenReturn(VoucherResponse.builder().id(100L).code("UTC2DISCOUNT").build());
+
+        VoucherResponse response = voucherService.getSellerVoucherDetail(1L, 100L);
+
+        assertNotNull(response);
+        assertEquals(100L, response.getId());
+        assertEquals("UTC2DISCOUNT", response.getCode());
+    }
+
+    @Test
+    @DisplayName("Seller xem chi tiết voucher ném lỗi khi không tìm thấy voucher")
+    void getSellerVoucherDetail_NotFound_ThrowsException() {
+        when(storeRepository.findByUserId(1L)).thenReturn(Optional.of(sampleStore));
+        when(voucherRepository.findById(999L)).thenReturn(Optional.empty());
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> voucherService.getSellerVoucherDetail(1L, 999L));
+        assertEquals(VoucherErrorCode.VOUCHER_NOT_FOUND, ex.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("Seller xem chi tiết voucher của shop khác ném lỗi VOUCHER_STORE_MISMATCH")
+    void getSellerVoucherDetail_StoreMismatch_ThrowsException() {
+        Store otherStore = Store.builder().id(99L).build();
+        Voucher otherVoucher = Voucher.builder().id(200L).store(otherStore).build();
+
+        when(storeRepository.findByUserId(1L)).thenReturn(Optional.of(sampleStore));
+        when(voucherRepository.findById(200L)).thenReturn(Optional.of(otherVoucher));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> voucherService.getSellerVoucherDetail(1L, 200L));
+        assertEquals(VoucherErrorCode.VOUCHER_STORE_MISMATCH, ex.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("Seller cập nhật voucher thành công")
+    void updateSellerVoucher_Success() {
+        UpdateVoucherRequest updateRequest = UpdateVoucherRequest.builder()
+                .discountType("FIXED_AMOUNT")
+                .discountValue(new BigDecimal("60000.00"))
+                .minOrderAmount(new BigDecimal("250000.00"))
+                .totalQuantity(20)
+                .userUsageLimit(2)
+                .startTime(Instant.now())
+                .endTime(Instant.now().plus(10, ChronoUnit.DAYS))
+                .status("ACTIVE")
+                .build();
+
+        when(storeRepository.findByUserId(1L)).thenReturn(Optional.of(sampleStore));
+        when(voucherRepository.findById(100L)).thenReturn(Optional.of(sampleVoucher));
+        when(voucherRepository.save(any(Voucher.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(voucherMapper.toResponse(any(Voucher.class))).thenReturn(VoucherResponse.builder().id(100L).code("UTC2DISCOUNT").totalQuantity(20).build());
+
+        VoucherResponse response = voucherService.updateSellerVoucher(1L, 100L, updateRequest);
+
+        assertNotNull(response);
+        assertEquals(20, response.getTotalQuantity());
+        verify(voucherRepository).save(sampleVoucher);
+    }
+
+    @Test
+    @DisplayName("Seller cập nhật voucher với tổng số lượng nhỏ hơn số lượng đã dùng ném INVALID_TOTAL_QUANTITY")
+    void updateSellerVoucher_InvalidTotalQuantity_ThrowsException() {
+        Voucher usedVoucher = Voucher.builder()
+                .id(100L)
+                .store(sampleStore)
+                .usedQuantity(5)
+                .build();
+
+        UpdateVoucherRequest updateRequest = UpdateVoucherRequest.builder()
+                .discountType("FIXED_AMOUNT")
+                .discountValue(new BigDecimal("60000.00"))
+                .minOrderAmount(new BigDecimal("250000.00"))
+                .totalQuantity(4) // nhỏ hơn 5
+                .userUsageLimit(1)
+                .startTime(Instant.now())
+                .endTime(Instant.now().plus(10, ChronoUnit.DAYS))
+                .build();
+
+        when(storeRepository.findByUserId(1L)).thenReturn(Optional.of(sampleStore));
+        when(voucherRepository.findById(100L)).thenReturn(Optional.of(usedVoucher));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> voucherService.updateSellerVoucher(1L, 100L, updateRequest));
+        assertEquals(VoucherErrorCode.INVALID_TOTAL_QUANTITY, ex.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("Seller xóa voucher chưa có lượt sử dụng thành công")
+    void deleteSellerVoucher_Success() {
+        when(storeRepository.findByUserId(1L)).thenReturn(Optional.of(sampleStore));
+        when(voucherRepository.findById(100L)).thenReturn(Optional.of(sampleVoucher));
+        when(voucherUsageRepository.existsByVoucherId(100L)).thenReturn(false);
+
+        voucherService.deleteSellerVoucher(1L, 100L);
+
+        verify(userVoucherRepository, times(1)).deleteByVoucherId(100L);
+        verify(voucherRepository, times(1)).delete(sampleVoucher);
+    }
+
+    @Test
+    @DisplayName("Seller xóa voucher thất bại khi đã có lượt sử dụng trong Voucher entity")
+    void deleteSellerVoucher_UsedQuantityGreaterThanZero_ThrowsException() {
+        Voucher usedVoucher = Voucher.builder()
+                .id(100L)
+                .store(sampleStore)
+                .usedQuantity(1)
+                .build();
+
+        when(storeRepository.findByUserId(1L)).thenReturn(Optional.of(sampleStore));
+        when(voucherRepository.findById(100L)).thenReturn(Optional.of(usedVoucher));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> voucherService.deleteSellerVoucher(1L, 100L));
+        assertEquals(VoucherErrorCode.VOUCHER_CANNOT_DELETE, ex.getErrorCode());
+        verify(voucherRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("Seller xóa voucher thất bại khi đã có bản ghi trong VoucherUsage")
+    void deleteSellerVoucher_VoucherUsageExists_ThrowsException() {
+        when(storeRepository.findByUserId(1L)).thenReturn(Optional.of(sampleStore));
+        when(voucherRepository.findById(100L)).thenReturn(Optional.of(sampleVoucher));
+        when(voucherUsageRepository.existsByVoucherId(100L)).thenReturn(true);
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> voucherService.deleteSellerVoucher(1L, 100L));
+        assertEquals(VoucherErrorCode.VOUCHER_CANNOT_DELETE, ex.getErrorCode());
+        verify(voucherRepository, never()).delete(any());
     }
 }
 
