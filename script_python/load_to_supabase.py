@@ -163,6 +163,27 @@ def sync_sequences(cur, table: str) -> None:
     )
 
 
+def _build_connect_kwargs() -> dict:
+    """Tra ve kwargs cho psycopg.connect().
+
+    Supabase pgbouncer 2024+ yeu cau startup packet co 'project=<ref>' de
+    xac dinh tenant (options=-c project=<ref>). Lay project_ref tu username
+    (format postgres.<ref>).
+
+    Them prepare_threshold=0 de psycopg3 KHONG dung prepared statement,
+    vi pgbouncer transaction mode (port 6543) khong ho tro qua pool
+    boundaries (-> loi '_pg3_0 does not exist').
+    """
+    kwargs: dict = {"connect_timeout": 30, "prepare_threshold": 0}
+    m = re.search(r"://([^:@]+):", CONN_STR)
+    if m:
+        user = m.group(1)
+        if "." in user:
+            project_ref = user.split(".")[-1]
+            kwargs["options"] = f"-c project={project_ref}"
+    return kwargs
+
+
 def main() -> int:
     if not HERE.joinpath("roles.csv").exists():
         print("ERROR: CSV files khong ton tai. Chay generate_all_seeds.py truoc.")
@@ -170,7 +191,8 @@ def main() -> int:
 
     total_start = time.time()
     try:
-        with psycopg.connect(CONN_STR) as conn:
+        connect_kwargs = _build_connect_kwargs()
+        with psycopg.connect(CONN_STR, **connect_kwargs) as conn:
             conn.execute("SET session_replication_role = 'replica'")
             print("== Pre-load: TRUNCATE all loaded tables ==")
             tables_to_trunc = [t for _, t in LOAD_ORDER]
