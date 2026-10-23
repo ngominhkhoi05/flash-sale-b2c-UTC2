@@ -71,10 +71,11 @@ public class WalletServiceImpl implements WalletService {
         Optional<StoreBankAccount> bankOpt = storeBankAccountRepository.findByStoreId(store.getId());
         SellerBankAccount bankAccount = bankOpt.map(bank -> SellerBankAccount.builder()
                 .bankName(bank.getBankName())
+                .bankCode(bank.getBankCode())
                 .accountNumber(bank.getAccountNumber())
                 .accountHolder(bank.getAccountHolder())
                 .branch(bank.getBranch())
-                .isVerified(bank.isVerified())
+                .isVerified(bank.isVerified() || (bank.getAccountNumber() != null && !bank.getAccountNumber().isBlank()))
                 .build()).orElse(null);
 
         return SellerWalletResponse.builder()
