@@ -119,6 +119,10 @@ public class StoreServiceImpl implements StoreService {
     public StoreResponse updateMyStore(Long userId, UpdateStoreRequest request) {
         Store store = getStoreByUserIdOrThrow(userId);
 
+        if (!"APPROVED".equalsIgnoreCase(store.getStatus())) {
+            throw new BusinessException(StoreErrorCode.STORE_NOT_APPROVED);
+        }
+
         String trimmedName = request.getStoreName().trim();
         if (!store.getStoreName().equalsIgnoreCase(trimmedName)) {
             if (storeRepository.existsByStoreName(trimmedName)) {
