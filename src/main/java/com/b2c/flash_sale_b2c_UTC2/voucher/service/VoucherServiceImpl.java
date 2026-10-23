@@ -84,6 +84,10 @@ public class VoucherServiceImpl implements VoucherService {
             store = storeRepository.findByUserId(userId).orElse(null);
         }
 
+        if (store != null && !"APPROVED".equalsIgnoreCase(store.getStatus())) {
+            throw new BusinessException(StoreErrorCode.STORE_NOT_APPROVED);
+        }
+
         Voucher voucher = Voucher.builder()
                 .code(code)
                 .store(store)
