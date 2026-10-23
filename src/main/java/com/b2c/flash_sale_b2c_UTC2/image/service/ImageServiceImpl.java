@@ -83,13 +83,16 @@ public class ImageServiceImpl implements ImageService {
         String folder = resolveFolder(ownerType, ownerId);
         CloudinaryService.CloudinaryUploadResult upload = cloudinaryService.upload(file, folder);
 
+        boolean isOneToOne = (ownerType == ImageOwnerType.USER || ownerType == ImageOwnerType.STORE);
+        boolean finalIsPrimary = isOneToOne || (wantPrimary && (ownerType == ImageOwnerType.PRODUCT || ownerType == ImageOwnerType.VARIANT));
+
         Image image = Image.builder()
                 .ownerType(ownerType)
                 .ownerId(ownerId)
                 .url(upload.url())
                 .cloudinaryPublicId(upload.publicId())
                 .displayOrder(order)
-                .isPrimary(wantPrimary && (ownerType == ImageOwnerType.PRODUCT || ownerType == ImageOwnerType.VARIANT))
+                .isPrimary(finalIsPrimary)
                 .status(STATUS_ACTIVE)
                 .cloudinaryDeleted(false)
                 .build();
@@ -113,6 +116,12 @@ public class ImageServiceImpl implements ImageService {
     @Override
     @Transactional(readOnly = true)
     public ImageResponse getPrimaryImage(ImageOwnerType ownerType, Long ownerId) {
+        if (ownerType == ImageOwnerType.USER || ownerType == ImageOwnerType.STORE) {
+            return imageRepository
+                    .findFirstByOwnerTypeAndOwnerIdAndStatus(ownerType, ownerId, STATUS_ACTIVE)
+                    .map(imageMapper::toResponse)
+                    .orElse(null);
+        }
         return imageRepository
                 .findFirstByOwnerTypeAndOwnerIdAndIsPrimaryTrueAndStatus(ownerType, ownerId, STATUS_ACTIVE)
                 .map(imageMapper::toResponse)
