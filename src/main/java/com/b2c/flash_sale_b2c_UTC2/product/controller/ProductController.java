@@ -38,6 +38,7 @@ import java.util.List;
 public class ProductController {
 
     private final ProductService productService;
+    private final com.b2c.flash_sale_b2c_UTC2.search.service.SearchService searchService;
 
     @GetMapping("/recommended")
     @Operation(summary = "Lay san pham recommended (for_you, best_seller, hot_deal) - Public",
@@ -117,7 +118,8 @@ public class ProductController {
     @Operation(summary = "Tìm kiếm sản phẩm cho storefront /search (Public)",
                description = "Trả về items + total + facets (subcategories, cities, ratings, services). " +
                              "Sort: relevance (default) | newest | best_selling | price_asc | price_desc. " +
-                             "Page 0-based (BE convention).")
+                             "Phân trang bằng cursor opaque (không dùng page). " +
+                             "Trả về nextCursor (null = hết kết quả) + hasMore + totalIsExact.")
     public ResponseEntity<ApiResponse<SearchResponse>> searchProducts(
             @Parameter(description = "Từ khoá tìm theo tên sản phẩm (LIKE %q%)")
             @RequestParam(value = "q", required = false) String q,
@@ -144,8 +146,8 @@ public class ProductController {
                     schema = @Schema(implementation = SearchSortKey.class))
             @RequestParam(value = "sort", required = false) String sort,
 
-            @Parameter(description = "Phân trang (page=0, size=20)")
-            @PageableDefault(size = 20) Pageable pageable
+            @Parameter(description = "Cursor opaque cho trang tiếp theo (lấy từ nextCursor của response trước)")
+            @RequestParam(value = "cursor", required = false) String cursor
     ) {
         List<SearchCity> cities = city == null ? null : city.stream()
                 .map(SearchCity::fromKey)
@@ -167,7 +169,7 @@ public class ProductController {
                 .sort(SearchSortKey.fromValue(sort))
                 .build();
 
-        SearchResponse response = productService.searchProducts(req, pageable);
+        SearchResponse response = searchService.search(req, cursor);
         return ResponseEntity.ok(ApiResponse.success("Tìm kiếm sản phẩm thành công", response));
     }
 

@@ -55,6 +55,9 @@ class ProductSecurityIntegrationTest {
     private ProductService productService;
 
     @MockitoBean
+    private com.b2c.flash_sale_b2c_UTC2.search.service.SearchService searchService;
+
+    @MockitoBean
     private ImageService imageService;
 
     @MockitoBean
