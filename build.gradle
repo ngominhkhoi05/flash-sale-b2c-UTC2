@@ -36,6 +36,11 @@ dependencies {
 	// Cloudinary SDK (upload/destroy ảnh cho Image Module polymorphic storage)
 	implementation 'com.cloudinary:cloudinary-http5:2.4.0'
 
+	// OpenSearch Java client (ApacheHttpClient5Transport, hỗ trợ Spring Boot 4.1)
+	// Bắt buộc >= 3.6.0 vì Spring Boot 4.1 nâng httpclient5 lên 5.6
+	// (gzip content-formatting breaking change).
+	implementation 'org.opensearch.client:opensearch-java:3.10.0'
+
 	// JWT (JSON Web Token)
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'

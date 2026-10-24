@@ -87,4 +87,11 @@ public class Product {
 
     @Column(name = "created_at")
     private Instant createdAt;
+
+    /**
+     * Thời điểm cập nhật gần nhất — dùng cho reconcile định kỳ của OpenSearch
+     * (quét sản phẩm thay đổi theo {@code updated_at}).
+     */
+    @Column(name = "updated_at")
+    private Instant updatedAt;
 }

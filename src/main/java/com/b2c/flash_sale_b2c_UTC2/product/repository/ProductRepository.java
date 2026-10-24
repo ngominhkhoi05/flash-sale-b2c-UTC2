@@ -12,6 +12,8 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -77,6 +79,77 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
 
     @Query("SELECT p FROM Product p JOIN FETCH p.store s JOIN FETCH p.category c WHERE p.id = :id")
     Optional<Product> findByIdWithStoreAndCategory(@Param("id") Long id);
+
+    /**
+     * Load products by id with store + category, giữ nguyên thứ tự id truyền vào
+     * (dùng cho hydrate kết quả search — mô hình search-then-hydrate).
+     *
+     * @param ids danh sách id sản phẩm.
+     * @return danh sách product (có thể rỗng nếu không id nào tồn tại).
+     */
+    @Query("SELECT p FROM Product p JOIN FETCH p.store s JOIN FETCH p.category c WHERE p.id IN :ids")
+    List<Product> findAllByIdInWithStoreAndCategory(@Param("ids") Collection<Long> ids);
+
+    /**
+     * Load sản phẩm ACTIVE của store APPROVED theo id — lớp phòng thủ thứ 2 cho
+     * search-then-hydrate (OpenSearch đã filter {@code status=ACTIVE} ở layer 1).
+     *
+     * @param ids danh sách id sản phẩm.
+     * @return danh sách product đủ điều kiện hiển thị.
+     */
+    @Query("""
+        SELECT p FROM Product p
+        JOIN FETCH p.store s
+        JOIN FETCH p.category c
+        WHERE p.id IN :ids
+        AND p.status = 'ACTIVE'
+        AND s.status = 'APPROVED'
+        """)
+    List<Product> findAllActiveByIdInWithStoreAndCategory(@Param("ids") Collection<Long> ids);
+
+    /**
+     * Sản phẩm ACTIVE (store APPROVED) đã cập nhật sau mốc thời gian cho trước —
+     * dùng cho reconcile định kỳ của index OpenSearch.
+     *
+     * @param since mốc thời gian (exclusive).
+     * @param limit số lượng tối đa trả về (batch nhỏ để an toàn multi-instance).
+     * @return danh sách product thay đổi.
+     */
+    @Query("""
+        SELECT p FROM Product p
+        JOIN FETCH p.store s
+        JOIN FETCH p.category c
+        WHERE p.status = 'ACTIVE'
+        AND s.status = 'APPROVED'
+        AND p.updatedAt > :since
+        ORDER BY p.updatedAt ASC
+        """)
+    List<Product> findActiveUpdatedAfter(@Param("since") Instant since, Pageable pageable);
+
+    /**
+     * Tất cả sản phẩm ACTIVE (store APPROVED) — dùng cho job full-reindex.
+     *
+     * @param pageable phân trang theo id tăng dần (batch nhỏ).
+     * @return danh sách product.
+     */
+    @Query("""
+        SELECT p FROM Product p
+        JOIN FETCH p.store s
+        JOIN FETCH p.category c
+        WHERE p.status = 'ACTIVE'
+        AND s.status = 'APPROVED'
+        ORDER BY p.id ASC
+        """)
+    List<Product> findAllActiveWithStoreAndCategory(Pageable pageable);
+
+    /**
+     * Tất cả id sản phẩm đã tồn tại trong DB (dùng để dọn document mồ côi trong
+     * index OpenSearch — sản phẩm đã hard delete).
+     *
+     * @return tập id sản phẩm.
+     */
+    @Query("SELECT p.id FROM Product p")
+    List<Long> findAllIds();
 
     @Query("""
         SELECT p FROM Product p

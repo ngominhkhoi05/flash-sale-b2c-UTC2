@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,6 +21,23 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     List<ProductVariant> findByProductIdIn(List<Long> productIds);
     boolean existsBySku(String sku);
     boolean existsBySkuAndIdNot(String sku, Long id);
+
+    /**
+     * Tổng hợp min/max giá + tổng tồn kho của các variant ACTIVE theo product id.
+     *
+     * <p>Dùng để denormalize vào document OpenSearch (không join DB lúc query).
+     * Trả về list {@code [productId, minPrice, maxPrice, totalStock]}.
+     *
+     * @param productIds danh sách product id.
+     * @return danh sách tổng hợp.
+     */
+    @Query("""
+        SELECT v.product.id, MIN(v.originalPrice), MAX(v.originalPrice), SUM(v.stockQuantity)
+        FROM ProductVariant v
+        WHERE v.product.id IN :productIds AND v.status = 'ACTIVE'
+        GROUP BY v.product.id
+        """)
+    List<Object[]> aggregatePriceAndStockByProductIds(@Param("productIds") Collection<Long> productIds);
 
     @Modifying
     @Query("UPDATE ProductVariant v SET v.stockQuantity = :newStock, v.version = v.version + 1 WHERE v.id = :id AND v.stockQuantity = :expectedOldStock")

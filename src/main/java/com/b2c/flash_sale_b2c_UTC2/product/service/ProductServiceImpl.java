@@ -38,10 +38,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import com.b2c.flash_sale_b2c_UTC2.search.event.ProductIndexEvent;
 import com.b2c.flash_sale_b2c_UTC2.store.exception.StoreErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.store.repository.StoreRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -72,6 +74,12 @@ public class ProductServiceImpl implements ProductService {
     private final ImageService imageService;
 
     private final StringRedisTemplate redisTemplate;
+
+    /**
+     * Publisher sự kiện đồng bộ index OpenSearch. Sự kiện được xử lý ở phase
+     * AFTER_COMMIT nên không bao giờ dual-write trong transaction.
+     */
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -114,6 +122,8 @@ public class ProductServiceImpl implements ProductService {
 
         List<ProductVariant> savedVariants = productVariantRepository.saveAll(variants);
 
+        publishIndexEvent(ProductIndexEvent.upsert(savedProduct.getId()));
+
         return buildProductDetailResponse(savedProduct, savedVariants);
     }
 
@@ -150,6 +160,8 @@ public class ProductServiceImpl implements ProductService {
 
         Product updatedProduct = productRepository.save(product);
         List<ProductVariant> currentVariants = productVariantRepository.findByProductId(updatedProduct.getId());
+
+        publishIndexEvent(ProductIndexEvent.upsert(updatedProduct.getId()));
 
         return buildProductDetailResponse(updatedProduct, currentVariants);
     }
@@ -253,10 +265,12 @@ public class ProductServiceImpl implements ProductService {
                 v.setStatus("INACTIVE");
             }
             productVariantRepository.saveAll(variants);
+            publishIndexEvent(ProductIndexEvent.delete(productId));
         } else {
             log.info("Sản phẩm ID {} chưa phát sinh giao dịch. Tiến hành Hard Delete.", productId);
             productVariantRepository.deleteAll(variants);
             productRepository.delete(product);
+            publishIndexEvent(ProductIndexEvent.delete(productId));
         }
     }
 
@@ -275,6 +289,8 @@ public class ProductServiceImpl implements ProductService {
         product.setStatus(status.toUpperCase());
         Product saved = productRepository.save(product);
         List<ProductVariant> variants = productVariantRepository.findByProductId(saved.getId());
+
+        publishIndexEvent(ProductIndexEvent.upsert(saved.getId()));
 
         return buildProductDetailResponse(saved, variants);
     }
@@ -1124,6 +1140,8 @@ public class ProductServiceImpl implements ProductService {
         product = productRepository.save(product);
         log.info("Admin đã cập nhật trạng thái sản phẩm id={} thành {}, lý do: {}", productId, newStatus, request.getReason());
 
+        publishIndexEvent(ProductIndexEvent.upsert(productId));
+
         List<ProductVariant> variants = productVariantRepository.findByProductId(productId);
         BigDecimal minPrice = null, maxPrice = null;
         int totalStock = 0;
@@ -1156,5 +1174,20 @@ public class ProductServiceImpl implements ProductService {
                 .imageUrl(imgUrl)
                 .createdAt(product.getCreatedAt())
                 .build();
+    }
+
+    /**
+     * Publish sự kiện đồng bộ index OpenSearch.
+     *
+     * <p>Sự kiện được xử lý ở phase AFTER_COMMIT bởi
+     * {@code ProductIndexEventListener} — không gọi OpenSearch trong transaction
+     * để tránh dual-write hazard (transaction rollback nhưng document đã index).
+     */
+    private void publishIndexEvent(ProductIndexEvent event) {
+        try {
+            eventPublisher.publishEvent(event);
+        } catch (Exception ex) {
+            log.warn("Không publish được sự kiện đồng bộ index: {}", ex.getMessage());
+        }
     }
 }
