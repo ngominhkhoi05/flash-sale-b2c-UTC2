@@ -39,6 +39,8 @@ import java.util.Map;
  *   <li><b>Sort luôn kết thúc bằng tiebreaker</b> {@code id} để thứ tự ổn định
  *       giữa 2 request (tránh trùng/thiếu item).</li>
  *   <li><b>{@code track_total_hits}</b> bị cap → {@code totalIsExact=false}.</li>
+ *   <li><b>Không gửi {@code index} cùng {@code pit}</b> — PIT đã mang sẵn index,
+ *       OpenSearch từ chối request có cả hai.</li>
  * </ul>
  */
 @Slf4j
@@ -118,8 +120,12 @@ public class RealOpenSearchGateway implements OpenSearchGateway {
     }
 
     private SearchResponse<Object> executeSearch(SearchQuerySpec spec, String pitId) throws Exception {
+        // KHÔNG gửi "index" cùng "pit": PIT đã mang sẵn index/alias được tạo từ,
+        // và OpenSearch từ chối request có cả hai:
+        //   [action_request_validation_exception] [indices] cannot be used with point in time
+        // Lỗi này làm mọi request search ném exception -> SearchServiceImpl fallback
+        // sang PostgreSQL (LIKE %keyword%) -> FTS không bao giờ thực sự chạy.
         SearchRequest request = SearchRequest.of(b -> b
-                .index(properties.getIndexAlias())
                 .pit(Pit.of(p -> p.id(pitId).keepAlive(properties.getSearch().getPitKeepAlive())))
                 .size(spec.size())
                 .query(buildQuery(spec))

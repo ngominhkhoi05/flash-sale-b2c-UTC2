@@ -9,6 +9,7 @@ import org.opensearch.client.opensearch._types.mapping.Property;
 import org.opensearch.client.opensearch._types.mapping.TypeMapping;
 import org.opensearch.client.opensearch.core.BulkRequest;
 import org.opensearch.client.opensearch.core.BulkResponse;
+import org.opensearch.client.opensearch.core.CountRequest;
 import org.opensearch.client.opensearch.core.DeleteByQueryRequest;
 import org.opensearch.client.opensearch.core.DeleteRequest;
 import org.opensearch.client.opensearch.core.IndexRequest;
@@ -46,6 +47,9 @@ public class SearchIndexService {
 
     /** Analyzer bỏ dấu tiếng Việt qua {@code icu_folding}. */
     public static final String ANALYZER_FOLDED = "vi_folded";
+
+    /** Số item lỗi tối đa được log chi tiết trong 1 lần bulk (tránh spam log). */
+    private static final int MAX_LOGGED_FAILED_ITEMS = 5;
 
     private final OpenSearchClient client;
     private final OpenSearchProperties properties;
@@ -140,6 +144,11 @@ public class SearchIndexService {
      * Bulk upsert documents vào alias. <b>Idempotent</b> — dùng {@code index}
      * (ghi đè theo {@code _id}) chứ không phải {@code create}.
      *
+     * <p><b>Chỉ trả về số document thực sự ghi thành công.</b> OpenSearch có thể
+     * trả {@code errors=true} với từng item lỗi (vd: field {@code date} sai format)
+     * mà HTTP vẫn 200 — nếu đếm {@code response.items().size()} thì sẽ báo "đã
+     * index N sản phẩm" trong khi index thực tế rỗng.
+     *
      * @return số document đã index thành công.
      */
     public int bulkUpsert(List<SearchIndexDocument> documents) {
@@ -155,18 +164,53 @@ public class SearchIndexService {
                         .document(doc))));
             }
             BulkResponse response = client.bulk(bulk.build());
-            if (response.errors()) {
-                long failed = response.items().stream()
-                        .map(BulkResponseItem::error)
-                        .filter(e -> e != null)
-                        .count();
-                log.warn("[SearchIndexService] bulk upsert had {} failed items (total={})",
-                        failed, response.items().size());
+            int success = countSuccessful(response);
+            if (success < response.items().size()) {
+                logFailedItems(response);
+                log.warn("[SearchIndexService] bulk upsert: {}/{} document thành công, {} lỗi",
+                        success, response.items().size(), response.items().size() - success);
             }
-            return response.items().size();
+            return success;
         } catch (Exception e) {
-            log.error("[SearchIndexService] bulk upsert failed: {}", e.getMessage());
+            log.error("[SearchIndexService] bulk upsert failed: {}", e.getMessage(), e);
             return 0;
+        }
+    }
+
+    /**
+     * Đếm số item bulk thực sự ghi thành công (HTTP 2xx, không có error).
+     */
+    private int countSuccessful(BulkResponse response) {
+        int success = 0;
+        for (BulkResponseItem item : response.items()) {
+            if (item == null) {
+                continue;
+            }
+            if (item.error() == null && item.status() >= 200 && item.status() < 300) {
+                success++;
+            }
+        }
+        return success;
+    }
+
+    /**
+     * Log chi tiết các item bulk bị lỗi — giúp tìm ra nguyên nhân (sai format
+     * field, mapping không tồn tại, alias chưa được tạo...) thay vì im lặng.
+     */
+    private void logFailedItems(BulkResponse response) {
+        int logged = 0;
+        for (BulkResponseItem item : response.items()) {
+            if (item == null || item.error() == null) {
+                continue;
+            }
+            if (logged >= MAX_LOGGED_FAILED_ITEMS) {
+                log.warn("[SearchIndexService] ... còn {} item lỗi khác không được log",
+                        response.items().size() - logged);
+                break;
+            }
+            log.warn("[SearchIndexService] bulk item lỗi: id={} status={} type={} reason={}",
+                    item.id(), item.status(), item.error().type(), item.error().reason());
+            logged++;
         }
     }
 
@@ -199,6 +243,24 @@ public class SearchIndexService {
                     .id(String.valueOf(productId))));
         } catch (Exception e) {
             log.warn("[SearchIndexService] delete productId={} failed: {}", productId, e.getMessage());
+        }
+    }
+
+    /**
+     * Đếm số document thực sự đang nằm trong index.
+     *
+     * <p>Dùng để verify trạng thái thật của index (sau khi reindex) — tránh tình
+     * trạng "log báo N sản phẩm" nhưng index thực tế rỗng.
+     *
+     * @return số document trong index, {@code -1} nếu không truy vấn được.
+     */
+    public long countDocuments() {
+        try {
+            CountRequest request = CountRequest.of(b -> b.index(properties.getIndexAlias()));
+            return client.count(request).count();
+        } catch (Exception e) {
+            log.warn("[SearchIndexService] countDocuments failed: {}", e.getMessage());
+            return -1;
         }
     }
 

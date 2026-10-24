@@ -163,6 +163,42 @@ class RealOpenSearchGatewayTest {
     }
 
     @Test
+    @DisplayName("search: KHONG gui index kem PIT (OpenSearch reject 'indices cannot be used with point in time')")
+    void search_doesNotSendIndexWithPit() throws Exception {
+        when(client.search(any(SearchRequest.class), any(Class.class)))
+                .thenReturn(response(List.of(hit("1")), "pit", 1, TotalHitsRelation.Eq));
+
+        gateway.search(spec("den mini", "relevance", "pit", null));
+
+        ArgumentCaptor<SearchRequest> captor = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client).search(captor.capture(), any(Class.class));
+        SearchRequest request = captor.getValue();
+        assertNotNull(request.pit());
+        // PIT da tu mang index -> gui them "index" bi OpenSearch tu choi voi
+        // 400 action_request_validation_exception -> search luon fallback sang DB.
+        assertTrue(request.index() == null || request.index().isEmpty(),
+                "request dang PIT khong duoc gui index, nhung gui: " + request.index());
+    }
+
+    @Test
+    @DisplayName("search: request PIT moi cung khong gui index")
+    void search_newPitDoesNotSendIndex() throws Exception {
+        when(client.createPit(any(CreatePitRequest.class)))
+                .thenReturn(CreatePitResponse.of(b -> b.pitId("pit-new").creationTime(1L)));
+        when(client.search(any(SearchRequest.class), any(Class.class)))
+                .thenReturn(response(List.of(hit("1")), "pit-new", 1, TotalHitsRelation.Eq));
+
+        gateway.search(spec("den mini", "relevance", null, null));
+
+        ArgumentCaptor<SearchRequest> captor = ArgumentCaptor.forClass(SearchRequest.class);
+        verify(client).search(captor.capture(), any(Class.class));
+        SearchRequest request = captor.getValue();
+        assertNotNull(request.pit());
+        assertTrue(request.index() == null || request.index().isEmpty(),
+                "request dang PIT khong duoc gui index, nhung gui: " + request.index());
+    }
+
+    @Test
     @DisplayName("search: sort luon ket thuc bang tiebreaker id asc")
     void search_sortHasTiebreaker() throws Exception {
         when(client.search(any(SearchRequest.class), any(Class.class)))

@@ -41,6 +41,13 @@ dependencies {
 	// (gzip content-formatting breaking change).
 	implementation 'org.opensearch.client:opensearch-java:3.10.0'
 
+	// Jackson JSR-310 (java.time -> JSON).
+	// BẮT BUỘC khai báo tường minh: OpenSearchClientConfig dùng JavaTimeModule để
+	// serialize Instant theo ISO-8601 (mapping `date` của OpenSearch reject epoch float).
+	// Không khai báo ở đây thì chỉ được pull vô tình qua springdoc/swagger-core-jakarta
+	// (transitive) — rủi ro mất class khi đổi phiên bản springdoc.
+	implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
 	// JWT (JSON Web Token)
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'

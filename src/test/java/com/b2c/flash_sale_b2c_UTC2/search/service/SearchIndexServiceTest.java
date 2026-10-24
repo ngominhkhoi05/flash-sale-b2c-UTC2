@@ -119,10 +119,11 @@ class SearchIndexServiceTest {
     @Test
     @DisplayName("bulkUpsert: goi bulk voi dung so operation va index vao alias")
     void bulkUpsert_sendsBulkOperations() throws IOException {
-        BulkResponseItem item = org.mockito.Mockito.mock(BulkResponseItem.class);
         BulkResponse response = org.mockito.Mockito.mock(BulkResponse.class);
         when(response.errors()).thenReturn(false);
-        when(response.items()).thenReturn(List.of(item, item));
+        BulkResponseItem item1 = okItem("1", 201);
+        BulkResponseItem item2 = okItem("2", 201);
+        when(response.items()).thenReturn(List.of(item1, item2));
         when(client.bulk(any(BulkRequest.class))).thenReturn(response);
 
         int count = service.bulkUpsert(List.of(doc(1L), doc(2L)));
@@ -137,6 +138,47 @@ class SearchIndexServiceTest {
     }
 
     @Test
+    @DisplayName("bulkUpsert: item co error (HTTP 200 nhung errors=true) -> chi dem item thanh cong")
+    void bulkUpsert_countsOnlySuccessfulItems() throws IOException {
+        BulkResponse response = org.mockito.Mockito.mock(BulkResponse.class);
+        when(response.errors()).thenReturn(true);
+        BulkResponseItem item1 = okItem("1", 201);
+        BulkResponseItem item2 = failedItem("2", 400);
+        BulkResponseItem item3 = failedItem("3", 400);
+        when(response.items()).thenReturn(List.of(item1, item2, item3));
+        when(client.bulk(any(BulkRequest.class))).thenReturn(response);
+
+        int count = service.bulkUpsert(List.of(doc(1L), doc(2L), doc(3L)));
+
+        assertEquals(1, count);
+    }
+
+    @Test
+    @DisplayName("bulkUpsert: item status 2xx nhung van co error -> khong dem thanh cong")
+    void bulkUpsert_doesNotCountItemWithErrorEvenOn2xx() throws IOException {
+        BulkResponse response = org.mockito.Mockito.mock(BulkResponse.class);
+        when(response.errors()).thenReturn(true);
+        BulkResponseItem item = okItem("1", 201);
+        when(item.error()).thenReturn(errorCause("mapper_parsing_exception", "failed to parse date field"));
+        when(response.items()).thenReturn(List.of(item));
+        when(client.bulk(any(BulkRequest.class))).thenReturn(response);
+
+        assertEquals(0, service.bulkUpsert(List.of(doc(1L))));
+    }
+
+    @Test
+    @DisplayName("bulkUpsert: item status khong phai 2xx (vd 500) -> khong dem thanh cong")
+    void bulkUpsert_doesNotCountNon2xxStatus() throws IOException {
+        BulkResponse response = org.mockito.Mockito.mock(BulkResponse.class);
+        when(response.errors()).thenReturn(true);
+        BulkResponseItem item = okItem("1", 500);
+        when(response.items()).thenReturn(List.of(item));
+        when(client.bulk(any(BulkRequest.class))).thenReturn(response);
+
+        assertEquals(0, service.bulkUpsert(List.of(doc(1L))));
+    }
+
+    @Test
     @DisplayName("bulkUpsert: OpenSearch bao loi -> tra 0 thay vi throw")
     void bulkUpsert_swallowsTransportError() throws IOException {
         when(client.bulk(any(BulkRequest.class))).thenThrow(new IOException("timeout"));
@@ -144,6 +186,27 @@ class SearchIndexServiceTest {
         int count = service.bulkUpsert(List.of(doc(1L)));
 
         assertEquals(0, count);
+    }
+
+    @Test
+    @DisplayName("countDocuments: tra so document thuc su dang nam trong index")
+    void countDocuments_returnsCount() throws IOException {
+        org.opensearch.client.opensearch.core.CountResponse response =
+                org.mockito.Mockito.mock(org.opensearch.client.opensearch.core.CountResponse.class);
+        when(response.count()).thenReturn(128L);
+        when(client.count(any(org.opensearch.client.opensearch.core.CountRequest.class)))
+                .thenReturn(response);
+
+        assertEquals(128L, service.countDocuments());
+    }
+
+    @Test
+    @DisplayName("countDocuments: OpenSearch khong phan hoi -> tra -1 (khong throw)")
+    void countDocuments_returnsMinusOneOnError() throws IOException {
+        when(client.count(any(org.opensearch.client.opensearch.core.CountRequest.class)))
+                .thenThrow(new IOException("timeout"));
+
+        assertEquals(-1L, service.countDocuments());
     }
 
     @Test
@@ -180,6 +243,29 @@ class SearchIndexServiceTest {
                 .thenThrow(new IOException("timeout"));
 
         assertFalse(service.indexExists());
+    }
+
+    private static BulkResponseItem okItem(String id, int status) {
+        BulkResponseItem item = org.mockito.Mockito.mock(BulkResponseItem.class);
+        when(item.id()).thenReturn(id);
+        when(item.status()).thenReturn(status);
+        when(item.error()).thenReturn(null);
+        return item;
+    }
+
+    private static BulkResponseItem failedItem(String id, int status) {
+        BulkResponseItem item = org.mockito.Mockito.mock(BulkResponseItem.class);
+        when(item.id()).thenReturn(id);
+        when(item.status()).thenReturn(status);
+        when(item.error()).thenReturn(errorCause("mapper_parsing_exception",
+                "failed to parse field [createdAt] of type [date]"));
+        return item;
+    }
+
+    private static org.opensearch.client.opensearch._types.ErrorCause errorCause(String type, String reason) {
+        return org.opensearch.client.opensearch._types.ErrorCause.of(b -> b
+                .type(type)
+                .reason(reason));
     }
 
     private static SearchIndexDocument doc(long id) {

@@ -1,5 +1,8 @@
 package com.b2c.flash_sale_b2c_UTC2.search.client;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hc.client5.http.auth.AuthScope;
@@ -9,9 +12,11 @@ import org.apache.hc.client5.http.impl.auth.BasicCredentialsProvider;
 import org.apache.hc.client5.http.impl.nio.PoolingAsyncClientConnectionManagerBuilder;
 import org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder;
 import org.apache.hc.client5.http.ssl.NoopHostnameVerifier;
+import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.ssl.SSLContextBuilder;
 import org.apache.hc.core5.ssl.TrustStrategy;
 import org.apache.hc.core5.util.Timeout;
+import org.opensearch.client.json.jackson.JacksonJsonpMapper;
 import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.transport.OpenSearchTransport;
 import org.opensearch.client.transport.httpclient5.ApacheHttpClient5TransportBuilder;
@@ -39,9 +44,15 @@ public class OpenSearchClientConfig {
 
     @Bean(destroyMethod = "close")
     public OpenSearchTransport openSearchTransport() {
-        URI uri = URI.create(properties.getHost());
+        // HttpHost.create(URI) tự tách đúng host/scheme/port.
+        // KHÔNG dùng new HttpHost(uri.getHost(), uri.getScheme(), uri.getPort()):
+        // thứ tự tham số của httpcore5 là (scheme, hostname, port) → code cũ tạo
+        // host="https", scheme="localhost" → lỗi "No such host is known (https)"
+        // và toàn bộ OpenSearch im lặng rơi về fallback PostgreSQL.
         ApacheHttpClient5TransportBuilder builder = ApacheHttpClient5TransportBuilder
-                .builder(new org.apache.hc.core5.http.HttpHost(uri.getHost(), uri.getScheme(), uri.getPort()));
+                .builder(resolveHost());
+
+        builder.setMapper(createJsonpMapper());
 
         builder.setHttpClientConfigCallback(httpClientBuilder -> {
             httpClientBuilder.setConnectionManager(
@@ -70,6 +81,37 @@ public class OpenSearchClientConfig {
     @Bean
     public OpenSearchClient openSearchClient(OpenSearchTransport transport) {
         return new OpenSearchClient(transport);
+    }
+
+    /**
+     * Tách host/scheme/port từ {@code opensearch.host}.
+     *
+     * <p>Package-private để test được: bug cốt lõi là truyền sai thứ tự tham số
+     * cho {@code HttpHost} khiến hostname thành {@code "https"}.
+     */
+    HttpHost resolveHost() {
+        return HttpHost.create(URI.create(properties.getHost()));
+    }
+
+    /**
+     * Tạo mapper JSON cho OpenSearch client.
+     *
+     * <p><b>Quan trọng — {@code Instant} phải serialize ra ISO-8601, không phải
+     * epoch dạng số thập phân.</b> Mapping {@code date} của OpenSearch chỉ nhận
+     * {@code strict_date_optional_time||epoch_millis}. Với cấu hình mặc định của
+     * Jackson ({@code WRITE_DATES_AS_TIMESTAMPS=true}), {@code Instant} được ghi
+     * thành {@code 1761234567.123000000} (float) — OpenSearch <b>reject</b> toàn bộ
+     * document với lỗi {@code mapper_parsing_exception}, khiến index rỗng trong khi
+     * log lại báo reindex thành công.
+     *
+     * <p>ISO-8601 ({@code 2026-01-01T00:00:00Z}) nằm trong {@code strict_date_optional_time}
+     * nên được chấp nhận, và không cần đổi mapping index đã tạo.
+     */
+    JacksonJsonpMapper createJsonpMapper() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
+        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        return new JacksonJsonpMapper(objectMapper);
     }
 
     /**
