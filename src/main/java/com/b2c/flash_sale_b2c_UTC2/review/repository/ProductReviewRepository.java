@@ -102,4 +102,16 @@ public interface ProductReviewRepository extends JpaRepository<ProductReview, Lo
 
     @Query("SELECT r.product.store.id, AVG(r.rating) FROM ProductReview r WHERE r.product.store.id IN :storeIds AND r.status = 'VISIBLE' GROUP BY r.product.store.id")
     List<Object[]> avgRatingsByStoreIds(@Param("storeIds") List<Long> storeIds);
+
+    /**
+     * Điểm đánh giá trung bình + số lượng đánh giá (VISIBLE) theo product id.
+     *
+     * <p>Dùng để denormalize vào document OpenSearch (không join DB lúc query).
+     * Trả về list {@code [productId, avgRating, ratingCount]}.
+     *
+     * @param productIds danh sách product id.
+     * @return danh sách tổng hợp.
+     */
+    @Query("SELECT r.product.id, AVG(r.rating), COUNT(r) FROM ProductReview r WHERE r.product.id IN :productIds AND r.status = 'VISIBLE' GROUP BY r.product.id")
+    List<Object[]> aggregateRatingByProductIds(@Param("productIds") java.util.Collection<Long> productIds);
 }

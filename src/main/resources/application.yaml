@@ -118,3 +118,34 @@ google:
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000}
 
+# ===================================================================
+# OpenSearch — Full-Text Search (search-then-hydrate + PIT/search_after)
+# ===================================================================
+# Chi tiết kien truc: docs/opensearch-search-architecture.md
+# - host/username/password: ket noi toi cluster (security plugin BAT).
+# - ssl-trust-all: CHI true cho local (demo cert tu ky). Production phai false.
+# - cursor-secret: khoa HMAC-SHA256 ky cursor phan trang. BAt buoc it nhat 32 ky tu.
+opensearch:
+  host: ${OPENSEARCH_HOST:https://localhost:9200}
+  username: ${OPENSEARCH_USERNAME:admin}
+  password: ${OPENSEARCH_PASSWORD:}
+  index-alias: ${OPENSEARCH_INDEX_ALIAS:products}
+  connect-timeout-ms: ${OPENSEARCH_CONNECT_TIMEOUT_MS:2000}
+  socket-timeout-ms: ${OPENSEARCH_SOCKET_TIMEOUT_MS:3000}
+  ssl-trust-all: ${OPENSEARCH_SSL_TRUST_ALL:false}
+  cursor-secret: ${SEARCH_CURSOR_SECRET:}
+  search:
+    page-size: ${OPENSEARCH_PAGE_SIZE:24}
+    pit-keep-alive: ${OPENSEARCH_PIT_KEEP_ALIVE:2m}
+    request-timeout-ms: ${OPENSEARCH_REQUEST_TIMEOUT_MS:1500}
+    track-total-hits: ${OPENSEARCH_TRACK_TOTAL_HITS:10000}
+
+# --- Scheduler: đồng bộ định kỳ index OpenSearch (reconcile) ---
+app:
+  scheduler:
+    # Chu kỳ reconcile (ms) — quét sản phẩm thay đổi và index lại (idempotent).
+    search-reindex-delay: ${SEARCH_REINDEX_DELAY:600000}
+    # Bật/tắt reconcile định kỳ (tắt khi chưa cần).
+    search-reconcile-enabled: ${SEARCH_RECONCILE_ENABLED:true}
+
+

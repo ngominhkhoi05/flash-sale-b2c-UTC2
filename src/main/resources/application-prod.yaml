@@ -80,6 +80,23 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 
+# --- OpenSearch (Full-Text Search) ---
+# Production PHẢI dùng TLS thật (ssl-trust-all: false) + truststore hop le.
+opensearch:
+  host: ${OPENSEARCH_HOST}
+  username: ${OPENSEARCH_USERNAME}
+  password: ${OPENSEARCH_PASSWORD}
+  index-alias: ${OPENSEARCH_INDEX_ALIAS:products}
+  connect-timeout-ms: ${OPENSEARCH_CONNECT_TIMEOUT_MS:2000}
+  socket-timeout-ms: ${OPENSEARCH_SOCKET_TIMEOUT_MS:2000}
+  ssl-trust-all: false
+  cursor-secret: ${SEARCH_CURSOR_SECRET}
+  search:
+    page-size: ${OPENSEARCH_PAGE_SIZE:24}
+    pit-keep-alive: ${OPENSEARCH_PIT_KEEP_ALIVE:2m}
+    request-timeout-ms: ${OPENSEARCH_REQUEST_TIMEOUT_MS:1500}
+    track-total-hits: ${OPENSEARCH_TRACK_TOTAL_HITS:10000}
+
 # ===================================================================
 # BẮT BUỘC set các env var sau khi deploy production:
 #   DB_USERNAME, DB_PASSWORD (Supabase)

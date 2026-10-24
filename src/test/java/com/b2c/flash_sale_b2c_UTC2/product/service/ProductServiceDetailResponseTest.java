@@ -72,6 +72,9 @@ class ProductServiceDetailResponseTest {
     @Mock
     private StringRedisTemplate stringRedisTemplate;
 
+    @Mock
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
     // Real mapper (no runtime deps)
     private final ProductVariantMapper productVariantMapper = new ProductVariantMapperImpl();
 
@@ -107,7 +110,8 @@ class ProductServiceDetailResponseTest {
                 productReviewRepository,
                 productVariantMapper,
                 imageService,
-                stringRedisTemplate
+                stringRedisTemplate,
+                eventPublisher
         );
     }
 

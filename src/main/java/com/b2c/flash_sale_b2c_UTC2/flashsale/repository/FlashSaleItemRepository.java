@@ -170,4 +170,23 @@ public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Lo
         GROUP BY fsi.status
     """)
     List<Object[]> countStatusBySlotId(@Param("slotId") Long slotId);
+
+    /**
+     * Danh sách product id đang có flash sale ACTIVE (item APPROVED + slot ACTIVE).
+     *
+     * <p>Dùng để denormalize cờ {@code isFlashSale} vào document OpenSearch.
+     *
+     * @param productIds danh sách product id cần kiểm tra.
+     * @return danh sách product id có flash sale ACTIVE.
+     */
+    @Query("""
+        SELECT DISTINCT v.product.id
+        FROM FlashSaleItem fsi
+        JOIN fsi.variant v
+        JOIN fsi.slot sl
+        WHERE v.product.id IN :productIds
+        AND fsi.status = 'APPROVED'
+        AND sl.status = 'ACTIVE'
+        """)
+    List<Long> findProductIdsWithActiveFlashSale(@Param("productIds") java.util.Collection<Long> productIds);
 }

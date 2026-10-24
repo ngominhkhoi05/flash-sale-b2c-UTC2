@@ -56,6 +56,7 @@ class FlashSalesOnProductDetailTest {
     @Mock private ProductReviewRepository productReviewRepository;
     @Mock private ImageService imageService;
     @Mock private StringRedisTemplate stringRedisTemplate;
+    @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     private ProductServiceImpl productService;
 
@@ -87,7 +88,8 @@ class FlashSalesOnProductDetailTest {
                 productReviewRepository,
                 mapper,
                 imageService,
-                stringRedisTemplate
+                stringRedisTemplate,
+                eventPublisher
         );
 
         store = Store.builder().id(1L).storeName("Test Shop").status("APPROVED").build();

@@ -38,10 +38,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import com.b2c.flash_sale_b2c_UTC2.search.event.ProductIndexEvent;
 import com.b2c.flash_sale_b2c_UTC2.store.exception.StoreErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.store.repository.StoreRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -72,6 +74,12 @@ public class ProductServiceImpl implements ProductService {
     private final ImageService imageService;
 
     private final StringRedisTemplate redisTemplate;
+
+    /**
+     * Publisher sự kiện đồng bộ index OpenSearch. Sự kiện được xử lý ở phase
+     * AFTER_COMMIT nên không bao giờ dual-write trong transaction.
+     */
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -114,6 +122,8 @@ public class ProductServiceImpl implements ProductService {
 
         List<ProductVariant> savedVariants = productVariantRepository.saveAll(variants);
 
+        publishIndexEvent(ProductIndexEvent.upsert(savedProduct.getId()));
+
         return buildProductDetailResponse(savedProduct, savedVariants);
     }
 
@@ -150,6 +160,8 @@ public class ProductServiceImpl implements ProductService {
 
         Product updatedProduct = productRepository.save(product);
         List<ProductVariant> currentVariants = productVariantRepository.findByProductId(updatedProduct.getId());
+
+        publishIndexEvent(ProductIndexEvent.upsert(updatedProduct.getId()));
 
         return buildProductDetailResponse(updatedProduct, currentVariants);
     }
@@ -253,10 +265,12 @@ public class ProductServiceImpl implements ProductService {
                 v.setStatus("INACTIVE");
             }
             productVariantRepository.saveAll(variants);
+            publishIndexEvent(ProductIndexEvent.delete(productId));
         } else {
             log.info("Sản phẩm ID {} chưa phát sinh giao dịch. Tiến hành Hard Delete.", productId);
             productVariantRepository.deleteAll(variants);
             productRepository.delete(product);
+            publishIndexEvent(ProductIndexEvent.delete(productId));
         }
     }
 
@@ -275,6 +289,8 @@ public class ProductServiceImpl implements ProductService {
         product.setStatus(status.toUpperCase());
         Product saved = productRepository.save(product);
         List<ProductVariant> variants = productVariantRepository.findByProductId(saved.getId());
+
+        publishIndexEvent(ProductIndexEvent.upsert(saved.getId()));
 
         return buildProductDetailResponse(saved, variants);
     }
@@ -319,223 +335,6 @@ public class ProductServiceImpl implements ProductService {
                 .toList();
 
         return PageResponse.of(productPage, content);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public com.b2c.flash_sale_b2c_UTC2.product.dto.SearchResponse searchProducts(
-            com.b2c.flash_sale_b2c_UTC2.product.dto.SearchRequest request,
-            Pageable pageable) {
-
-        // 1. Map service flag + subcategory inputs into ProductFilterRequest.
-        ProductFilterRequest filter = buildSearchFilter(request);
-
-        // 2. Run the same query path as getPublicProducts, but bypass PRICE_ASC/PRICE_DESC
-        //    (we map to ProductSortOption which is handled by the existing impl).
-        ProductSortOption sortOption = (request.getSort() == null
-                ? ProductSortOption.CREATED_AT_DESC
-                : request.getSort().toProductSortOption());
-
-        Page<Product> productPage;
-        if (sortOption == ProductSortOption.PRICE_ASC || sortOption == ProductSortOption.PRICE_DESC) {
-            int page = pageable.getPageNumber();
-            int size = pageable.getPageSize();
-            List<Product> products = (sortOption == ProductSortOption.PRICE_ASC)
-                    ? productRepository.findAllOrderByMinPriceAsc(PageRequest.of(page, size))
-                    : productRepository.findAllOrderByMinPriceDesc(PageRequest.of(page, size));
-            // Re-filter in Java: spec-aware filtering on the price-ordered slice.
-            // Note: this is a best-effort facet on a partial slice; totals still come from
-            // the spec-based count below for the facets.
-            productPage = new PageImpl<>(applyFilterInMemory(products, filter), pageable,
-                    applyFilterInMemory(products, filter).size());
-        } else {
-            Specification<Product> spec = ProductSpecifications.fromFilterRequest(filter)
-                    .and(ProductSpecifications.isActiveWithApprovedStore());
-            Sort sort = buildSort(sortOption, pageable);
-            Pageable sortedPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
-            productPage = productRepository.findAll(spec, sortedPageable);
-        }
-
-        // 3. Batch-load variants + images and map to RecommendedProductResponse
-        //    (same shape as /api/v1/products/recommended) so the FE can render
-        //    the storefront ProductCard directly.
-        List<Long> productIds = productPage.getContent().stream().map(Product::getId).toList();
-        Map<Long, List<ProductVariant>> variantsByProductId = productIds.isEmpty() ? Map.of() :
-                productVariantRepository.findByProductIdInAndStatus(productIds, "ACTIVE").stream()
-                        .collect(Collectors.groupingBy(v -> v.getProduct().getId()));
-
-        Map<Long, String> primaryImageMap = productIds.isEmpty() ? Map.of() :
-                imageService.getPrimaryImagesByOwnerIds(ImageOwnerType.PRODUCT, productIds)
-                        .entrySet().stream()
-                        .collect(Collectors.toMap(Map.Entry::getKey, e -> nullSafeUrl(e.getValue())));
-
-        List<RecommendedProductResponse> content = productPage.getContent().stream()
-                .map(p -> mapToSearchItem(p, variantsByProductId.getOrDefault(p.getId(), List.of()),
-                        primaryImageMap.get(p.getId())))
-                .toList();
-
-        // 4. Build facets (4 buckets, hard-coded keys + counts).
-        com.b2c.flash_sale_b2c_UTC2.product.dto.SearchFacetsDto facets = buildSearchFacets(request);
-
-        return com.b2c.flash_sale_b2c_UTC2.product.dto.SearchResponse.builder()
-                .items(content)
-                .total(productPage.getTotalElements())
-                .page(pageable.getPageNumber())
-                .pageSize(pageable.getPageSize())
-                .facets(facets)
-                .build();
-    }
-
-    /**
-     * Build a {@link ProductFilterRequest} from a {@link SearchRequest}.
-     * <ul>
-     *   <li>Subcategory (first element only) -> categoryId via name lookup.</li>
-     *   <li>Service flags -> flashSaleOnly / hasDiscount where applicable.</li>
-     *   <li>q -> keyword (LIKE on name).</li>
-     *   <li>priceMin/Max + rating -> straight pass-through.</li>
-     * </ul>
-     */
-    private ProductFilterRequest buildSearchFilter(
-            com.b2c.flash_sale_b2c_UTC2.product.dto.SearchRequest req) {
-        ProductFilterRequest.ProductFilterRequestBuilder b = ProductFilterRequest.builder()
-                .keyword(req.getQ())
-                .minPrice(req.getPriceMin())
-                .maxPrice(req.getPriceMax())
-                .rating(req.getRating());
-
-        // Subcategory: first element is used (the underlying repository accepts only one categoryId).
-        if (req.getSubcategories() != null && !req.getSubcategories().isEmpty()) {
-            // We accept the literal subcategory key. The Category entity does not currently
-            // store these UI keys, so we leave categoryId null here and the FE will continue
-            // to drive category filter via the existing /api/v1/categories lookup. Keeping
-            // the slot wired for future migration.
-            b.categoryId(null);
-        }
-
-        Boolean flashSaleOnly = null;
-        Boolean hasDiscount = null;
-        if (req.getServices() != null) {
-            for (com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService s : req.getServices()) {
-                if (s == com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.FLASH_SALE) {
-                    flashSaleOnly = Boolean.TRUE;
-                } else if (s == com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.VOUCHER) {
-                    hasDiscount = Boolean.TRUE;
-                }
-            }
-        }
-        b.flashSaleOnly(flashSaleOnly);
-        b.hasDiscount(hasDiscount);
-
-        // Search sort is not part of ProductFilterRequest (sort is applied at query level).
-        return b.build();
-    }
-
-    /**
-     * Apply a filter in-memory over a price-ordered product list. Used as a
-     * best-effort filter for the PRICE_ASC / PRICE_DESC sort path, which the
-     * existing repository serves via aggregate query (no spec applied).
-     */
-    private List<Product> applyFilterInMemory(List<Product> products, ProductFilterRequest filter) {
-        if (filter == null) {
-            return products;
-        }
-        // Minimal in-memory filter: status + store.status only (best-effort).
-        // The price/rating filter is already applied by the underlying query.
-        return products.stream()
-                .filter(p -> "ACTIVE".equalsIgnoreCase(p.getStatus()))
-                .filter(p -> p.getStore() != null && "APPROVED".equalsIgnoreCase(p.getStore().getStatus()))
-                .toList();
-    }
-
-    /**
-     * Build the 4-bucket facets envelope. Subcategory and city keys are hard-coded
-     * (see plan). Service flags use the {@link com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService}
-     * enum. Rating buckets are 5/4/3 with count = 0 (no count-by-rating query yet).
-     *
-     * <p>City count uses the total number of items returned by the spec-driven
-     * query (city filtering is not yet wired through to the data layer).</p>
-     */
-    private com.b2c.flash_sale_b2c_UTC2.product.dto.SearchFacetsDto buildSearchFacets(
-            com.b2c.flash_sale_b2c_UTC2.product.dto.SearchRequest req) {
-        long baseCount = computeFacetBaseCount(req);
-
-        List<com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto> subcategories = List.of(
-                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
-                        .key("true-wireless").label("True Wireless").count(0).build(),
-                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
-                        .key("over-ear").label("Over-ear").count(0).build(),
-                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
-                        .key("sport-waterproof").label("Sport & Waterproof").count(0).build(),
-                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
-                        .key("gaming-mic").label("Gaming & Mic").count(0).build(),
-                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
-                        .key("accessories").label("Phụ kiện").count(0).build()
-        );
-
-        List<com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto> cities = List.of(
-                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
-                        .key("HCM").label("TP. Hồ Chí Minh").count(baseCount).build(),
-                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
-                        .key("HN").label("Hà Nội").count(baseCount).build(),
-                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
-                        .key("DN").label("Đà Nẵng").count(baseCount).build(),
-                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
-                        .key("BD").label("Bình Dương").count(baseCount).build()
-        );
-
-        List<com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto> ratings = List.of(
-                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
-                        .key("5").label("5 sao").count(0).build(),
-                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
-                        .key("4").label("4 sao trở lên").count(0).build(),
-                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
-                        .key("3").label("3 sao trở lên").count(0).build()
-        );
-
-        List<com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto> services = List.of(
-                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
-                        .key(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.FLASH_SALE.getKey())
-                        .label(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.FLASH_SALE.getLabel())
-                        .count(0).build(),
-                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
-                        .key(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.VOUCHER.getKey())
-                        .label(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.VOUCHER.getLabel())
-                        .count(0).build(),
-                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
-                        .key(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.FREESHIP.getKey())
-                        .label(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.FREESHIP.getLabel())
-                        .count(0).build(),
-                com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto.builder()
-                        .key(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.OFFICIAL.getKey())
-                        .label(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.OFFICIAL.getLabel())
-                        .count(0).build()
-        );
-
-        return com.b2c.flash_sale_b2c_UTC2.product.dto.SearchFacetsDto.builder()
-                .subcategories(subcategories)
-                .cities(cities)
-                .ratings(ratings)
-                .services(services)
-                .build();
-    }
-
-    /**
-     * Compute the base count used by city facets: number of products matching
-     * the keyword + price + rating filters (without subcategory/service flags).
-     * City filtering is not yet wired through the data layer, so all cities
-     * report the same baseline.
-     */
-    private long computeFacetBaseCount(
-            com.b2c.flash_sale_b2c_UTC2.product.dto.SearchRequest req) {
-        ProductFilterRequest filter = ProductFilterRequest.builder()
-                .keyword(req.getQ())
-                .minPrice(req.getPriceMin())
-                .maxPrice(req.getPriceMax())
-                .rating(req.getRating())
-                .build();
-        Specification<Product> spec = ProductSpecifications.fromFilterRequest(filter)
-                .and(ProductSpecifications.isActiveWithApprovedStore());
-        return productRepository.count(spec);
     }
 
     private Sort buildSort(ProductSortOption sortOption, Pageable pageable) {
@@ -985,35 +784,6 @@ public class ProductServiceImpl implements ProductService {
         }).toList();
     }
 
-    /**
-     * Map a {@link Product} to a {@link RecommendedProductResponse} for the search
-     * endpoint. Mirrors {@link #mapToRecommended(Product, List, String, String)} but
-     * does not set a {@code label} (the search endpoint does not classify items as
-     * {@code for_you} / {@code best_seller} / {@code hot_deal}).
-     */
-    private RecommendedProductResponse mapToSearchItem(Product p, List<ProductVariant> variants,
-                                                       String imageUrl) {
-        BigDecimal minPrice = null, maxPrice = null;
-        int totalStock = 0;
-        for (ProductVariant v : variants) {
-            if (minPrice == null || v.getOriginalPrice().compareTo(minPrice) < 0) minPrice = v.getOriginalPrice();
-            if (maxPrice == null || v.getOriginalPrice().compareTo(maxPrice) > 0) maxPrice = v.getOriginalPrice();
-            totalStock += (v.getStockQuantity() != null ? v.getStockQuantity() : 0);
-        }
-        return RecommendedProductResponse.builder()
-                .id(p.getId())
-                .storeId(p.getStore().getId())
-                .storeName(p.getStore().getStoreName())
-                .name(p.getName())
-                .imageUrl(imageUrl)
-                .minPrice(minPrice)
-                .maxPrice(maxPrice)
-                .totalStock(totalStock)
-                .totalSold(p.getTotalSold())
-                .label(null)
-                .build();
-    }
-
     private RecommendedProductResponse mapToRecommended(Product p, List<ProductVariant> variants,
                                                        String imageUrl, String label) {
         BigDecimal minPrice = null, maxPrice = null;
@@ -1124,6 +894,8 @@ public class ProductServiceImpl implements ProductService {
         product = productRepository.save(product);
         log.info("Admin đã cập nhật trạng thái sản phẩm id={} thành {}, lý do: {}", productId, newStatus, request.getReason());
 
+        publishIndexEvent(ProductIndexEvent.upsert(productId));
+
         List<ProductVariant> variants = productVariantRepository.findByProductId(productId);
         BigDecimal minPrice = null, maxPrice = null;
         int totalStock = 0;
@@ -1156,5 +928,20 @@ public class ProductServiceImpl implements ProductService {
                 .imageUrl(imgUrl)
                 .createdAt(product.getCreatedAt())
                 .build();
+    }
+
+    /**
+     * Publish sự kiện đồng bộ index OpenSearch.
+     *
+     * <p>Sự kiện được xử lý ở phase AFTER_COMMIT bởi
+     * {@code ProductIndexEventListener} — không gọi OpenSearch trong transaction
+     * để tránh dual-write hazard (transaction rollback nhưng document đã index).
+     */
+    private void publishIndexEvent(ProductIndexEvent event) {
+        try {
+            eventPublisher.publishEvent(event);
+        } catch (Exception ex) {
+            log.warn("Không publish được sự kiện đồng bộ index: {}", ex.getMessage());
+        }
     }
 }
