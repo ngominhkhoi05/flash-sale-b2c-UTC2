@@ -40,6 +40,8 @@ import com.b2c.flash_sale_b2c_UTC2.voucher.entity.VoucherUsage;
 import com.b2c.flash_sale_b2c_UTC2.voucher.repository.VoucherRepository;
 import com.b2c.flash_sale_b2c_UTC2.voucher.repository.VoucherUsageRepository;
 import com.b2c.flash_sale_b2c_UTC2.voucher.service.VoucherService;
+import com.b2c.flash_sale_b2c_UTC2.payment.dto.PaymentResponse;
+import com.b2c.flash_sale_b2c_UTC2.payment.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -76,6 +78,7 @@ public class OrderServiceImpl implements OrderService {
     private final VoucherService voucherService;
         private final CartRepository cartRepository;
     private final com.b2c.flash_sale_b2c_UTC2.payment.repository.PaymentRepository paymentRepository;
+    private final PaymentService paymentService;
     private final CartItemRepository cartItemRepository;
     private final ImageService imageService;
     private final OrderMapper orderMapper;
@@ -221,6 +224,24 @@ public class OrderServiceImpl implements OrderService {
             OrderResponse response = orderMapper.toResponse(order);
             List<OrderItemResponse> itemResponses = enrichItemResponses(orderItemsToSave);
             response.setItems(itemResponses);
+
+            if ("ZALOPAY".equalsIgnoreCase(request.getPaymentMethod()) && paymentService != null) {
+                try {
+                    PaymentResponse paymentResp = paymentService.createZaloPayPayment(buyerId, order.getId());
+                    response.setPaymentMethod("ZALOPAY");
+                    response.setPaymentStatus(paymentResp.getStatus());
+                    response.setPaymentUrl(paymentResp.getPaymentUrl());
+                    response.setQrCodeUrl(paymentResp.getQrCodeUrl());
+                } catch (Exception e) {
+                    log.warn("Auto-create ZaloPay payment failed during createOrders for orderId={}: {}",
+                            order.getId(), e.getMessage());
+                    response.setPaymentMethod("ZALOPAY");
+                    response.setPaymentStatus("PENDING");
+                }
+            } else if ("COD".equalsIgnoreCase(request.getPaymentMethod())) {
+                response.setPaymentMethod("COD");
+                response.setPaymentStatus("PENDING");
+            }
 
             createdOrders.add(response);
             log.info("Tạo thành công đơn hàng orderCode={} cho storeId={}", orderCode, store.getId());
@@ -478,6 +499,7 @@ public class OrderServiceImpl implements OrderService {
             }
 
             shopOrders.add(QrShopOrderResponse.builder()
+                    .orderId(o.getId())
                     .storeId(o.getStore() != null ? o.getStore().getId() : null)
                     .storeName(o.getStore() != null ? o.getStore().getStoreName() : "")
                     .storeBadge(storeBadge)
@@ -492,26 +514,42 @@ public class OrderServiceImpl implements OrderService {
                     orders.get(0).getCreatedAt().plusSeconds(900) : Instant.now().plusSeconds(900);
         }
 
-        String amountStr = totalAmount.stripTrailingZeros().toPlainString();
-        String safeOrderCode = URLEncoder.encode(orderCode, StandardCharsets.UTF_8);
-        String qrCodeUrl = "https://api.vietqr.io/image/970422-9999999999-compact2.png?amount=" + amountStr + "&addInfo=" + safeOrderCode;
-        String paymentUrl = "https://qc.zalopay.vn/pay?order=" + safeOrderCode + "&amount=" + amountStr;
+        String qrCodeUrl = null;
+        String paymentUrl = null;
+        String paymentStatus = "PENDING";
 
         if (orders.size() == 1) {
-            List<Payment> payments = paymentRepository.findByOrderId(orders.get(0).getId());
-            if (payments != null && !payments.isEmpty()) {
-                Payment latest = payments.get(payments.size() - 1);
-                if (latest.getQrCodeData() != null && !latest.getQrCodeData().isBlank()) {
-                    qrCodeUrl = latest.getQrCodeData();
+            Order primaryOrder = orders.get(0);
+            List<Payment> payments = paymentRepository.findByOrderId(primaryOrder.getId());
+            Payment latest = (payments != null && !payments.isEmpty()) ? payments.get(payments.size() - 1) : null;
+            if (latest == null && paymentService != null && "PENDING_PAYMENT".equalsIgnoreCase(primaryOrder.getStatus())) {
+                try {
+                    PaymentResponse createdPayment = paymentService.createZaloPayPayment(buyerId, primaryOrder.getId());
+                    qrCodeUrl = createdPayment.getQrCodeUrl();
+                    paymentUrl = createdPayment.getPaymentUrl();
+                    paymentStatus = createdPayment.getStatus();
+                } catch (Exception e) {
+                    log.warn("Auto-create ZaloPay payment failed in getOrderQrDetail for orderId={}: {}",
+                            primaryOrder.getId(), e.getMessage());
                 }
-                if (latest.getPaymentUrl() != null && !latest.getPaymentUrl().isBlank()) {
-                    paymentUrl = latest.getPaymentUrl();
-                }
+            } else if (latest != null) {
+                qrCodeUrl = latest.getQrCodeData();
+                paymentUrl = latest.getPaymentUrl();
+                paymentStatus = latest.getStatus();
             }
         }
 
+        if (qrCodeUrl == null || qrCodeUrl.isBlank()) {
+            String amountStr = totalAmount.stripTrailingZeros().toPlainString();
+            String safeOrderCode = URLEncoder.encode(orderCode, StandardCharsets.UTF_8);
+            qrCodeUrl = "https://api.vietqr.io/image/970422-9999999999-compact2.png?amount=" + amountStr + "&addInfo=" + safeOrderCode;
+            paymentUrl = "https://qc.zalopay.vn/pay?order=" + safeOrderCode + "&amount=" + amountStr;
+        }
+
         return QrOrderDetailResponse.builder()
+                .orderId(orders.get(0).getId())
                 .orderCode(orderCode)
+                .paymentStatus(paymentStatus)
                 .qrCodeUrl(qrCodeUrl)
                 .expiresAt(earliestExpiry)
                 .paymentExpiry(earliestExpiry)

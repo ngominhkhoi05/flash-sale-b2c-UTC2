@@ -14,7 +14,9 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class QrOrderDetailResponse {
+    private Long orderId;
     private String orderCode;
+    private String paymentStatus;
     private String qrCodeUrl;
     private Instant expiresAt;
     private Instant paymentExpiry;

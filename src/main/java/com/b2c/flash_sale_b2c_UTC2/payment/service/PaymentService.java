@@ -13,4 +13,5 @@ public interface PaymentService {
     Map<String, Object> handleZaloPayCallback(ZaloPayCallbackDto cb);
 
     PaymentResponse queryZaloPayPayment(Long buyerId, Long orderId);
+    PaymentResponse queryZaloPayPaymentByCode(Long buyerId, String orderCode);
 }

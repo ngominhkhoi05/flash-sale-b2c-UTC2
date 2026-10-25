@@ -64,8 +64,26 @@ public class PaymentServiceImpl implements PaymentService {
             throw new BusinessException(OrderErrorCode.INVALID_STATUS_TRANSITION);
         }
 
+        List<Payment> existingPayments = paymentRepository.findByOrderId(orderId);
+        if (existingPayments != null && !existingPayments.isEmpty()) {
+            Payment latest = existingPayments.get(existingPayments.size() - 1);
+            if ("SUCCESS".equalsIgnoreCase(latest.getStatus())) {
+                return mapToResponse(latest, order);
+            }
+            if ("PENDING".equalsIgnoreCase(latest.getStatus())
+                    && latest.getQrCodeData() != null && !latest.getQrCodeData().isBlank()
+                    && latest.getCreatedAt() != null
+                    && latest.getCreatedAt().isAfter(Instant.now().minusSeconds(900))) {
+                log.info("Reusing active PENDING ZaloPay payment id={} for orderId={}", latest.getId(), orderId);
+                return mapToResponse(latest, order);
+            }
+        }
+
         long now = System.currentTimeMillis();
-        String appTransId = "ZP" + now + "_" + order.getId();
+        String datePrefix = java.time.format.DateTimeFormatter.ofPattern("yyMMdd")
+                .withZone(java.time.ZoneId.of("Asia/Ho_Chi_Minh"))
+                .format(Instant.now());
+        String appTransId = datePrefix + "_" + order.getId() + "_" + (now % 10000000L);
         String embedData = "{\"orderId\":" + order.getId() + ",\"orderCode\":\"" + order.getOrderCode() + "\"}";
         String item = "[]";
         long amount = order.getTotalAmount().longValue();
@@ -293,6 +311,17 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         return mapToResponse(latest, order);
+    }
+
+    @Override
+    @Transactional
+    public PaymentResponse queryZaloPayPaymentByCode(Long buyerId, String orderCode) {
+        Order order = orderRepository.findByOrderCode(orderCode)
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
+        if (!order.getBuyer().getId().equals(buyerId)) {
+            throw new BusinessException(OrderErrorCode.ORDER_ACCESS_DENIED);
+        }
+        return queryZaloPayPayment(buyerId, order.getId());
     }
 
     private Order validateBuyerOrder(Long buyerId, Long orderId) {
