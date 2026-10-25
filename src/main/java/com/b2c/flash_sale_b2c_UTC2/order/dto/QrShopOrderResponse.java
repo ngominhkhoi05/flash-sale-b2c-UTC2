@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 public class QrShopOrderResponse {
+    private Long orderId;
     private Long storeId;
     private String storeName;
     private String storeBadge;

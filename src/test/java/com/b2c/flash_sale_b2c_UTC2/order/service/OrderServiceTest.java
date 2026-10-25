@@ -22,6 +22,7 @@ import com.b2c.flash_sale_b2c_UTC2.order.mapper.OrderMapper;
 import com.b2c.flash_sale_b2c_UTC2.order.repository.OrderItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.order.repository.OrderRepository;
 import com.b2c.flash_sale_b2c_UTC2.payment.repository.PaymentRepository;
+import com.b2c.flash_sale_b2c_UTC2.payment.service.PaymentService;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.Product;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.ProductVariant;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductVariantRepository;
@@ -101,6 +102,9 @@ class OrderServiceTest {
 
     @Mock
     private PaymentRepository paymentRepository;
+
+    @Mock
+    private PaymentService paymentService;
 
     @Mock
     private ImageService imageService;
@@ -460,8 +464,8 @@ class OrderServiceTest {
         assertEquals(new BigDecimal("199000"), response.getTotalAmount());
         assertEquals(expiresAt, response.getExpiresAt());
         assertEquals(expiresAt, response.getPaymentExpiry());
-        assertTrue(response.getQrCodeUrl().contains("vietqr.io"));
-        assertTrue(response.getQrCodeUrl().contains("199000"));
+        assertTrue(response.getQrCodeUrl().startsWith("data:image/png;base64,"));
+        assertTrue(response.getPaymentUrl().contains("zalopay.vn"));
         assertEquals(1, response.getShopOrders().size());
 
         QrShopOrderResponse shopOrder = response.getShopOrders().get(0);

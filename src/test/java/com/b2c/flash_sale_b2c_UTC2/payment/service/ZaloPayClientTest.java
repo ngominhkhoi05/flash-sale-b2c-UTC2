@@ -101,4 +101,25 @@ class ZaloPayClientTest {
                 .build();
         assertFalse(client.verifyCallbackMac(cbNullMac));
     }
+
+    @Test
+    @DisplayName("parseCallbackData correctly parses snake_case JSON from real ZaloPay callback")
+    void parseCallbackData_SnakeCaseJson_Success() {
+        String json = "{\"app_id\":2554,\"app_trans_id\":\"261025_ORD100_12345\",\"app_time\":1729850000000,"
+                + "\"app_user\":\"FlashSaleB2C\",\"amount\":150000,\"zp_trans_id\":261025000012345,"
+                + "\"server_time\":1729850005000,\"channel\":38,\"merchant_user_id\":\"buyer1\"}";
+
+        ZaloPayCallbackDto.ZaloPayCallbackData data = client.parseCallbackData(json);
+
+        assertNotNull(data);
+        assertEquals("2554", data.getAppId());
+        assertEquals("261025_ORD100_12345", data.getAppTransId());
+        assertEquals(1729850000000L, data.getAppTime());
+        assertEquals("FlashSaleB2C", data.getAppUser());
+        assertEquals(150000L, data.getAmount());
+        assertEquals("261025000012345", data.getZpTransId());
+        assertEquals(1729850005000L, data.getServerTime());
+        assertEquals(38, data.getChannel());
+        assertEquals("buyer1", data.getMerchantUserId());
+    }
 }

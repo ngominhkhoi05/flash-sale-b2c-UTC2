@@ -22,4 +22,6 @@ public class CreateOrderRequest {
     @NotEmpty(message = "Danh sách đơn hàng tách theo gian hàng không được để trống")
     @Valid
     private List<CheckoutStoreOrderRequest> storeOrders;
+
+    private String paymentMethod;
 }

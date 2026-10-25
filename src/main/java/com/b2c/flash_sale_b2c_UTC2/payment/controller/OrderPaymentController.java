@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Order Payment", description = "APIs thanh toán đơn hàng: ZaloPay QR, COD và xem trạng thái thanh toán")
 @RestController
-@RequestMapping("/api/v1/orders/{id}/payment")
+@RequestMapping("/api/v1/orders")
 @RequiredArgsConstructor
 public class OrderPaymentController {
 
@@ -25,7 +25,7 @@ public class OrderPaymentController {
 
     @Operation(summary = "Xem trạng thái và thông tin thanh toán của đơn hàng",
                description = "Trả về phương thức thanh toán, số tiền, link thanh toán, mã QR và trạng thái thanh toán")
-    @GetMapping
+    @GetMapping("/{id}/payment")
     public ResponseEntity<ApiResponse<PaymentResponse>> getPayment(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @PathVariable("id") Long id
@@ -36,7 +36,7 @@ public class OrderPaymentController {
 
     @Operation(summary = "Tạo phiên thanh toán ZaloPay (Sinh QR và URL thanh toán)",
                description = "Khởi tạo yêu cầu thanh toán qua cổng ZaloPay cho đơn hàng")
-    @PostMapping("/zalopay")
+    @PostMapping("/{id}/payment/zalopay")
     public ResponseEntity<ApiResponse<PaymentResponse>> createZaloPayPayment(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @PathVariable("id") Long id
@@ -47,7 +47,7 @@ public class OrderPaymentController {
 
     @Operation(summary = "Xác nhận phương thức thanh toán khi nhận hàng (COD)",
                description = "Xác nhận đơn hàng chọn phương thức COD và chuyển trạng thái đơn hàng sang CONFIRMED")
-    @PostMapping("/cod")
+    @PostMapping("/{id}/payment/cod")
     public ResponseEntity<ApiResponse<PaymentResponse>> confirmCodPayment(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @PathVariable("id") Long id
@@ -56,14 +56,25 @@ public class OrderPaymentController {
         return ResponseEntity.ok(ApiResponse.success("Xác nhận thanh toán COD thành công", response));
     }
 
-    @Operation(summary = "Query trạng thái giao dịch ZaloPay từ gateway",
+    @Operation(summary = "Query trạng thái giao dịch ZaloPay từ gateway theo ID đơn hàng",
                description = "Helper khi client bị miss callback từ ZaloPay. Gọi /v2/query trên ZaloPay server để đồng bộ trạng thái payment và order.")
-    @PostMapping("/zalopay/query")
+    @PostMapping("/{id}/payment/zalopay/query")
     public ResponseEntity<ApiResponse<PaymentResponse>> queryZaloPayPayment(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @PathVariable("id") Long id
     ) {
         PaymentResponse response = paymentService.queryZaloPayPayment(userDetails.getUser().getId(), id);
+        return ResponseEntity.ok(ApiResponse.success("Query trạng thái thanh toán ZaloPay thành công", response));
+    }
+
+    @Operation(summary = "Query trạng thái giao dịch ZaloPay từ gateway theo mã đơn hàng (orderCode)",
+               description = "Helper cho trang QR payment khi client chỉ có orderCode. Gọi /v2/query trên ZaloPay server.")
+    @PostMapping("/by-code/{orderCode}/payment/zalopay/query")
+    public ResponseEntity<ApiResponse<PaymentResponse>> queryZaloPayPaymentByCode(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("orderCode") String orderCode
+    ) {
+        PaymentResponse response = paymentService.queryZaloPayPaymentByCode(userDetails.getUser().getId(), orderCode);
         return ResponseEntity.ok(ApiResponse.success("Query trạng thái thanh toán ZaloPay thành công", response));
     }
 }
