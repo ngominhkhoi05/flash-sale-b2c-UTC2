@@ -71,9 +71,13 @@ public class PaymentServiceImpl implements PaymentService {
                 return mapToResponse(latest, order);
             }
             if ("PENDING".equalsIgnoreCase(latest.getStatus())
-                    && latest.getQrCodeData() != null && !latest.getQrCodeData().isBlank()
                     && latest.getCreatedAt() != null
                     && latest.getCreatedAt().isAfter(Instant.now().minusSeconds(900))) {
+                if ((latest.getQrCodeData() == null || latest.getQrCodeData().isBlank() || latest.getQrCodeData().contains("vietqr"))
+                        && latest.getPaymentUrl() != null && !latest.getPaymentUrl().isBlank()) {
+                    latest.setQrCodeData(com.b2c.flash_sale_b2c_UTC2.common.util.QrCodeGenerator.generateQrBase64(latest.getPaymentUrl(), 300, 300));
+                    paymentRepository.save(latest);
+                }
                 log.info("Reusing active PENDING ZaloPay payment id={} for orderId={}", latest.getId(), orderId);
                 return mapToResponse(latest, order);
             }
@@ -121,13 +125,19 @@ public class PaymentServiceImpl implements PaymentService {
             zpPayloadJson = "{}";
         }
 
+        String qrCodeData = zpResp.getQrCode();
+        if ((qrCodeData == null || qrCodeData.isBlank() || !qrCodeData.startsWith("data:image/"))
+                && zpResp.getOrderUrl() != null && !zpResp.getOrderUrl().isBlank()) {
+            qrCodeData = com.b2c.flash_sale_b2c_UTC2.common.util.QrCodeGenerator.generateQrBase64(zpResp.getOrderUrl(), 300, 300);
+        }
+
         Payment payment = Payment.builder()
                 .order(order)
                 .paymentMethod("ZALOPAY")
                 .transactionCode(appTransId)
                 .amount(order.getTotalAmount())
                 .paymentUrl(zpResp.getOrderUrl())
-                .qrCodeData(zpResp.getQrCode())
+                .qrCodeData(qrCodeData)
                 .status("PENDING")
                 .callbackPayload(zpPayloadJson)
                 .createdAt(Instant.now())

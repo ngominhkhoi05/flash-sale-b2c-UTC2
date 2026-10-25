@@ -464,8 +464,8 @@ class OrderServiceTest {
         assertEquals(new BigDecimal("199000"), response.getTotalAmount());
         assertEquals(expiresAt, response.getExpiresAt());
         assertEquals(expiresAt, response.getPaymentExpiry());
-        assertTrue(response.getQrCodeUrl().contains("vietqr.io"));
-        assertTrue(response.getQrCodeUrl().contains("199000"));
+        assertTrue(response.getQrCodeUrl().startsWith("data:image/png;base64,"));
+        assertTrue(response.getPaymentUrl().contains("zalopay.vn"));
         assertEquals(1, response.getShopOrders().size());
 
         QrShopOrderResponse shopOrder = response.getShopOrders().get(0);

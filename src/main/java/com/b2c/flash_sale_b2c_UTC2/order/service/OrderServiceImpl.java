@@ -518,7 +518,7 @@ public class OrderServiceImpl implements OrderService {
         String paymentUrl = null;
         String paymentStatus = "PENDING";
 
-        if (orders.size() == 1) {
+        if (!orders.isEmpty()) {
             Order primaryOrder = orders.get(0);
             List<Payment> payments = paymentRepository.findByOrderId(primaryOrder.getId());
             Payment latest = (payments != null && !payments.isEmpty()) ? payments.get(payments.size() - 1) : null;
@@ -533,17 +533,26 @@ public class OrderServiceImpl implements OrderService {
                             primaryOrder.getId(), e.getMessage());
                 }
             } else if (latest != null) {
-                qrCodeUrl = latest.getQrCodeData();
                 paymentUrl = latest.getPaymentUrl();
                 paymentStatus = latest.getStatus();
+                qrCodeUrl = latest.getQrCodeData();
+                if ((qrCodeUrl == null || qrCodeUrl.isBlank() || qrCodeUrl.contains("vietqr"))
+                        && paymentUrl != null && !paymentUrl.isBlank()) {
+                    qrCodeUrl = com.b2c.flash_sale_b2c_UTC2.common.util.QrCodeGenerator.generateQrBase64(paymentUrl, 300, 300);
+                    latest.setQrCodeData(qrCodeUrl);
+                    paymentRepository.save(latest);
+                }
             }
         }
 
-        if (qrCodeUrl == null || qrCodeUrl.isBlank()) {
+        if (paymentUrl == null || paymentUrl.isBlank()) {
             String amountStr = totalAmount.stripTrailingZeros().toPlainString();
             String safeOrderCode = URLEncoder.encode(orderCode, StandardCharsets.UTF_8);
-            qrCodeUrl = "https://api.vietqr.io/image/970422-9999999999-compact2.png?amount=" + amountStr + "&addInfo=" + safeOrderCode;
-            paymentUrl = "https://qc.zalopay.vn/pay?order=" + safeOrderCode + "&amount=" + amountStr;
+            paymentUrl = "https://qcgateway.zalopay.vn/openinapp?order=" + safeOrderCode + "&amount=" + amountStr;
+        }
+
+        if (qrCodeUrl == null || qrCodeUrl.isBlank() || qrCodeUrl.contains("vietqr")) {
+            qrCodeUrl = com.b2c.flash_sale_b2c_UTC2.common.util.QrCodeGenerator.generateQrBase64(paymentUrl, 300, 300);
         }
 
         return QrOrderDetailResponse.builder()

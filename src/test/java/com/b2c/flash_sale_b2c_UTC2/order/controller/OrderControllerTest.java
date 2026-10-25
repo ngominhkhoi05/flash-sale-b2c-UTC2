@@ -235,7 +235,7 @@ class OrderControllerTest {
 
         QrOrderDetailResponse response = QrOrderDetailResponse.builder()
                 .orderCode("FS-261001-A7K2Q")
-                .qrCodeUrl("https://api.vietqr.io/image/970422-9999999999-compact2.png?amount=199000&addInfo=FS-261001-A7K2Q")
+                .qrCodeUrl("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...")
                 .amount(new BigDecimal("199000"))
                 .totalAmount(new BigDecimal("199000"))
                 .shopOrders(List.of(shopOrder))

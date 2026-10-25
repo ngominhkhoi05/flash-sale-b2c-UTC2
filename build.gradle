@@ -35,6 +35,9 @@ dependencies {
 	implementation 'org.redisson:redisson:3.45.0'
 	// Cloudinary SDK (upload/destroy ảnh cho Image Module polymorphic storage)
 	implementation 'com.cloudinary:cloudinary-http5:2.4.0'
+	// ZXing (Generate QR Code for ZaloPay)
+	implementation 'com.google.zxing:core:3.5.3'
+	implementation 'com.google.zxing:javase:3.5.3'
 
 	// OpenSearch Java client (ApacheHttpClient5Transport, hỗ trợ Spring Boot 4.1)
 	// Bắt buộc >= 3.6.0 vì Spring Boot 4.1 nâng httpclient5 lên 5.6
