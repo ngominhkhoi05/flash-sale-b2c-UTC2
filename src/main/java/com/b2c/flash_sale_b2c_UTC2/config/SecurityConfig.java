@@ -88,6 +88,7 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/stores/featured").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/categories/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/products/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/products/search/image/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/flash-sales/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/banners/**").permitAll()
                         // Seller endpoints: yêu cầu vai trò SELLER
