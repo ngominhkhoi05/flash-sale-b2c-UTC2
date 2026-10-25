@@ -147,5 +147,14 @@ app:
     search-reindex-delay: ${SEARCH_REINDEX_DELAY:600000}
     # Bật/tắt reconcile định kỳ (tắt khi chưa cần).
     search-reconcile-enabled: ${SEARCH_RECONCILE_ENABLED:true}
+  # --- Image Search (pgvector + CLIP AI service) ---
+  image-search:
+    embedding-service-url: ${IMAGE_EMBEDDING_URL:http://localhost:8000}
+    connect-timeout-ms: 3000
+    read-timeout-ms: 15000
+    max-distance: 0.38
+    default-limit: 20
+    reindex-batch-size: 50
+
 
 

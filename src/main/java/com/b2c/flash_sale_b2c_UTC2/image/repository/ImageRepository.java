@@ -2,6 +2,8 @@ package com.b2c.flash_sale_b2c_UTC2.image.repository;
 
 import com.b2c.flash_sale_b2c_UTC2.image.entity.Image;
 import com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -90,4 +92,19 @@ public interface ImageRepository extends JpaRepository<Image, Long> {
     List<Image> findByOwnerTypeAndOwnerIdIn(
             @Param("ownerType") ImageOwnerType ownerType,
             @Param("ownerIds") List<Long> ownerIds);
+
+    /**
+     * Tìm ảnh phục vụ việc đánh vector chỉ mục (Vector Indexing / Reindex).
+     */
+    @Query("""
+        SELECT i FROM Image i
+        WHERE i.ownerType = :ownerType
+          AND i.status = 'ACTIVE'
+          AND (:primaryOnly = false OR i.isPrimary = true)
+        ORDER BY i.id ASC
+        """)
+    Page<Image> findImagesForIndexing(
+            @Param("ownerType") ImageOwnerType ownerType,
+            @Param("primaryOnly") boolean primaryOnly,
+            Pageable pageable);
 }
