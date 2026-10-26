@@ -212,10 +212,16 @@ public class AuthServiceImpl implements AuthService {
 
         // Kiểm tra tồn tại trong Redis (Whitelist refresh token)
         String redisKey = REDIS_REFRESH_KEY_PREFIX + userId + ":" + jti;
-        Boolean exists = stringRedisTemplate.hasKey(redisKey);
-        if (!Boolean.TRUE.equals(exists)) {
-            log.warn("Phát hiện Refresh Token không tồn tại hoặc đã bị thu hồi/xoay vòng trong Redis: userId={}, jti={}", userId, jti);
-            throw new BusinessException(AuthErrorCode.INVALID_REFRESH_TOKEN);
+        try {
+            Boolean exists = stringRedisTemplate.hasKey(redisKey);
+            if (Boolean.FALSE.equals(exists)) {
+                log.warn("Phát hiện Refresh Token không tồn tại hoặc đã bị thu hồi/xoay vòng trong Redis: userId={}, jti={}", userId, jti);
+                throw new BusinessException(AuthErrorCode.INVALID_REFRESH_TOKEN);
+            }
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.warn("Không thể kiểm tra Redis Whitelist (Redis có thể đang tắt ở local dev): {}", ex.getMessage());
         }
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(userEmail);
@@ -279,20 +285,28 @@ public class AuthServiceImpl implements AuthService {
         if (userId == null || jti == null) {
             return;
         }
-        String redisKey = REDIS_REFRESH_KEY_PREFIX + userId + ":" + jti;
-        long ttlSeconds = jwtProperties.getRefreshExpirationMs() / 1000;
-        stringRedisTemplate.opsForValue().set(redisKey, "VALID", ttlSeconds, TimeUnit.SECONDS);
+        try {
+            String redisKey = REDIS_REFRESH_KEY_PREFIX + userId + ":" + jti;
+            long ttlSeconds = jwtProperties.getRefreshExpirationMs() / 1000;
+            stringRedisTemplate.opsForValue().set(redisKey, "VALID", ttlSeconds, TimeUnit.SECONDS);
 
-        String userTokensKey = REDIS_USER_TOKENS_PREFIX + userId;
-        stringRedisTemplate.opsForSet().add(userTokensKey, jti);
-        stringRedisTemplate.expire(userTokensKey, ttlSeconds, TimeUnit.SECONDS);
+            String userTokensKey = REDIS_USER_TOKENS_PREFIX + userId;
+            stringRedisTemplate.opsForSet().add(userTokensKey, jti);
+            stringRedisTemplate.expire(userTokensKey, ttlSeconds, TimeUnit.SECONDS);
+        } catch (Exception ex) {
+            log.warn("Không thể lưu refresh token vào Redis (Redis có thể đang tắt ở local dev): {}", ex.getMessage());
+        }
     }
 
     private void revokeRefreshToken(Long userId, String jti) {
-        String key = REDIS_REFRESH_KEY_PREFIX + userId + ":" + jti;
-        stringRedisTemplate.delete(key);
+        try {
+            String key = REDIS_REFRESH_KEY_PREFIX + userId + ":" + jti;
+            stringRedisTemplate.delete(key);
 
-        String setKey = REDIS_USER_TOKENS_PREFIX + userId;
-        stringRedisTemplate.opsForSet().remove(setKey, jti);
+            String setKey = REDIS_USER_TOKENS_PREFIX + userId;
+            stringRedisTemplate.opsForSet().remove(setKey, jti);
+        } catch (Exception ex) {
+            log.warn("Không thể thu hồi refresh token trong Redis: {}", ex.getMessage());
+        }
     }
 }
