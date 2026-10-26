@@ -401,13 +401,17 @@ public class GoogleOAuth2ServiceImpl implements GoogleOAuth2Service {
 
     private void saveRefreshTokenInRedis(Long userId, String jti) {
         if (userId == null || jti == null) return;
-        String redisKey = REDIS_REFRESH_KEY_PREFIX + userId + ":" + jti;
-        long ttlSeconds = jwtProperties.getRefreshExpirationMs() / 1000;
-        stringRedisTemplate.opsForValue().set(redisKey, "VALID", ttlSeconds, TimeUnit.SECONDS);
+        try {
+            String redisKey = REDIS_REFRESH_KEY_PREFIX + userId + ":" + jti;
+            long ttlSeconds = jwtProperties.getRefreshExpirationMs() / 1000;
+            stringRedisTemplate.opsForValue().set(redisKey, "VALID", ttlSeconds, TimeUnit.SECONDS);
 
-        String userTokensKey = REDIS_USER_TOKENS_PREFIX + userId;
-        stringRedisTemplate.opsForSet().add(userTokensKey, jti);
-        stringRedisTemplate.expire(userTokensKey, ttlSeconds, TimeUnit.SECONDS);
+            String userTokensKey = REDIS_USER_TOKENS_PREFIX + userId;
+            stringRedisTemplate.opsForSet().add(userTokensKey, jti);
+            stringRedisTemplate.expire(userTokensKey, ttlSeconds, TimeUnit.SECONDS);
+        } catch (Exception ex) {
+            log.warn("Không thể lưu refresh token vào Redis trong Google OAuth (Redis có thể đang tắt ở local dev): {}", ex.getMessage());
+        }
     }
 
     // ===== Helpers =====
