@@ -40,6 +40,9 @@ public class FlashSaleExpirationScheduler {
     @Autowired(required = false)
     private UserRepository userRepository;
 
+    @Autowired(required = false)
+    private FlashSaleItemService itemService;
+
     /**
      * Job 1: Quét các đơn Flash Sale PENDING_PAYMENT hết hạn giữ chỗ (quá 300s).
      * Chạy định kỳ mỗi 15 giây.
@@ -138,13 +141,10 @@ public class FlashSaleExpirationScheduler {
     }
 
     /**
-     * Job 2: Quét các khung giờ Flash Sale đã kết thúc để tự động hoàn trả tồn kho chưa bán (unsold stock).
-     * Chạy định kỳ mỗi 30 giây.
-     *
-     * The actual close + stock return is delegated to FlashSaleSlotCloseService
-     * so the @Transactional boundary is honored by the Spring AOP proxy.
+     * Job 2: Quét các khung giờ Flash Sale để tự động kích hoạt phiên khi đến giờ và đóng phiên khi hết giờ.
+     * Chạy định kỳ mỗi 5 giây.
      */
-    @Scheduled(fixedDelay = 30000)
+    @Scheduled(fixedDelay = 5000)
     public void processEndedSlotsAndReturnUnsoldStock() {
         try {
             Instant now = Instant.now();
@@ -163,6 +163,16 @@ public class FlashSaleExpirationScheduler {
                 slot.setStatus("ACTIVE");
                 slotRepository.save(slot);
                 log.info("Activated FlashSaleSlot ID: {} - {}", slot.getId(), slot.getTitle());
+
+                // Tự động nạp tồn kho lên Redis
+                if (itemService != null) {
+                    try {
+                        itemService.preWarmRedisForSlot(slot.getId());
+                    } catch (Exception e) {
+                        log.warn("Auto pre-warm for slot {} failed: {}", slot.getId(), e.getMessage());
+                    }
+                }
+
                 try {
                     wsBroadcaster.broadcastSlotStatus(slot.getId(), "ACTIVE");
                 } catch (Exception e) {
@@ -176,3 +186,4 @@ public class FlashSaleExpirationScheduler {
         }
     }
 }
+

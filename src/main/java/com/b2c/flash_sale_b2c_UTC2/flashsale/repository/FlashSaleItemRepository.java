@@ -20,6 +20,7 @@ public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Lo
     List<FlashSaleItem> findBySlotIdAndStatus(Long slotId, String status);
 
     List<FlashSaleItem> findBySlotId(Long slotId);
+    long countByStatus(String status);
 
     @Query("""
         SELECT fsi FROM FlashSaleItem fsi
