@@ -16,6 +16,7 @@ public interface WalletWithdrawalRequestRepository extends JpaRepository<WalletW
     Optional<WalletWithdrawalRequest> findByRequestCode(String requestCode);
 
     Optional<WalletWithdrawalRequest> findByIdempotencyKey(String idempotencyKey);
+    long countByStatus(String status);
 
     Page<WalletWithdrawalRequest> findByStoreId(Long storeId, Pageable pageable);
 

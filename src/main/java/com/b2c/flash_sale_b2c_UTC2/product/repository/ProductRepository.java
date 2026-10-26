@@ -258,4 +258,6 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
             @Param("search") String search,
             Pageable pageable
     );
+
+    boolean existsByCategoryId(Integer categoryId);
 }

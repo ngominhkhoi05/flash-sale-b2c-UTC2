@@ -87,4 +87,53 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
      */
     @Query("SELECT o.buyer.id, count(o) FROM Order o WHERE o.buyer.id IN :buyerIds GROUP BY o.buyer.id")
     List<Object[]> countOrdersByBuyerIds(@Param("buyerIds") List<Long> buyerIds);
+
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.createdAt >= :start AND o.createdAt < :end AND o.status IN :statuses")
+    long countByCreatedAtBetweenAndStatusIn(
+            @Param("start") Instant start,
+            @Param("end") Instant end,
+            @Param("statuses") List<String> statuses);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.createdAt >= :start AND o.createdAt < :end AND o.status IN :statuses")
+    BigDecimal sumTotalAmountByCreatedAtBetweenAndStatusIn(
+            @Param("start") Instant start,
+            @Param("end") Instant end,
+            @Param("statuses") List<String> statuses);
+
+    @Query("SELECT o FROM Order o WHERE o.createdAt >= :start AND o.createdAt < :end AND o.status IN :statuses ORDER BY o.createdAt ASC")
+    List<Order> findOrdersForDashboard(
+            @Param("start") Instant start,
+            @Param("end") Instant end,
+            @Param("statuses") List<String> statuses);
+
+    @Query("""
+        SELECT s.id, s.storeName, u.fullName, COALESCE(SUM(o.totalAmount), 0), COUNT(o)
+        FROM Order o
+        JOIN o.store s
+        JOIN s.user u
+        WHERE o.createdAt >= :start AND o.createdAt < :end AND o.status IN :statuses
+        GROUP BY s.id, s.storeName, u.fullName
+        ORDER BY SUM(o.totalAmount) DESC
+    """)
+    List<Object[]> findTopStoresByRevenue(
+            @Param("start") Instant start,
+            @Param("end") Instant end,
+            @Param("statuses") List<String> statuses,
+            Pageable pageable);
+
+    @Query("""
+        SELECT c.id, c.name, COALESCE(SUM(oi.priceAtPurchase * oi.quantity), 0)
+        FROM OrderItem oi
+        JOIN oi.order o
+        JOIN oi.variant v
+        JOIN v.product p
+        JOIN p.category c
+        WHERE o.createdAt >= :start AND o.createdAt < :end AND o.status IN :statuses
+        GROUP BY c.id, c.name
+        ORDER BY SUM(oi.priceAtPurchase * oi.quantity) DESC
+    """)
+    List<Object[]> findCategoryRevenueBreakdown(
+            @Param("start") Instant start,
+            @Param("end") Instant end,
+            @Param("statuses") List<String> statuses);
 }

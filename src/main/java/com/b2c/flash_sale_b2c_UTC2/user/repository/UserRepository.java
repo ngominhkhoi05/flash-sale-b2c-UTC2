@@ -12,6 +12,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByPhone(String phone);
     boolean existsByEmail(String email);
     boolean existsByPhone(String phone);
+    long countByCreatedAtBetween(java.time.Instant start, java.time.Instant end);
 
     @org.springframework.data.jpa.repository.Query(value = """
         SELECT DISTINCT u FROM User u
