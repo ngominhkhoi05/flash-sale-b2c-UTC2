@@ -1,0 +1,68 @@
+# ===================================================================
+# Flash Sale B2C - Profile Load Test (Redisson Distributed Lock)
+# Kích hoạt qua: --spring.profiles.active=loadtest hoặc SPRING_PROFILES_ACTIVE=loadtest
+# ===================================================================
+
+spring:
+  config:
+    activate:
+      on-profile: loadtest
+
+  # --- Ket noi CSDL PostgreSQL ---
+  datasource:
+    url: jdbc:postgresql://localhost:5432/flash_sale_b2c
+    username: postgres
+    password: ${DB_PASSWORD:root}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: FlashSaleLoadTestHikariPool
+      maximum-pool-size: 50
+      minimum-idle: 20
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: false
+
+  # --- Redis single node ---
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: ""
+      timeout: 3000ms
+
+# --- Redisson Client Config ---
+redisson:
+  enabled: true
+
+# --- Flash Sale Concurrency Strategy: Redisson Distributed Lock ---
+flashsale:
+  reservation:
+    strategy: redisson
+  lock:
+    wait-ms: 200
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+
+# --- Giảm log khi load test để không nghẽn I/O ---
+logging:
+  level:
+    root: INFO
+    com.b2c.flash_sale_b2c_UTC2: INFO
+    org.hibernate.SQL: WARN
