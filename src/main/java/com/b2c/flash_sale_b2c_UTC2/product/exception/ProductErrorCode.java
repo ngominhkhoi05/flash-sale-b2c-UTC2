@@ -12,6 +12,7 @@ public enum ProductErrorCode implements ErrorCode {
     CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "CAT_404_NOT_FOUND", "Không tìm thấy ngành hàng yêu cầu"),
     CATEGORY_NAME_ALREADY_EXISTS(HttpStatus.CONFLICT, "CAT_409_NAME_EXISTS", "Tên ngành hàng đã tồn tại"),
     CATEGORY_SLUG_ALREADY_EXISTS(HttpStatus.CONFLICT, "CAT_409_SLUG_EXISTS", "Đường dẫn slug của ngành hàng đã tồn tại"),
+    CATEGORY_HAS_PRODUCTS(HttpStatus.CONFLICT, "CAT_409_HAS_PRODUCTS", "Không thể xóa ngành hàng đang có sản phẩm liên kết"),
     PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "PROD_404_NOT_FOUND", "Không tìm thấy sản phẩm"),
     PRODUCT_ACCESS_DENIED(HttpStatus.FORBIDDEN, "PROD_403_ACCESS_DENIED", "Bạn không có quyền quản lý sản phẩm này"),
     STORE_NOT_ELIGIBLE(HttpStatus.FORBIDDEN, "PROD_403_STORE_NOT_ELIGIBLE", "Gian hàng chưa được phê duyệt hoặc không đủ điều kiện đăng bán"),
