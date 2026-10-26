@@ -23,6 +23,7 @@ public class CategoryServiceImpl implements CategoryService {
 
     private final CategoryRepository categoryRepository;
     private final CategoryMapper categoryMapper;
+    private final com.b2c.flash_sale_b2c_UTC2.product.repository.ProductRepository productRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -107,6 +108,11 @@ public class CategoryServiceImpl implements CategoryService {
     public void deleteCategory(Integer id) {
         Category category = categoryRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ProductErrorCode.CATEGORY_NOT_FOUND));
+
+        if (productRepository.existsByCategoryId(id)) {
+            throw new BusinessException(ProductErrorCode.CATEGORY_HAS_PRODUCTS);
+        }
+
         categoryRepository.delete(category);
         log.info("Admin đã xóa ngành hàng id={}", id);
     }
