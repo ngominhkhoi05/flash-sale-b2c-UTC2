@@ -31,6 +31,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -46,6 +48,8 @@ public class FlashSaleReservationService {
     private final AddressRepository addressRepository;
     private final StockReservationStrategy stockReservationStrategy;
     private final FlashSaleWsBroadcaster wsBroadcaster;
+    @Autowired(required = false)
+    private GatedReservationTransactionalWorker gatedWorker;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Autowired(required = false)
@@ -128,7 +132,7 @@ public class FlashSaleReservationService {
             }
         }
 
-        FlashSaleItem item = itemRepository.findById(request.getFlashSaleItemId())
+        FlashSaleItem item = itemRepository.findByIdWithDetails(request.getFlashSaleItemId())
                 .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.ITEM_NOT_FOUND));
 
         if (!"APPROVED".equals(item.getStatus())) {
@@ -290,6 +294,229 @@ public class FlashSaleReservationService {
             }
             throw new BusinessException(FlashSaleErrorCode.ORDER_CREATION_FAILED);
         }
+    }
+
+
+    /**
+     * Luồng gated Lua (Việc 2):
+     * 1. Validate & đọc dữ liệu không mở transaction (read-only / không giữ connection DB).
+     * 2. Gọi Lua reserveStock trên Redis. Nếu thất bại -> trả kết quả ngay, KHÔNG chạm DB.
+     * 3. Chỉ khi Lua thành công mới mở transaction DB ngắn: tạo order, UPDATE kho ở cuối cùng, và WS trong afterCommit.
+     * 4. Bù hoàn chính xác trên Redis nếu ghi DB thất bại.
+     */
+
+    /**
+     * Luồng Redisson Optimized (Ma trận 2x2):
+     * Lock Redisson đã bao bọc bên ngoài tại Facade.
+     * Tại đây:
+     * 1. Validate & đọc dữ liệu không giữ connection DB.
+     * 2. Trừ kho Redis in-memory (qua stockReservationStrategy.reserveStock).
+     * 3. Chỉ khi trừ Redis thành công mới mở transaction DB ngắn qua GatedReservationTransactionalWorker
+     *    (tạo order trước, UPDATE kho ở cuối, WS trong afterCommit).
+     * 4. Bù trừ chính xác nếu ghi DB thất bại.
+     */
+    public ReservationResponse createReservationOptimizedRedisson(Long userId, String idempotencyKey, CreateReservationRequest request) {
+        return createReservationGatedLua(userId, idempotencyKey, request);
+    }
+
+    public ReservationResponse createReservationGatedLua(Long userId, String idempotencyKey, CreateReservationRequest request) {
+        String idemKey = null;
+        if (idempotencyKey != null && !idempotencyKey.isBlank() && redisTemplate != null) {
+            idemKey = IDEMPOTENCY_KEY_PREFIX + userId + ":" + idempotencyKey;
+            Boolean isFirstReq = redisTemplate.opsForValue().setIfAbsent(idemKey, "PROCESSING", Duration.ofMinutes(10));
+            if (Boolean.FALSE.equals(isFirstReq)) {
+                String existingVal = redisTemplate.opsForValue().get(idemKey);
+                if ("PROCESSING".equals(existingVal)) {
+                    log.warn("Duplicate reservation request in flight for userId: {}, idempotencyKey: {}", userId, idempotencyKey);
+                    throw new BusinessException(FlashSaleErrorCode.IDEMPOTENCY_CONFLICT);
+                }
+                if (existingVal != null && !existingVal.isBlank()) {
+                    log.info("Returning cached order result for idempotencyKey: {} -> {}", idempotencyKey, existingVal);
+                    return ReservationResponse.builder()
+                            .orderCode(existingVal)
+                            .reservationId(existingVal)
+                            .status("PENDING_PAYMENT")
+                            .message("Yêu cầu đã được xử lý thành công trước đó (Idempotent replay).")
+                            .build();
+                }
+            }
+        }
+
+        // 1. Validate & đọc dữ liệu cần thiết (KHÔNG giữ connection)
+        Address address;
+        if (request.getAddressId() != null) {
+            address = addressRepository.findById(request.getAddressId())
+                    .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.ADDRESS_NOT_FOUND_OR_NOT_OWNED));
+            if (address.getUser() == null || !address.getUser().getId().equals(userId)) {
+                throw new BusinessException(FlashSaleErrorCode.ADDRESS_NOT_FOUND_OR_NOT_OWNED);
+            }
+        } else {
+            address = addressRepository.findByUserIdAndIsDefaultTrue(userId)
+                    .orElseGet(() -> {
+                        List<Address> userAddresses = addressRepository.findByUserId(userId);
+                        return (userAddresses != null && !userAddresses.isEmpty()) ? userAddresses.get(0) : null;
+                    });
+
+            if (address == null) {
+                if (idemKey != null && redisTemplate != null) redisTemplate.delete(idemKey);
+                throw new BusinessException(FlashSaleErrorCode.ADDRESS_REQUIRED);
+            }
+        }
+
+        FlashSaleItem item = itemRepository.findByIdWithDetails(request.getFlashSaleItemId())
+                .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.ITEM_NOT_FOUND));
+
+        if (!"APPROVED".equals(item.getStatus())) {
+            throw new BusinessException(FlashSaleErrorCode.ITEM_NOT_FOUND);
+        }
+
+        FlashSaleSlot slot = item.getSlot();
+        Instant now = Instant.now();
+
+        if (now.isBefore(slot.getStartTime()) || now.isAfter(slot.getEndTime()) || !"ACTIVE".equals(slot.getStatus())) {
+            throw new BusinessException(FlashSaleErrorCode.SLOT_NOT_ACTIVE);
+        }
+
+        long remainingSlotSeconds = Duration.between(now, slot.getEndTime()).getSeconds();
+        if (remainingSlotSeconds <= 0) {
+            throw new BusinessException(FlashSaleErrorCode.SLOT_ALREADY_ENDED);
+        }
+
+        String orderCode = "FS-" + System.currentTimeMillis() + "-" + (int) (Math.random() * 9000 + 1000);
+
+        // 2. Gọi Lua reserve trên Redis
+        long reservationResult = stockReservationStrategy.reserveStock(
+                slot.getId(),
+                userId,
+                item.getId(),
+                request.getQuantity(),
+                item.getUserPurchaseLimit(),
+                remainingSlotSeconds,
+                orderCode
+        );
+
+        if (reservationResult == -1) {
+            if (idemKey != null && redisTemplate != null) redisTemplate.delete(idemKey);
+            throw new BusinessException(FlashSaleErrorCode.PURCHASE_LIMIT_EXCEEDED);
+        }
+        if (reservationResult == 0) {
+            if (idemKey != null && redisTemplate != null) redisTemplate.delete(idemKey);
+            throw new BusinessException(FlashSaleErrorCode.OUT_OF_STOCK);
+        }
+
+        // 3. Chỉ khi Lua thành công mới mở transaction DB ngắn
+        try {
+            return (gatedWorker != null) ? gatedWorker.executeGatedDatabaseReservation(userId, address, item, slot, request, orderCode, idemKey) : executeGatedDatabaseReservation(userId, address, item, slot, request, orderCode, idemKey);
+        } catch (Exception ex) {
+            log.error("DB reservation failed for orderCode={}. Compensating Redis Lua reservation...", orderCode, ex);
+            try {
+                stockReservationStrategy.rollbackStockWithMarker(slot.getId(), userId, item.getId(), request.getQuantity(), orderCode);
+                if (idemKey != null && redisTemplate != null) {
+                    redisTemplate.delete(idemKey);
+                }
+            } catch (Exception compEx) {
+                log.error("CRITICAL: Failed during Redis compensation for orderCode: {}", orderCode, compEx);
+            }
+            if (ex instanceof BusinessException be) {
+                throw be;
+            }
+            throw new BusinessException(FlashSaleErrorCode.ORDER_CREATION_FAILED);
+        }
+    }
+
+    @Transactional
+    public ReservationResponse executeGatedDatabaseReservation(
+            Long userId,
+            Address address,
+            FlashSaleItem item,
+            FlashSaleSlot slot,
+            CreateReservationRequest request,
+            String orderCode,
+            String idemKey
+    ) {
+        if (orderPort == null) {
+            log.error("FlashSaleOrderPort is not configured!");
+            throw new BusinessException(FlashSaleErrorCode.ORDER_CREATION_FAILED);
+        }
+
+        Instant expiresAt = Instant.now().plusSeconds(slot.getReservationTtlSeconds());
+        BigDecimal totalAmount = item.getFlashSalePrice().multiply(BigDecimal.valueOf(request.getQuantity()));
+
+        CreateFlashSaleOrderCommand cmd = new CreateFlashSaleOrderCommand(
+                userId,
+                address.getId(),
+                item.getId(),
+                slot.getId(),
+                item.getVariant().getId(),
+                item.getVariant().getProduct().getStore().getId(),
+                request.getQuantity(),
+                item.getFlashSalePrice(),
+                item.getVariant().getProduct().getName(),
+                item.getVariant().getVariantName(),
+                orderCode,
+                expiresAt
+        );
+
+        // Tạo order trước
+        OrderRef orderRef = orderPort.createPendingOrder(cmd);
+
+        // Sau cùng mới UPDATE hàng DB để thời gian giữ row-lock ngắn nhất
+        int dbUpdated = itemRepository.deductAvailableStockConditionally(item.getId(), request.getQuantity());
+        if (dbUpdated == 0) {
+            log.warn("DB available_stock was insufficient for itemId: {}. Forcing rollback.", item.getId());
+            throw new BusinessException(FlashSaleErrorCode.OUT_OF_STOCK);
+        }
+
+        // Dọn dẹp pending res trên Redis & gán cache idempotency
+        if (redisTemplate != null) {
+            redisTemplate.delete(PENDING_RES_PREFIX + orderCode);
+            redisTemplate.opsForZSet().remove(PENDING_RES_INDEX, orderCode);
+            if (idemKey != null) {
+                redisTemplate.opsForValue().set(idemKey, orderRef.orderCode(), Duration.ofMinutes(10));
+            }
+        }
+
+        // Đẩy WebSocket ra sau khi transaction đã commit thành công
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    try {
+                        wsBroadcaster.broadcastStockUpdate(slot.getId(), item.getId(), item.getAvailableStock() - request.getQuantity());
+                        User buyer = (userRepository != null) ? userRepository.findById(userId).orElse(null) : null;
+                        if (buyer != null) {
+                            FlashSaleWsEvent event = FlashSaleWsEvent.builder()
+                                    .eventType(FlashSaleWsEvent.EventType.ORDER_RESERVED)
+                                    .slotId(slot.getId())
+                                    .flashSaleItemId(item.getId())
+                                    .orderId(orderRef.orderId())
+                                    .orderCode(orderRef.orderCode())
+                                    .quantity(request.getQuantity())
+                                    .totalAmount(totalAmount.longValue())
+                                    .expiresAt(expiresAt)
+                                    .occurredAt(Instant.now())
+                                    .build();
+                            wsBroadcaster.sendReservationResultToUser(buyer.getEmail(), event);
+                        }
+                    } catch (Exception wsEx) {
+                        log.warn("[WS] afterCommit broadcast warning: {}", wsEx.getMessage());
+                    }
+                }
+            });
+        }
+
+        return ReservationResponse.builder()
+                .orderId(orderRef.orderId())
+                .orderCode(orderRef.orderCode())
+                .reservationId(orderRef.orderCode())
+                .flashSaleItemId(item.getId())
+                .quantity(request.getQuantity())
+                .flashSalePrice(item.getFlashSalePrice())
+                .totalAmount(totalAmount)
+                .status("PENDING_PAYMENT")
+                .expiresAt(expiresAt)
+                .message("Giữ chỗ Flash Sale thành công. Vui lòng thanh toán trước thời hạn.")
+                .build();
     }
 
     /**

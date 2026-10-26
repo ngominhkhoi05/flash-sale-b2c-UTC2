@@ -52,7 +52,7 @@ public class RealFlashSaleOrderPort implements FlashSaleOrderPort {
     private final ProductVariantRepository productVariantRepository;
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW, timeout = 3)
+    @Transactional
     public OrderRef createPendingOrder(CreateFlashSaleOrderCommand cmd) {
         User buyer = userRepository.getReferenceById(cmd.userId());
         Address address = addressRepository.getReferenceById(cmd.addressId());

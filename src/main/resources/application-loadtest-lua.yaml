@@ -1,0 +1,62 @@
+# ===================================================================
+# Flash Sale B2C - Profile Load Test Lua (Baseline công bằng)
+# ===================================================================
+
+spring:
+  config:
+    activate:
+      on-profile: loadtest-lua
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/flash_sale_b2c
+    username: postgres
+    password: ${DB_PASSWORD:root}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: FlashSaleLoadTestLuaHikariPool
+      maximum-pool-size: 50
+      minimum-idle: 20
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: false
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: ""
+      timeout: 3000ms
+
+redisson:
+  enabled: false
+
+flashsale:
+  reservation:
+    strategy: lua
+  fail-fast:
+    enabled: ${FASTA_ENABLED:false}
+
+logging:
+  level:
+    root: INFO
+    com.b2c.flash_sale_b2c_UTC2: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+    org.hibernate.SQL: WARN
