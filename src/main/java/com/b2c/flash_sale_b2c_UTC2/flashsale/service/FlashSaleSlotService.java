@@ -102,15 +102,73 @@ public class FlashSaleSlotService {
     public FlashSaleSlotResponse getSlotById(Long slotId) {
         FlashSaleSlot slot = slotRepository.findById(slotId)
                 .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.SLOT_NOT_FOUND));
-        return slotMapper.toResponse(slot);
+        Instant now = Instant.now();
+        FlashSaleSlotResponse resp = slotMapper.toResponse(slot);
+        if (!"ENDED".equals(slot.getStatus()) && slot.getEndTime() != null && !slot.getEndTime().isAfter(now)) {
+            resp.setStatus("ENDED");
+        } else if (("UPCOMING".equals(slot.getStatus()) || "REGISTRATION_OPEN".equals(slot.getStatus()))
+                && slot.getStartTime() != null && !slot.getStartTime().isAfter(now)
+                && slot.getEndTime() != null && slot.getEndTime().isAfter(now)) {
+            resp.setStatus("ACTIVE");
+        }
+        return resp;
     }
 
     @Transactional(readOnly = true)
     public List<FlashSaleSlotResponse> getAllSlots() {
+        Instant now = Instant.now();
         return slotRepository.findAll().stream()
-                .map(slotMapper::toResponse)
+                .map(slot -> {
+                    FlashSaleSlotResponse resp = slotMapper.toResponse(slot);
+                    if (!"ENDED".equals(slot.getStatus()) && slot.getEndTime() != null && !slot.getEndTime().isAfter(now)) {
+                        resp.setStatus("ENDED");
+                    } else if (("UPCOMING".equals(slot.getStatus()) || "REGISTRATION_OPEN".equals(slot.getStatus()))
+                            && slot.getStartTime() != null && !slot.getStartTime().isAfter(now)
+                            && slot.getEndTime() != null && slot.getEndTime().isAfter(now)) {
+                        resp.setStatus("ACTIVE");
+                    }
+                    return resp;
+                })
                 .toList();
     }
+
+    @Transactional
+    public void deleteSlot(Long slotId) {
+        FlashSaleSlot slot = slotRepository.findById(slotId)
+                .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.SLOT_NOT_FOUND));
+
+        Instant now = Instant.now();
+        boolean isActive = "ACTIVE".equals(slot.getStatus()) ||
+                (slot.getStartTime() != null && !slot.getStartTime().isAfter(now)
+                        && slot.getEndTime() != null && slot.getEndTime().isAfter(now));
+
+        if (isActive) {
+            throw new BusinessException(FlashSaleErrorCode.SLOT_ACTIVE_CANNOT_DELETE);
+        }
+
+        // Hoàn tồn kho nếu có items đăng ký đã APPROVED trong phiên chưa chạy/hủy
+        List<FlashSaleItem> items = itemRepository.findBySlotId(slotId);
+        if (!items.isEmpty()) {
+            for (FlashSaleItem item : items) {
+                if ("APPROVED".equals(item.getStatus()) && (slot.getIsStockRolledBack() == null || !slot.getIsStockRolledBack())) {
+                    if (item.getVariant() != null && item.getAllocatedStock() != null && item.getAllocatedStock() > 0) {
+                        try {
+                            variantRepository.replenishStockQuantityConditionally(item.getVariant().getId(), item.getAllocatedStock());
+                        } catch (Exception ex) {
+                            log.warn("Không thể hoàn tồn kho biến thể: {}", ex.getMessage());
+                        }
+                    }
+                }
+            }
+            // Xóa toàn bộ items của slot để tránh lỗi ràng buộc khóa ngoại
+            itemRepository.deleteAll(items);
+        }
+
+        // Xóa hoàn toàn slot khỏi cơ sở dữ liệu
+        slotRepository.delete(slot);
+        log.info("Admin đã xóa hoàn toàn phiên Flash Sale ID: {} ({}) khỏi cơ sở dữ liệu", slotId, slot.getTitle());
+    }
+
 
     @Transactional(readOnly = true)
     public RealtimeTelemetryResponse getSlotTelemetry(Long slotId) {

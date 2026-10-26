@@ -14,6 +14,7 @@ public enum FlashSaleErrorCode implements ErrorCode {
     SLOT_OVERLAP(HttpStatus.CONFLICT, "FS_409_SLOT_OVERLAP", "Khung giờ Flash Sale bị trùng lặp với khung giờ đã tồn tại"),
     SLOT_NOT_ACTIVE(HttpStatus.BAD_REQUEST, "FS_400_SLOT_NOT_ACTIVE", "Khung giờ Flash Sale hiện không hoạt động"),
     SLOT_ALREADY_ENDED(HttpStatus.BAD_REQUEST, "FS_400_SLOT_ALREADY_ENDED", "Khung giờ Flash Sale đã kết thúc"),
+    SLOT_ACTIVE_CANNOT_DELETE(HttpStatus.BAD_REQUEST, "FS_400_SLOT_ACTIVE_CANNOT_DELETE", "Không thể xóa phiên Flash Sale đang diễn ra"),
 
     ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "FS_404_ITEM_NOT_FOUND", "Không tìm thấy sản phẩm trong Flash Sale"),
     ITEM_ALREADY_REGISTERED(HttpStatus.CONFLICT, "FS_409_ITEM_ALREADY_REGISTERED", "Biến thể sản phẩm này đã được đăng ký trong khung giờ"),

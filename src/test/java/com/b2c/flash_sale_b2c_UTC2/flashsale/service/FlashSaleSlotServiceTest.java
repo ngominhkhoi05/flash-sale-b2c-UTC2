@@ -250,4 +250,124 @@ class FlashSaleSlotServiceTest {
         // Verify no rollback attempted
         verify(variantRepository, never()).replenishStockQuantityConditionally(anyLong(), any());
     }
+
+    @Test
+    @DisplayName("deleteSlot - ném lỗi SLOT_NOT_FOUND khi phiên không tồn tại")
+    void deleteSlot_SlotNotFound() {
+        when(slotRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> slotService.deleteSlot(999L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", FlashSaleErrorCode.SLOT_NOT_FOUND);
+
+        verify(slotRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("deleteSlot - ném lỗi SLOT_ACTIVE_CANNOT_DELETE khi phiên đang có trạng thái ACTIVE")
+    void deleteSlot_ActiveStatus_ThrowsException() {
+        FlashSaleSlot slot = FlashSaleSlot.builder()
+                .id(1L)
+                .title("Flash Sale Trưa 12h")
+                .status("ACTIVE")
+                .startTime(Instant.now().minusSeconds(600))
+                .endTime(Instant.now().plusSeconds(600))
+                .build();
+
+        when(slotRepository.findById(1L)).thenReturn(Optional.of(slot));
+
+        assertThatThrownBy(() -> slotService.deleteSlot(1L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", FlashSaleErrorCode.SLOT_ACTIVE_CANNOT_DELETE);
+
+        verify(slotRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("deleteSlot - ném lỗi SLOT_ACTIVE_CANNOT_DELETE khi phiên đang trong giờ mở bán")
+    void deleteSlot_WithinActiveTimeRange_ThrowsException() {
+        FlashSaleSlot slot = FlashSaleSlot.builder()
+                .id(2L)
+                .title("Flash Sale Khung giờ vàng")
+                .status("UPCOMING")
+                .startTime(Instant.now().minusSeconds(300))
+                .endTime(Instant.now().plusSeconds(3600))
+                .build();
+
+        when(slotRepository.findById(2L)).thenReturn(Optional.of(slot));
+
+        assertThatThrownBy(() -> slotService.deleteSlot(2L))
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("errorCode", FlashSaleErrorCode.SLOT_ACTIVE_CANNOT_DELETE);
+
+        verify(slotRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("deleteSlot - xóa thành công phiên UPCOMING, hoàn kho cho các SKU đã duyệt")
+    void deleteSlot_UpcomingSlot_WithApprovedItems_RestoresStockAndDeletes() {
+        FlashSaleSlot slot = FlashSaleSlot.builder()
+                .id(3L)
+                .title("Flash Sale Tuần Tới")
+                .status("UPCOMING")
+                .startTime(Instant.now().plusSeconds(7200))
+                .endTime(Instant.now().plusSeconds(14400))
+                .isStockRolledBack(false)
+                .build();
+
+        ProductVariant variant1 = ProductVariant.builder().id(101L).build();
+        ProductVariant variant2 = ProductVariant.builder().id(102L).build();
+
+        FlashSaleItem approvedItem1 = FlashSaleItem.builder()
+                .id(11L)
+                .slot(slot)
+                .variant(variant1)
+                .allocatedStock(50)
+                .status("APPROVED")
+                .build();
+
+        FlashSaleItem pendingItem2 = FlashSaleItem.builder()
+                .id(12L)
+                .slot(slot)
+                .variant(variant2)
+                .allocatedStock(30)
+                .status("PENDING")
+                .build();
+
+        List<FlashSaleItem> items = List.of(approvedItem1, pendingItem2);
+
+        when(slotRepository.findById(3L)).thenReturn(Optional.of(slot));
+        when(itemRepository.findBySlotId(3L)).thenReturn(items);
+
+        slotService.deleteSlot(3L);
+
+        // Verify hoàn tồn kho cho item APPROVED
+        verify(variantRepository).replenishStockQuantityConditionally(101L, 50);
+        // Verify không hoàn kho cho item PENDING
+        verify(variantRepository, never()).replenishStockQuantityConditionally(eq(102L), any());
+
+        // Verify xóa các item liên kết và xóa slot khỏi DB
+        verify(itemRepository).deleteAll(items);
+        verify(slotRepository).delete(slot);
+    }
+
+    @Test
+    @DisplayName("deleteSlot - xóa thành công phiên đã kết thúc (ENDED)")
+    void deleteSlot_EndedSlot_Success() {
+        FlashSaleSlot slot = FlashSaleSlot.builder()
+                .id(4L)
+                .title("Flash Sale Hôm Qua")
+                .status("ENDED")
+                .startTime(Instant.now().minusSeconds(86400))
+                .endTime(Instant.now().minusSeconds(72000))
+                .isStockRolledBack(true)
+                .build();
+
+        when(slotRepository.findById(4L)).thenReturn(Optional.of(slot));
+        when(itemRepository.findBySlotId(4L)).thenReturn(List.of());
+
+        slotService.deleteSlot(4L);
+
+        verify(slotRepository).delete(slot);
+    }
 }

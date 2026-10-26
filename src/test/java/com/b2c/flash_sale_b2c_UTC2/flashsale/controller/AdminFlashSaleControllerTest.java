@@ -343,4 +343,42 @@ class AdminFlashSaleControllerTest {
                 .andExpect(jsonPath("$.data[0].id").value(101))
                 .andExpect(jsonPath("$.data[0].status").value("SELLING"));
     }
+
+    @Test
+    @DisplayName("DELETE /api/v1/admin/flash-sales/slots/{id} - 200 OK thành công cho ADMIN")
+    void deleteSlot_Success_ForAdmin() throws Exception {
+        org.mockito.Mockito.doNothing().when(slotService).deleteSlot(1L);
+
+        mockMvc.perform(delete("/api/v1/admin/flash-sales/slots/1")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Xóa phiên Flash Sale thành công"));
+
+        org.mockito.Mockito.verify(slotService).deleteSlot(1L);
+    }
+
+    @Test
+    @DisplayName("DELETE /api/v1/admin/flash-sales/slots/{id} - 403 Forbidden khi người bán (SELLER) cố tình xóa")
+    void deleteSlot_Forbidden_ForSeller() throws Exception {
+        mockMvc.perform(delete("/api/v1/admin/flash-sales/slots/1")
+                        .header("Authorization", "Bearer " + sellerToken))
+                .andExpect(status().isForbidden());
+
+        org.mockito.Mockito.verify(slotService, org.mockito.Mockito.never()).deleteSlot(any());
+    }
+
+    @Test
+    @DisplayName("DELETE /api/v1/admin/flash-sales/slots/{id} - 400 Bad Request khi xóa phiên đang diễn ra (ACTIVE)")
+    void deleteSlot_ActiveSlot_ReturnsBadRequest() throws Exception {
+        org.mockito.Mockito.doThrow(new com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException(
+                com.b2c.flash_sale_b2c_UTC2.flashsale.exception.FlashSaleErrorCode.SLOT_ACTIVE_CANNOT_DELETE
+        )).when(slotService).deleteSlot(2L);
+
+        mockMvc.perform(delete("/api/v1/admin/flash-sales/slots/2")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Không thể xóa phiên Flash Sale đang diễn ra"));
+    }
 }
