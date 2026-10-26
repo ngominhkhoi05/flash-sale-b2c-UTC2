@@ -63,6 +63,13 @@ public class AdminFlashSaleController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    @DeleteMapping("/slots/{id}")
+    @Operation(summary = "Xóa phiên Flash Sale khỏi hệ thống", description = "Admin xóa vĩnh viễn khung giờ Flash Sale chưa diễn ra hoặc đã kết thúc khỏi database")
+    public ResponseEntity<ApiResponse<Void>> deleteSlot(@PathVariable Long id) {
+        slotService.deleteSlot(id);
+        return ResponseEntity.ok(ApiResponse.success("Xóa phiên Flash Sale thành công", null));
+    }
+
     @PatchMapping("/items/{id}/approve")
     @Operation(summary = "Duyệt sản phẩm Flash Sale", description = "Duyệt đăng ký sản phẩm, trừ kho gốc biến thể nguyên tử")
     public ResponseEntity<ApiResponse<FlashSaleItemResponse>> approveItem(@PathVariable Long id) {
