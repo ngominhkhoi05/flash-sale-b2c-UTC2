@@ -30,9 +30,10 @@ public interface FlashSaleSlotRepository extends JpaRepository<FlashSaleSlot, Lo
             @Param("endTime") Instant endTime
     );
 
-    @Query("SELECT s FROM FlashSaleSlot s WHERE s.status = 'UPCOMING' AND s.startTime <= :now AND s.endTime > :now")
+    @Query("SELECT s FROM FlashSaleSlot s WHERE s.status IN ('UPCOMING', 'REGISTRATION_OPEN') AND s.startTime <= :now AND s.endTime > :now")
     List<FlashSaleSlot> findSlotsToActivate(@Param("now") Instant now);
 
-    @Query("SELECT s FROM FlashSaleSlot s WHERE s.status = 'ACTIVE' AND s.endTime <= :now")
+    @Query("SELECT s FROM FlashSaleSlot s WHERE s.status != 'ENDED' AND s.endTime <= :now")
     List<FlashSaleSlot> findSlotsToEnd(@Param("now") Instant now);
+
 }

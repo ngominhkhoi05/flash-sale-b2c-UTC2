@@ -16,6 +16,8 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
     Optional<Store> findByStoreName(String storeName);
     boolean existsByStoreName(String storeName);
     boolean existsByUserId(Long userId);
+    long countByCreatedAtBetween(java.time.Instant start, java.time.Instant end);
+    long countByStatus(String status);
 
     /**
      * Find featured stores (approved status). Order by creation date DESC.
