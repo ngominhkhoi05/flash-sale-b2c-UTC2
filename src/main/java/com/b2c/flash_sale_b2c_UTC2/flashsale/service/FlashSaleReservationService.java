@@ -1,5 +1,8 @@
 package com.b2c.flash_sale_b2c_UTC2.flashsale.service;
 
+import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.FlashSaleOrderStreamEvent;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.service.FlashSaleOrderStreamConsumer;
+
 import com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.CancelReservationResponse;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.CreateReservationRequest;
@@ -317,6 +320,154 @@ public class FlashSaleReservationService {
      */
     public ReservationResponse createReservationOptimizedRedisson(Long userId, String idempotencyKey, CreateReservationRequest request) {
         return createReservationGatedLua(userId, idempotencyKey, request);
+    }
+
+
+    /**
+     * Big-Tech Async Queue Reservation (Cách 3 - Trừ kho Redis + Đẩy Queue Redis Stream):
+     * 1. Kiểm tra Idempotency trên Redis in-memory (< 1ms).
+     * 2. Validate nhanh: slot, user purchase limit, address ownership (read-only, không mở transaction).
+     * 3. Trừ kho nguyên tử trên Redis bằng Lua script (< 2ms).
+     * 4. Ghi bản ghi pending vào Redis và Publish event vào Redis Stream (`flash_sale:order_stream`).
+     * 5. Trả về ngay lập tức HTTP 201/202 PENDING_PROCESSING cho Client trong < 10ms.
+     * Worker phía sau (FlashSaleOrderStreamConsumer) sẽ tiêu thụ stream và lưu vào DB bất đồng bộ.
+     */
+    public ReservationResponse createReservationAsync(Long userId, String idempotencyKey, CreateReservationRequest request) {
+        String idemKey = null;
+        if (idempotencyKey != null && !idempotencyKey.isBlank() && redisTemplate != null) {
+            idemKey = IDEMPOTENCY_KEY_PREFIX + userId + ":" + idempotencyKey;
+            Boolean isFirstReq = redisTemplate.opsForValue().setIfAbsent(idemKey, "PROCESSING", Duration.ofMinutes(10));
+            if (Boolean.FALSE.equals(isFirstReq)) {
+                String existingVal = redisTemplate.opsForValue().get(idemKey);
+                if ("PROCESSING".equals(existingVal)) {
+                    log.warn("[ASYNC] Duplicate reservation in flight for userId: {}, idempotencyKey: {}", userId, idempotencyKey);
+                    throw new BusinessException(FlashSaleErrorCode.IDEMPOTENCY_CONFLICT);
+                }
+                if (existingVal != null && !existingVal.isBlank()) {
+                    log.info("[ASYNC] Returning cached order result for idempotencyKey: {} -> {}", idempotencyKey, existingVal);
+                    return ReservationResponse.builder()
+                            .orderCode(existingVal)
+                            .reservationId(existingVal)
+                            .status("PENDING_PAYMENT")
+                            .message("Yêu cầu đã được xử lý thành công trước đó (Idempotent replay).")
+                            .build();
+                }
+            }
+        }
+
+        // 1. Validate & đọc dữ liệu không giữ connection DB
+        Address address;
+        if (request.getAddressId() != null) {
+            address = addressRepository.findById(request.getAddressId())
+                    .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.ADDRESS_NOT_FOUND_OR_NOT_OWNED));
+            if (address.getUser() == null || !address.getUser().getId().equals(userId)) {
+                throw new BusinessException(FlashSaleErrorCode.ADDRESS_NOT_FOUND_OR_NOT_OWNED);
+            }
+        } else {
+            address = addressRepository.findByUserIdAndIsDefaultTrue(userId)
+                    .orElseGet(() -> {
+                        List<Address> userAddresses = addressRepository.findByUserId(userId);
+                        return (userAddresses != null && !userAddresses.isEmpty()) ? userAddresses.get(0) : null;
+                    });
+
+            if (address == null) {
+                if (idemKey != null && redisTemplate != null) redisTemplate.delete(idemKey);
+                throw new BusinessException(FlashSaleErrorCode.ADDRESS_REQUIRED);
+            }
+        }
+
+        FlashSaleItem item = itemRepository.findByIdWithDetails(request.getFlashSaleItemId())
+                .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.ITEM_NOT_FOUND));
+
+        if (!"APPROVED".equals(item.getStatus())) {
+            throw new BusinessException(FlashSaleErrorCode.ITEM_NOT_FOUND);
+        }
+
+        FlashSaleSlot slot = item.getSlot();
+        Instant now = Instant.now();
+
+        if (now.isBefore(slot.getStartTime()) || now.isAfter(slot.getEndTime()) || !"ACTIVE".equals(slot.getStatus())) {
+            throw new BusinessException(FlashSaleErrorCode.SLOT_NOT_ACTIVE);
+        }
+
+        long remainingSlotSeconds = Duration.between(now, slot.getEndTime()).getSeconds();
+        if (remainingSlotSeconds <= 0) {
+            throw new BusinessException(FlashSaleErrorCode.SLOT_ALREADY_ENDED);
+        }
+
+        String orderCode = "FS-" + System.currentTimeMillis() + "-" + (int) (Math.random() * 9000 + 1000);
+
+        // 2. Gọi Lua reserve trên Redis
+        long reservationResult = stockReservationStrategy.reserveStock(
+                slot.getId(),
+                userId,
+                item.getId(),
+                request.getQuantity(),
+                item.getUserPurchaseLimit(),
+                remainingSlotSeconds,
+                orderCode
+        );
+
+        if (reservationResult == -1) {
+            if (idemKey != null && redisTemplate != null) redisTemplate.delete(idemKey);
+            throw new BusinessException(FlashSaleErrorCode.PURCHASE_LIMIT_EXCEEDED);
+        }
+        if (reservationResult == 0) {
+            if (idemKey != null && redisTemplate != null) redisTemplate.delete(idemKey);
+            throw new BusinessException(FlashSaleErrorCode.OUT_OF_STOCK);
+        }
+
+        // 3. Đẩy Order Event vào Redis Stream
+        Instant expiresAt = Instant.now().plusSeconds(slot.getReservationTtlSeconds());
+        BigDecimal totalAmount = item.getFlashSalePrice().multiply(BigDecimal.valueOf(request.getQuantity()));
+
+        FlashSaleOrderStreamEvent event = FlashSaleOrderStreamEvent.builder()
+                .userId(userId)
+                .addressId(address.getId())
+                .flashSaleItemId(item.getId())
+                .slotId(slot.getId())
+                .variantId(item.getVariant().getId())
+                .storeId(item.getVariant().getProduct().getStore().getId())
+                .quantity(request.getQuantity())
+                .unitPrice(item.getFlashSalePrice())
+                .productName(item.getVariant().getProduct().getName())
+                .variantName(item.getVariant().getVariantName())
+                .orderCode(orderCode)
+                .expiresAt(expiresAt)
+                .idempotencyKey(idempotencyKey)
+                .createdAtEpochMs(System.currentTimeMillis())
+                .build();
+
+        try {
+            if (redisTemplate != null) {
+                String eventJson = objectMapper.writeValueAsString(event);
+                java.util.Map<String, String> map = java.util.Map.of("payload", eventJson);
+                redisTemplate.opsForStream().add(FlashSaleOrderStreamConsumer.STREAM_KEY, map);
+                log.info("[ASYNC] Published order event to stream: orderCode={}", orderCode);
+            }
+        } catch (Exception ex) {
+            log.error("[ASYNC] Failed to publish order event to Redis Stream for orderCode={}. Compensating Redis...", orderCode, ex);
+            try {
+                stockReservationStrategy.rollbackStockWithMarker(slot.getId(), userId, item.getId(), request.getQuantity(), orderCode);
+                if (idemKey != null && redisTemplate != null) redisTemplate.delete(idemKey);
+            } catch (Exception rollEx) {
+                log.error("[ASYNC] Compensation failed for orderCode={}", orderCode, rollEx);
+            }
+            throw new BusinessException(FlashSaleErrorCode.ORDER_CREATION_FAILED);
+        }
+
+        // 4. Trả về ngay lập tức cho client
+        return ReservationResponse.builder()
+                .orderCode(orderCode)
+                .reservationId(orderCode)
+                .flashSaleItemId(item.getId())
+                .quantity(request.getQuantity())
+                .flashSalePrice(item.getFlashSalePrice())
+                .totalAmount(totalAmount)
+                .status("PROCESSING")
+                .expiresAt(expiresAt)
+                .message("Đã giữ chỗ Flash Sale thành công. Hệ thống đang tiến hành tạo đơn hàng.")
+                .build();
     }
 
     public ReservationResponse createReservationGatedLua(Long userId, String idempotencyKey, CreateReservationRequest request) {

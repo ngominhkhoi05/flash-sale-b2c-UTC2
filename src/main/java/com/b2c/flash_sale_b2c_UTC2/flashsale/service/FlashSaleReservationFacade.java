@@ -28,6 +28,7 @@ public class FlashSaleReservationFacade {
     private final String strategy;
     private final String luaFlow;
     private final String txFlow;
+    private final String reservationMode;
     private final long waitMs;
     private final boolean failFastEnabled;
     private final RedissonClient redissonClient;
@@ -42,6 +43,7 @@ public class FlashSaleReservationFacade {
             @Value("${flashsale.reservation.strategy:lua}") String strategy,
             @Value("${flashsale.reservation.lua-flow:legacy}") String luaFlow,
             @Value("${flashsale.tx-flow:legacy}") String txFlow,
+            @Value("${flashsale.reservation.mode:sync}") String reservationMode,
             @Value("${flashsale.lock.wait-ms:200}") long waitMs,
             @Value("${flashsale.fail-fast.enabled:false}") boolean failFastEnabled,
             @Autowired(required = false) RedissonClient redissonClient,
@@ -51,6 +53,7 @@ public class FlashSaleReservationFacade {
         this.strategy = strategy;
         this.luaFlow = luaFlow;
         this.txFlow = txFlow;
+        this.reservationMode = reservationMode;
         this.waitMs = waitMs;
         this.failFastEnabled = failFastEnabled;
         this.redissonClient = redissonClient;
@@ -72,6 +75,11 @@ public class FlashSaleReservationFacade {
                     }
                 }
             }
+        }
+
+        // --- NHÁNH ASYNC REDIS STREAM ---
+        if ("async".equalsIgnoreCase(reservationMode)) {
+            return reservationService.createReservationAsync(userId, idempotencyKey, request);
         }
 
         // --- NHÁNH LUA ---
