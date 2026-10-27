@@ -185,6 +185,7 @@ public class ProductServiceImpl implements ProductService {
                 .collect(Collectors.toMap(ProductVariant::getId, Function.identity()));
 
         List<ProductVariant> toSave = new ArrayList<>();
+        Set<Long> updatedVariantIds = new HashSet<>();
         for (UpdateProductVariantRequest vReq : variantRequests) {
             if (vReq.getId() != null) {
                 ProductVariant existing = existingMap.get(vReq.getId());
@@ -215,6 +216,7 @@ public class ProductServiceImpl implements ProductService {
                     existing.setStatus(vReq.getStatus());
                 }
                 toSave.add(existing);
+                updatedVariantIds.add(existing.getId());
             } else {
                 // Tạo mới biến thể bổ sung vào SPU
                 if (productVariantRepository.existsBySku(vReq.getSku().trim())) {
@@ -232,6 +234,18 @@ public class ProductServiceImpl implements ProductService {
                         .createdAt(Instant.now())
                         .build();
                 toSave.add(newVariant);
+            }
+        }
+
+        // Tự động chuyển các biến thể cũ không còn được chọn sang INACTIVE để bảo toàn dữ liệu
+        for (ProductVariant existing : existingVariants) {
+            if (!updatedVariantIds.contains(existing.getId())) {
+                boolean inActiveFlashSale = flashSaleItemRepository.isVariantInActiveFlashSale(existing.getId());
+                if (inActiveFlashSale) {
+                    throw new BusinessException(ProductErrorCode.VARIANT_IN_ACTIVE_FLASH_SALE);
+                }
+                existing.setStatus("INACTIVE");
+                toSave.add(existing);
             }
         }
 
@@ -440,16 +454,16 @@ public class ProductServiceImpl implements ProductService {
             return;
         }
 
-        int expectedCount = 1;
+        int maxPossibleVariants = 1;
         for (TierVariationConfigDto config : configs) {
             if (config.getOptions() == null || config.getOptions().isEmpty()) {
                 throw new BusinessException(ProductErrorCode.INVALID_TIER_VARIATION);
             }
-            expectedCount *= config.getOptions().size();
+            maxPossibleVariants *= config.getOptions().size();
         }
 
-        if (variantCount != expectedCount) {
-            log.warn("Số biến thể gửi lên ({}) không khớp với số biến thể dự kiến ({}) từ phân loại", variantCount, expectedCount);
+        if (variantCount < 1 || variantCount > maxPossibleVariants) {
+            log.warn("Số biến thể gửi lên ({}) không hợp lệ so với tối đa ({}) từ phân loại", variantCount, maxPossibleVariants);
             throw new BusinessException(ProductErrorCode.INVALID_TIER_VARIATION);
         }
     }
