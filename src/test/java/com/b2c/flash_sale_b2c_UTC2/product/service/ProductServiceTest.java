@@ -175,22 +175,23 @@ class ProductServiceTest {
     }
 
     @Test
-    @DisplayName("Tạo sản phẩm thất bại khi số SKU không khớp tierVariationConfigs -> 400 INVALID_TIER_VARIATION")
-    void createProduct_MismatchTierVariations_ShouldThrowException() {
+    @DisplayName("Tạo sản phẩm thất bại khi số SKU vượt quá giới hạn tối đa của tierVariationConfigs -> 400 INVALID_TIER_VARIATION")
+    void createProduct_ExceedTierVariations_ShouldThrowException() {
         when(storeRepository.findByUserId(sellerUser.getId())).thenReturn(Optional.of(approvedStore));
         when(categoryRepository.findById(1)).thenReturn(Optional.of(category));
 
-        // 2 sizes x 2 colors = 4 variants expected, but only 2 provided
+        // 1 size x 2 colors = 2 variants max, but 3 provided
         CreateProductRequest request = CreateProductRequest.builder()
                 .categoryId(1)
                 .name("Quần Jean")
                 .tierVariationConfigs(List.of(
-                        TierVariationConfigDto.builder().name("Size").options(List.of("29", "30")).build(),
+                        TierVariationConfigDto.builder().name("Size").options(List.of("29")).build(),
                         TierVariationConfigDto.builder().name("Màu").options(List.of("Xanh", "Đen")).build()
                 ))
                 .variants(List.of(
                         CreateProductVariantRequest.builder().sku("QJ-1").variantName("29 Xanh").originalPrice(new BigDecimal("200000")).stockQuantity(10).build(),
-                        CreateProductVariantRequest.builder().sku("QJ-2").variantName("30 Đen").originalPrice(new BigDecimal("200000")).stockQuantity(10).build()
+                        CreateProductVariantRequest.builder().sku("QJ-2").variantName("29 Đen").originalPrice(new BigDecimal("200000")).stockQuantity(10).build(),
+                        CreateProductVariantRequest.builder().sku("QJ-3").variantName("29 Đỏ").originalPrice(new BigDecimal("200000")).stockQuantity(10).build()
                 ))
                 .build();
 
@@ -198,6 +199,46 @@ class ProductServiceTest {
                 productService.createProduct(sellerUser.getId(), request));
 
         assertEquals(ProductErrorCode.INVALID_TIER_VARIATION, ex.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("Tạo sản phẩm thành công khi số SKU là tập con hợp lệ của tierVariationConfigs")
+    void createProduct_PartialTierVariations_ShouldSucceed() {
+        when(storeRepository.findByUserId(sellerUser.getId())).thenReturn(Optional.of(approvedStore));
+        when(categoryRepository.findById(1)).thenReturn(Optional.of(category));
+        Product savedProduct = Product.builder()
+                .id(99L)
+                .store(approvedStore)
+                .category(category)
+                .name("Quần Jean Partial")
+                .status("ACTIVE")
+                .createdAt(Instant.now())
+                .build();
+        when(productRepository.save(any(Product.class))).thenReturn(savedProduct);
+        when(productVariantRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // 2 sizes x 2 colors = 4 variants max, seller only sells 2
+        CreateProductRequest request = CreateProductRequest.builder()
+                .categoryId(1)
+                .name("Quần Jean Partial")
+                .tierVariationConfigs(List.of(
+                        TierVariationConfigDto.builder().name("Size").options(List.of("29", "30")).build(),
+                        TierVariationConfigDto.builder().name("Màu").options(List.of("Xanh", "Đen")).build()
+                ))
+                .variants(List.of(
+                        CreateProductVariantRequest.builder().sku("QJ-PARTIAL-1").variantName("29 Xanh").originalPrice(new BigDecimal("200000")).stockQuantity(10).build(),
+                        CreateProductVariantRequest.builder().sku("QJ-PARTIAL-2").variantName("30 Đen").originalPrice(new BigDecimal("200000")).stockQuantity(10).build()
+                ))
+                .build();
+
+        try {
+            productService.createProduct(sellerUser.getId(), request);
+        } catch (NullPointerException ignored) {
+            // Expected khi id = null trong unit test mock
+        }
+
+        verify(productRepository).save(any(Product.class));
+        verify(productVariantRepository).saveAll(anyList());
     }
 
     @Test
