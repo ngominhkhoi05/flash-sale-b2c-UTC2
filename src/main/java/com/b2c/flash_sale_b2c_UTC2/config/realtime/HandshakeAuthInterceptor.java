@@ -78,11 +78,11 @@ public class HandshakeAuthInterceptor implements HandshakeInterceptor {
                 return true;
             }
 
-            log.warn("WebSocket handshake — invalid JWT token");
-            return false;
+            log.warn("WebSocket handshake — invalid or expired JWT token, falling back to anonymous public access");
+            return true;
         } catch (Exception e) {
-            log.warn("WebSocket handshake — JWT validation failed: {}", e.getMessage());
-            return false;
+            log.warn("WebSocket handshake — JWT validation failed: {}, falling back to anonymous public access", e.getMessage());
+            return true;
         }
     }
 
