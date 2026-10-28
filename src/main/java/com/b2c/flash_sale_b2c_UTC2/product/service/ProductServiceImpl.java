@@ -738,9 +738,9 @@ public class ProductServiceImpl implements ProductService {
         Pageable pageable = org.springframework.data.domain.PageRequest.of(0, limit);
 
         List<RecommendedProductResponse> forYou = buildRecommendedProducts(
-                productRepository.findForYouProducts(pageable), "for_you");
+                productRepository.findForYouProducts(pageable), null);
         List<RecommendedProductResponse> bestSellers = buildRecommendedProducts(
-                productRepository.findBestSellerProducts(pageable), "best_seller");
+                productRepository.findBestSellerProducts(pageable), null);
         List<RecommendedProductResponse> hotDeals = buildRecommendedHotDeals(limit);
 
         if (tab == null || "all".equalsIgnoreCase(tab)) {
