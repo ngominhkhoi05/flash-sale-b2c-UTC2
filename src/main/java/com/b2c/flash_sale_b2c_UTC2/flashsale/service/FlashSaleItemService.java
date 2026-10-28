@@ -6,6 +6,7 @@ import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.BatchApproveFailedItem;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.BatchApproveFlashSaleItemsRequest;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.BatchApproveFlashSaleItemsResponse;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.FlashSaleItemResponse;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.PublicFlashSaleItemDetailResponse;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.PublicFlashSaleSlotResponse;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.RegisterFlashSaleItemRequest;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.RejectFlashSaleItemRequest;
@@ -18,8 +19,11 @@ import com.b2c.flash_sale_b2c_UTC2.flashsale.repository.FlashSaleItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.repository.FlashSaleSlotRepository;
 import com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType;
 import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
+import com.b2c.flash_sale_b2c_UTC2.product.entity.Category;
+import com.b2c.flash_sale_b2c_UTC2.product.entity.Product;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.ProductVariant;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductVariantRepository;
+import com.b2c.flash_sale_b2c_UTC2.review.repository.ProductReviewRepository;
 import com.b2c.flash_sale_b2c_UTC2.store.entity.Store;
 import com.b2c.flash_sale_b2c_UTC2.store.repository.StoreRepository;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +52,9 @@ public class FlashSaleItemService {
     private final StoreRepository storeRepository;
     private final FlashSaleItemMapper itemMapper;
     private final ImageService imageService;
+
+    @Autowired(required = false)
+    private ProductReviewRepository productReviewRepository;
 
     @Autowired(required = false)
     private StringRedisTemplate redisTemplate;
@@ -201,6 +208,10 @@ public class FlashSaleItemService {
                 int displayStock = getRealtimeStock(item);
                 Long vId = item.getVariant().getId();
                 Long pId = item.getVariant().getProduct().getId();
+                com.b2c.flash_sale_b2c_UTC2.product.entity.Category cat = item.getVariant().getProduct().getCategory();
+                Integer catId = cat != null ? cat.getId() : null;
+                String catName = cat != null ? cat.getName() : null;
+                String catSlug = cat != null ? cat.getSlug() : null;
                 String imageUrl = variantImageMap.get(vId);
                 if (imageUrl == null) {
                     imageUrl = productImageMap.get(pId);
@@ -209,9 +220,14 @@ public class FlashSaleItemService {
                 itemDtos.add(PublicFlashSaleSlotResponse.PublicFlashSaleItemResponse.builder()
                         .id(item.getId())
                         .slotId(slot.getId())
+                        .productId(pId)
                         .variantId(vId)
+                        .categoryId(catId)
+                        .categoryName(catName)
+                        .categorySlug(catSlug)
                         .sku(item.getVariant().getSku())
                         .variantName(item.getVariant().getVariantName())
+                        .attributes(item.getVariant().getAttributes())
                         .productName(item.getVariant().getProduct().getName())
                         .imageUrl(imageUrl)
                         .originalPrice(item.getVariant().getOriginalPrice())
@@ -243,6 +259,127 @@ public class FlashSaleItemService {
                 .filter(slot -> "ACTIVE".equalsIgnoreCase(slot.getStatus()))
                 .flatMap(slot -> slot.getItems().stream())
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PublicFlashSaleItemDetailResponse getPublicItemDetail(Long itemId) {
+        FlashSaleItem item = itemRepository.findByIdWithDetails(itemId)
+                .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.ITEM_NOT_FOUND));
+
+        int displayStock = getRealtimeStock(item);
+
+        ProductVariant variant = item.getVariant();
+        Product product = variant.getProduct();
+        Store store = product.getStore();
+        Category category = product.getCategory();
+        FlashSaleSlot slot = item.getSlot();
+
+        int discountPercent = 0;
+        if (variant.getOriginalPrice() != null && variant.getOriginalPrice().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal diff = variant.getOriginalPrice().subtract(item.getFlashSalePrice());
+            discountPercent = diff.multiply(BigDecimal.valueOf(100))
+                    .divide(variant.getOriginalPrice(), 0, java.math.RoundingMode.HALF_UP)
+                    .intValue();
+        }
+
+        List<String> imageUrls = new ArrayList<>();
+        String primaryImageUrl = null;
+
+        try {
+            var variantPrimary = imageService.getPrimaryImage(ImageOwnerType.VARIANT, variant.getId());
+            if (variantPrimary != null && variantPrimary.getUrl() != null) {
+                primaryImageUrl = variantPrimary.getUrl();
+            }
+
+            var variantImages = imageService.listImages(ImageOwnerType.VARIANT, variant.getId());
+            if (variantImages != null) {
+                for (var img : variantImages) {
+                    if (img.getUrl() != null && !imageUrls.contains(img.getUrl())) {
+                        imageUrls.add(img.getUrl());
+                    }
+                }
+            }
+
+            if (primaryImageUrl == null) {
+                var prodPrimary = imageService.getPrimaryImage(ImageOwnerType.PRODUCT, product.getId());
+                if (prodPrimary != null && prodPrimary.getUrl() != null) {
+                    primaryImageUrl = prodPrimary.getUrl();
+                }
+            }
+
+            var prodImages = imageService.listImages(ImageOwnerType.PRODUCT, product.getId());
+            if (prodImages != null) {
+                for (var img : prodImages) {
+                    if (img.getUrl() != null && !imageUrls.contains(img.getUrl())) {
+                        imageUrls.add(img.getUrl());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load images for FlashSaleItem ID: {}, error: {}", itemId, e.getMessage());
+        }
+
+        if (primaryImageUrl != null && !imageUrls.contains(primaryImageUrl)) {
+            imageUrls.add(0, primaryImageUrl);
+        }
+
+        String storeLogoUrl = null;
+        try {
+            var storeLogo = imageService.getPrimaryImage(ImageOwnerType.STORE, store.getId());
+            if (storeLogo != null) {
+                storeLogoUrl = storeLogo.getUrl();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load store logo for store ID: {}, error: {}", store.getId(), e.getMessage());
+        }
+
+        Double avgRating = null;
+        long ratingCount = 0;
+        if (productReviewRepository != null) {
+            try {
+                avgRating = productReviewRepository.avgRatingByProductId(product.getId());
+                ratingCount = productReviewRepository.countByProductIdAndVisible(product.getId());
+            } catch (Exception e) {
+                log.warn("Failed to load review stats for product ID: {}, error: {}", product.getId(), e.getMessage());
+            }
+        }
+
+        return PublicFlashSaleItemDetailResponse.builder()
+                .id(item.getId())
+                .slotId(slot.getId())
+                .slotTitle(slot.getTitle())
+                .slotStartTime(slot.getStartTime())
+                .slotEndTime(slot.getEndTime())
+                .slotStatus(slot.getStatus())
+                .reservationTtlSeconds(slot.getReservationTtlSeconds())
+                .originalPrice(variant.getOriginalPrice())
+                .flashSalePrice(item.getFlashSalePrice())
+                .discountPercent(discountPercent)
+                .allocatedStock(item.getAllocatedStock())
+                .availableStock(displayStock)
+                .userPurchaseLimit(item.getUserPurchaseLimit())
+                .status(item.getStatus())
+                .productId(product.getId())
+                .productName(product.getName())
+                .productDescription(product.getDescription())
+                .productSlug(product.getSlug())
+                .totalSold(product.getTotalSold())
+                .ratingAvg(avgRating != null ? Math.round(avgRating * 10.0) / 10.0 : 5.0)
+                .ratingCount(ratingCount)
+                .categoryId(category != null ? category.getId() : null)
+                .categoryName(category != null ? category.getName() : null)
+                .categorySlug(category != null ? category.getSlug() : null)
+                .storeId(store.getId())
+                .storeName(store.getStoreName())
+                .storeTier(store.getTier() != null ? store.getTier().name() : "NORMAL")
+                .storeLogoUrl(storeLogoUrl)
+                .variantId(variant.getId())
+                .sku(variant.getSku())
+                .variantName(variant.getVariantName())
+                .attributes(variant.getAttributes())
+                .primaryImageUrl(primaryImageUrl)
+                .imageUrls(imageUrls)
+                .build();
     }
 
     public int getRealtimeStock(FlashSaleItem item) {

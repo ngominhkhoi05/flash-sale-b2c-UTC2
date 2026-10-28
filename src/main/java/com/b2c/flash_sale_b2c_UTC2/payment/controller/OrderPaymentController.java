@@ -77,4 +77,15 @@ public class OrderPaymentController {
         PaymentResponse response = paymentService.queryZaloPayPaymentByCode(userDetails.getUser().getId(), orderCode);
         return ResponseEntity.ok(ApiResponse.success("Query trạng thái thanh toán ZaloPay thành công", response));
     }
+
+    @Operation(summary = "Xác nhận thanh toán COD theo mã đơn hàng (orderCode)",
+               description = "Helper cho trang QR payment khi client muốn đổi sang thanh toán COD theo orderCode.")
+    @PostMapping("/by-code/{orderCode}/payment/cod")
+    public ResponseEntity<ApiResponse<PaymentResponse>> confirmCodPaymentByCode(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable("orderCode") String orderCode
+    ) {
+        PaymentResponse response = paymentService.confirmCodPaymentByCode(userDetails.getUser().getId(), orderCode);
+        return ResponseEntity.ok(ApiResponse.success("Xác nhận thanh toán COD thành công", response));
+    }
 }

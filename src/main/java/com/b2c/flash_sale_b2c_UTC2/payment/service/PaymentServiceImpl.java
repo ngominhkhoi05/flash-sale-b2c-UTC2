@@ -57,7 +57,7 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
-    @Transactional
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public PaymentResponse createZaloPayPayment(Long buyerId, Long orderId) {
         Order order = validateBuyerOrder(buyerId, orderId);
         if ("CANCELLED".equalsIgnoreCase(order.getStatus()) || "COMPLETED".equalsIgnoreCase(order.getStatus())) {
@@ -269,6 +269,20 @@ public class PaymentServiceImpl implements PaymentService {
         Order order = validateBuyerOrder(buyerId, orderId);
         List<Payment> payments = paymentRepository.findByOrderId(orderId);
         if (payments == null || payments.isEmpty()) {
+            if ("PENDING_PAYMENT".equalsIgnoreCase(order.getStatus())) {
+                return createZaloPayPayment(buyerId, orderId);
+            }
+            if ("CONFIRMED".equalsIgnoreCase(order.getStatus()) || "COMPLETED".equalsIgnoreCase(order.getStatus())) {
+                return PaymentResponse.builder()
+                        .orderId(order.getId())
+                        .orderCode(order.getOrderCode())
+                        .paymentMethod("ZALOPAY")
+                        .amount(order.getTotalAmount())
+                        .status("SUCCESS")
+                        .createdAt(order.getCreatedAt())
+                        .paidAt(order.getUpdatedAt())
+                        .build();
+            }
             throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);
         }
 
@@ -291,8 +305,8 @@ public class PaymentServiceImpl implements PaymentService {
                 Object zpTransId = zpResult.get("zp_trans_id");
                 Object amountPaid = zpResult.get("amount");
 
-                if (Boolean.FALSE.equals(isProcessing) && amountPaid instanceof Number
-                        && ((Number) amountPaid).longValue() > 0) {
+                if ((isProcessing == null || Boolean.FALSE.equals(isProcessing))
+                        && (amountPaid == null || (amountPaid instanceof Number && ((Number) amountPaid).longValue() > 0))) {
                     log.info("ZaloPay query fallback: app_trans_id={} reported as paid", latest.getTransactionCode());
                     latest.setStatus("SUCCESS");
                     latest.setPaidAt(Instant.now());
@@ -332,6 +346,17 @@ public class PaymentServiceImpl implements PaymentService {
             throw new BusinessException(OrderErrorCode.ORDER_ACCESS_DENIED);
         }
         return queryZaloPayPayment(buyerId, order.getId());
+    }
+
+    @Override
+    @Transactional
+    public PaymentResponse confirmCodPaymentByCode(Long buyerId, String orderCode) {
+        Order order = orderRepository.findByOrderCode(orderCode)
+                .orElseThrow(() -> new BusinessException(OrderErrorCode.ORDER_NOT_FOUND));
+        if (!order.getBuyer().getId().equals(buyerId)) {
+            throw new BusinessException(OrderErrorCode.ORDER_ACCESS_DENIED);
+        }
+        return confirmCodPayment(buyerId, order.getId());
     }
 
     private Order validateBuyerOrder(Long buyerId, Long orderId) {

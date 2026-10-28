@@ -15,7 +15,7 @@ import java.util.Optional;
 @Repository
 public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Long> {
 
-    @Query("SELECT fsi FROM FlashSaleItem fsi JOIN FETCH fsi.slot s JOIN FETCH fsi.variant v JOIN FETCH v.product p JOIN FETCH p.store st WHERE fsi.id = :id")
+    @Query("SELECT fsi FROM FlashSaleItem fsi JOIN FETCH fsi.slot s JOIN FETCH fsi.variant v JOIN FETCH v.product p LEFT JOIN FETCH p.category c JOIN FETCH p.store st WHERE fsi.id = :id")
     Optional<FlashSaleItem> findByIdWithDetails(@Param("id") Long id);
 
     Optional<FlashSaleItem> findBySlotIdAndVariantId(Long slotId, Long variantId);
@@ -29,6 +29,7 @@ public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Lo
         SELECT fsi FROM FlashSaleItem fsi
         JOIN FETCH fsi.variant v
         JOIN FETCH v.product p
+        LEFT JOIN FETCH p.category c
         WHERE fsi.slot.id = :slotId
         AND fsi.status = 'APPROVED'
     """)
