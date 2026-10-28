@@ -155,6 +155,13 @@ public class FlashSaleReservationService {
             throw new BusinessException(FlashSaleErrorCode.SLOT_ALREADY_ENDED);
         }
 
+        if (item.getAvailableStock() == null) {
+            item.setAvailableStock(item.getAllocatedStock() != null ? item.getAllocatedStock() : 0);
+            item = itemRepository.save(item);
+        }
+
+        ensureStockOnRedis(item, slot, remainingSlotSeconds);
+
         // Sinh mã orderCode trước để truyền vào Lua script ghi bản ghi giữ chỗ tạm
         String orderCode = "FS-" + System.currentTimeMillis() + "-" + (int) (Math.random() * 9000 + 1000);
 
@@ -395,6 +402,13 @@ public class FlashSaleReservationService {
             throw new BusinessException(FlashSaleErrorCode.SLOT_ALREADY_ENDED);
         }
 
+        if (item.getAvailableStock() == null) {
+            item.setAvailableStock(item.getAllocatedStock() != null ? item.getAllocatedStock() : 0);
+            item = itemRepository.save(item);
+        }
+
+        ensureStockOnRedis(item, slot, remainingSlotSeconds);
+
         String orderCode = "FS-" + System.currentTimeMillis() + "-" + (int) (Math.random() * 9000 + 1000);
 
         // 2. Gọi Lua reserve trên Redis
@@ -532,6 +546,13 @@ public class FlashSaleReservationService {
         if (remainingSlotSeconds <= 0) {
             throw new BusinessException(FlashSaleErrorCode.SLOT_ALREADY_ENDED);
         }
+
+        if (item.getAvailableStock() == null) {
+            item.setAvailableStock(item.getAllocatedStock() != null ? item.getAllocatedStock() : 0);
+            item = itemRepository.save(item);
+        }
+
+        ensureStockOnRedis(item, slot, remainingSlotSeconds);
 
         String orderCode = "FS-" + System.currentTimeMillis() + "-" + (int) (Math.random() * 9000 + 1000);
 
@@ -803,6 +824,30 @@ public class FlashSaleReservationService {
             }
         } catch (Exception e) {
             log.error("[Reconciliation] Lỗi trong reconcilePendingReservations: {}", e.getMessage(), e);
+        }
+    }
+
+    public void ensureStockOnRedis(FlashSaleItem item, FlashSaleSlot slot, long remainingSlotSeconds) {
+        if (redisTemplate == null) return;
+        String stockKey = "flash_sale:stock:" + item.getId();
+        try {
+            String existingVal = redisTemplate.opsForValue().get(stockKey);
+            if (existingVal == null) {
+                int stockToSet = (item.getAvailableStock() != null && item.getAvailableStock() > 0)
+                        ? item.getAvailableStock()
+                        : (item.getAllocatedStock() != null ? item.getAllocatedStock() : 0);
+
+                if (stockToSet > 0) {
+                    redisTemplate.opsForValue().setIfAbsent(
+                            stockKey,
+                            String.valueOf(stockToSet),
+                            Duration.ofSeconds(Math.max(remainingSlotSeconds, 60))
+                    );
+                    log.info("Auto pre-warmed missing Redis stock for FlashSaleItem ID: {} -> initialStock: {}", item.getId(), stockToSet);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to auto pre-warm Redis stock for item ID: {}: {}", item.getId(), e.getMessage());
         }
     }
 }
