@@ -71,9 +71,13 @@ public class AdminFlashSaleController {
     }
 
     @PatchMapping("/items/{id}/approve")
-    @Operation(summary = "Duyệt sản phẩm Flash Sale", description = "Duyệt đăng ký sản phẩm, trừ kho gốc biến thể nguyên tử")
-    public ResponseEntity<ApiResponse<FlashSaleItemResponse>> approveItem(@PathVariable Long id) {
-        FlashSaleItemResponse response = itemService.approveItem(id);
+    @Operation(summary = "Duyệt sản phẩm Flash Sale", description = "Duyệt đăng ký sản phẩm, trừ kho gốc biến thể nguyên tử và áp dụng hoa hồng sàn")
+    public ResponseEntity<ApiResponse<FlashSaleItemResponse>> approveItem(
+            @PathVariable Long id,
+            @RequestBody(required = false) com.b2c.flash_sale_b2c_UTC2.flashsale.dto.ApproveFlashSaleItemRequest request
+    ) {
+        java.math.BigDecimal commission = request != null ? request.getCommissionRateOverride() : null;
+        FlashSaleItemResponse response = itemService.approveItem(id, commission);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -158,6 +162,14 @@ public class AdminFlashSaleController {
         EmergencyPauseResponse response = slotService.emergencyPauseSlot(id, request);
         return ResponseEntity.ok(ApiResponse.success("Dừng khẩn cấp phiên Flash Sale thành công", response));
     }
+
+    @PostMapping("/slots/{id}/resume")
+    @Operation(summary = "Tiếp tục phiên Flash Sale", description = "Admin khôi phục phiên Flash Sale đang tạm dừng sang hoạt động")
+    public ResponseEntity<ApiResponse<FlashSaleSlotResponse>> resumeSlot(@PathVariable Long id) {
+        FlashSaleSlotResponse response = slotService.resumeSlot(id);
+        return ResponseEntity.ok(ApiResponse.success("Khôi phục phiên Flash Sale thành công", response));
+    }
+
 
     @GetMapping("/slots/{id}/skus")
     @Operation(summary = "Lấy danh sách Live SKUs của phiên Flash Sale", description = "Xem tồn kho trực tiếp trên Redis của các SKU trong phiên")
