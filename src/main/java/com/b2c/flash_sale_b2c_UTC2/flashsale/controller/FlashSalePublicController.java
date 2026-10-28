@@ -1,6 +1,7 @@
 package com.b2c.flash_sale_b2c_UTC2.flashsale.controller;
 
 import com.b2c.flash_sale_b2c_UTC2.common.api.ApiResponse;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.PublicFlashSaleItemDetailResponse;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.PublicFlashSaleSlotResponse;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.service.FlashSaleItemService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -8,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -32,6 +34,13 @@ public class FlashSalePublicController {
     @Operation(summary = "Xem danh sách các sản phẩm Flash Sale đang mở bán active cho trang chủ", description = "Trả về danh sách sản phẩm đang trong phiên Flash Sale ACTIVE kèm tồn kho khả dụng thời gian thực")
     public ResponseEntity<ApiResponse<List<PublicFlashSaleSlotResponse.PublicFlashSaleItemResponse>>> getActiveItems() {
         List<PublicFlashSaleSlotResponse.PublicFlashSaleItemResponse> response = itemService.getActiveItems();
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/items/{itemId}")
+    @Operation(summary = "Xem chi tiết một sản phẩm Flash Sale theo ID", description = "Trả về thông tin chi tiết phiên, sản phẩm, biến thể cố định, giá flash sale và tồn kho thời gian thực")
+    public ResponseEntity<ApiResponse<PublicFlashSaleItemDetailResponse>> getItemDetail(@PathVariable Long itemId) {
+        PublicFlashSaleItemDetailResponse response = itemService.getPublicItemDetail(itemId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }
