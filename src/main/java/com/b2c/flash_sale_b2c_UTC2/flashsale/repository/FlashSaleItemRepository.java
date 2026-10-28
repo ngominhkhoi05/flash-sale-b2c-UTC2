@@ -29,6 +29,7 @@ public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Lo
         SELECT fsi FROM FlashSaleItem fsi
         JOIN FETCH fsi.variant v
         JOIN FETCH v.product p
+        LEFT JOIN FETCH p.category c
         WHERE fsi.slot.id = :slotId
         AND fsi.status = 'APPROVED'
     """)

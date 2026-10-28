@@ -165,6 +165,10 @@ public class FlashSaleItemService {
                 int displayStock = getRealtimeStock(item);
                 Long vId = item.getVariant().getId();
                 Long pId = item.getVariant().getProduct().getId();
+                com.b2c.flash_sale_b2c_UTC2.product.entity.Category cat = item.getVariant().getProduct().getCategory();
+                Integer catId = cat != null ? cat.getId() : null;
+                String catName = cat != null ? cat.getName() : null;
+                String catSlug = cat != null ? cat.getSlug() : null;
                 String imageUrl = variantImageMap.get(vId);
                 if (imageUrl == null) {
                     imageUrl = productImageMap.get(pId);
@@ -173,9 +177,14 @@ public class FlashSaleItemService {
                 itemDtos.add(PublicFlashSaleSlotResponse.PublicFlashSaleItemResponse.builder()
                         .id(item.getId())
                         .slotId(slot.getId())
+                        .productId(pId)
                         .variantId(vId)
+                        .categoryId(catId)
+                        .categoryName(catName)
+                        .categorySlug(catSlug)
                         .sku(item.getVariant().getSku())
                         .variantName(item.getVariant().getVariantName())
+                        .attributes(item.getVariant().getAttributes())
                         .productName(item.getVariant().getProduct().getName())
                         .imageUrl(imageUrl)
                         .originalPrice(item.getVariant().getOriginalPrice())
