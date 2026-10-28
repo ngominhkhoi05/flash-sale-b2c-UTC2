@@ -124,6 +124,34 @@ public class FlashSaleWsBroadcaster {
         }
     }
 
+    /**
+     * Broadcast sự kiện duyệt SKU tới kênh Admin theo thời gian thực (STOMP WebSocket).
+     * Cập nhật badge đếm số lượng SKU chờ duyệt tức thì trên Admin Console.
+     */
+    public void broadcastAdminApprovalEvent(String eventType, Long slotId, Long itemId, String productName, String storeName, Long pendingCount) {
+        try {
+            java.util.Map<String, Object> payload = new java.util.HashMap<>();
+            payload.put("eventType", eventType);
+            payload.put("slotId", slotId);
+            payload.put("itemId", itemId);
+            payload.put("productName", productName);
+            payload.put("storeName", storeName);
+            payload.put("pendingCount", pendingCount);
+            payload.put("occurredAt", Instant.now().toString());
+
+            ApiResponse<java.util.Map<String, Object>> response = ApiResponse.success(
+                    "Admin Flash Sale update",
+                    payload
+            );
+
+            messagingTemplate.convertAndSend("/topic/admin/flash-sale/counts", response);
+            messagingTemplate.convertAndSend("/topic/admin/flash-sale/approvals", response);
+            log.info("[WS] Broadcast {} to admin: itemId={}, pendingCount={}", eventType, itemId, pendingCount);
+        } catch (Exception ex) {
+            log.warn("[WS] Error broadcasting admin approval event: {}", ex.getMessage());
+        }
+    }
+
     // ── Private user destinations ────────────────────────────────
 
     /**

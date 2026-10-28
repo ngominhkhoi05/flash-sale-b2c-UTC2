@@ -147,8 +147,23 @@ public class FlashSaleReservationService {
 
         // Strict time check: reserve after end_time or before start_time must be rejected
         if (now.isBefore(slot.getStartTime()) || now.isAfter(slot.getEndTime()) || !"ACTIVE".equals(slot.getStatus())) {
+            if (idemKey != null && redisTemplate != null) redisTemplate.delete(idemKey);
             throw new BusinessException(FlashSaleErrorCode.SLOT_NOT_ACTIVE);
         }
+
+        // Fast fail-safe: check Redis emergency pause flag
+        if (redisTemplate != null) {
+            try {
+                String isPaused = redisTemplate.opsForValue().get("flash_sale:slot:" + slot.getId() + ":paused");
+                if ("1".equals(isPaused)) {
+                    if (idemKey != null) redisTemplate.delete(idemKey);
+                    throw new BusinessException(FlashSaleErrorCode.SLOT_NOT_ACTIVE);
+                }
+            } catch (BusinessException be) {
+                throw be;
+            } catch (Exception ignored) {}
+        }
+
 
         long remainingSlotSeconds = Duration.between(now, slot.getEndTime()).getSeconds();
         if (remainingSlotSeconds <= 0) {
