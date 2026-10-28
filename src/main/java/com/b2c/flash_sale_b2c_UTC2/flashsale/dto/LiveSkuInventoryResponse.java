@@ -15,6 +15,7 @@ public class LiveSkuInventoryResponse {
     private String productName;
     private String variantName;
     private String storeName;
+    private String categoryName;
     private Integer allocatedStock;
     private Integer availableStock;
     private Integer holdingStock;
