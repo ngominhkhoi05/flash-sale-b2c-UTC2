@@ -19,4 +19,11 @@ public class FlashSaleSlotResponse {
     private Integer reservationTtlSeconds;
     private String status;
     private Instant createdAt;
+
+    // Các trường thống kê SKU thực tế từ bảng flash_sale_items
+    private Long approvedSkusCount;
+    private Long pendingSkusCount;
+    private Long totalSkusCount;
+    private Integer allocatedQuantity;
+    private Integer soldQuantity;
 }

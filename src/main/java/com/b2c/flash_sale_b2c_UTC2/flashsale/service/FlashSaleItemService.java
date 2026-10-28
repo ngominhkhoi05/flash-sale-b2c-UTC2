@@ -55,6 +55,9 @@ public class FlashSaleItemService {
     @Autowired(required = false)
     private FlashSaleOrderPort orderPort;
 
+    @Autowired(required = false)
+    private com.b2c.flash_sale_b2c_UTC2.flashsale.realtime.FlashSaleWsBroadcaster wsBroadcaster;
+
     public static final String STOCK_KEY_PREFIX = "flash_sale:stock:";
 
     @Transactional
@@ -109,11 +112,22 @@ public class FlashSaleItemService {
                 .createdAt(Instant.now())
                 .build();
 
-        return itemMapper.toResponse(itemRepository.save(item));
+        FlashSaleItem saved = itemRepository.save(item);
+        if (wsBroadcaster != null) {
+            try {
+                long pendingCount = itemRepository.countByStatus("PENDING_APPROVAL");
+                String prodName = variant.getProduct() != null ? variant.getProduct().getName() : null;
+                String stName = store.getStoreName();
+                wsBroadcaster.broadcastAdminApprovalEvent("ITEM_REGISTERED", slot.getId(), saved.getId(), prodName, stName, pendingCount);
+            } catch (Exception ex) {
+                log.warn("Failed to broadcast ITEM_REGISTERED: {}", ex.getMessage());
+            }
+        }
+        return itemMapper.toResponse(saved);
     }
 
     @Transactional
-    public FlashSaleItemResponse approveItem(Long itemId) {
+    public FlashSaleItemResponse approveItem(Long itemId, java.math.BigDecimal commissionRateOverride) {
         FlashSaleItem item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.ITEM_NOT_FOUND));
 
@@ -130,20 +144,42 @@ public class FlashSaleItemService {
             throw new BusinessException(FlashSaleErrorCode.INSUFFICIENT_BASE_STOCK);
         }
 
+        if (commissionRateOverride != null) {
+            java.math.BigDecimal normalized = commissionRateOverride.compareTo(java.math.BigDecimal.ONE) > 0
+                    ? commissionRateOverride.divide(new java.math.BigDecimal("100"), 4, java.math.RoundingMode.HALF_UP)
+                    : commissionRateOverride;
+            item.setCommissionRateOverride(normalized);
+        }
+
         item.setStatus("APPROVED");
         item.setAvailableStock(item.getAllocatedStock());
         FlashSaleItem savedItem = itemRepository.save(item);
 
-        log.info("Admin approved FlashSaleItem ID: {}, deducted {} base stock from variant ID: {}",
-                savedItem.getId(), savedItem.getAllocatedStock(), savedItem.getVariant().getId());
+        if (wsBroadcaster != null) {
+            try {
+                long pendingCount = itemRepository.countByStatus("PENDING_APPROVAL");
+                wsBroadcaster.broadcastAdminApprovalEvent("ITEM_APPROVED", savedItem.getSlot().getId(), savedItem.getId(), null, null, pendingCount);
+            } catch (Exception ex) {
+                log.warn("Failed to broadcast ITEM_APPROVED: {}", ex.getMessage());
+            }
+        }
+
+        log.info("Admin approved FlashSaleItem ID: {}, commission: {}, deducted {} base stock from variant ID: {}",
+                savedItem.getId(), savedItem.getCommissionRateOverride(), savedItem.getAllocatedStock(), savedItem.getVariant().getId());
 
         return itemMapper.toResponse(savedItem);
     }
 
+    @Transactional
+    public FlashSaleItemResponse approveItem(Long itemId) {
+        return approveItem(itemId, null);
+    }
+
     @Transactional(readOnly = true)
     public List<PublicFlashSaleSlotResponse> getPublicSlots() {
-        List<FlashSaleSlot> slots = slotRepository.findByStatusInOrderByStartTimeAsc(List.of("ACTIVE", "UPCOMING"));
+        List<FlashSaleSlot> slots = slotRepository.findByStatusInOrderByStartTimeAsc(List.of("ACTIVE", "UPCOMING", "PAUSED"));
         List<PublicFlashSaleSlotResponse> responseList = new ArrayList<>();
+
 
         for (FlashSaleSlot slot : slots) {
             List<FlashSaleItem> approvedItems = itemRepository.findApprovedItemsWithDetailsBySlotId(slot.getId());
@@ -352,6 +388,14 @@ public class FlashSaleItemService {
 
         item.setStatus("REJECTED");
         FlashSaleItem savedItem = itemRepository.save(item);
+        if (wsBroadcaster != null) {
+            try {
+                long pendingCount = itemRepository.countByStatus("PENDING_APPROVAL");
+                wsBroadcaster.broadcastAdminApprovalEvent("ITEM_REJECTED", savedItem.getSlot().getId(), savedItem.getId(), null, null, pendingCount);
+            } catch (Exception ex) {
+                log.warn("Failed to broadcast ITEM_REJECTED: {}", ex.getMessage());
+            }
+        }
         log.info("Admin rejected FlashSaleItem ID: {}, reason: {}", savedItem.getId(), request != null ? request.getReason() : "None");
         return itemMapper.toResponse(savedItem);
     }
@@ -364,7 +408,7 @@ public class FlashSaleItemService {
         if (request != null && request.getItemIds() != null) {
             for (Long itemId : request.getItemIds()) {
                 try {
-                    approveItem(itemId);
+                    approveItem(itemId, request.getCommissionRateOverride());
                     approvedItemIds.add(itemId);
                 } catch (BusinessException ex) {
                     failedReasons.add(BatchApproveFailedItem.builder()

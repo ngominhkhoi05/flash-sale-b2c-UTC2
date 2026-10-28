@@ -18,4 +18,10 @@ public class BatchApproveFlashSaleItemsRequest {
     @NotEmpty(message = "Danh sách ID không được rỗng")
     @JsonAlias({"ids", "item_ids"})
     private List<Long> itemIds;
+
+    private java.math.BigDecimal commissionRateOverride;
+
+    public BatchApproveFlashSaleItemsRequest(List<Long> itemIds) {
+        this.itemIds = itemIds;
+    }
 }

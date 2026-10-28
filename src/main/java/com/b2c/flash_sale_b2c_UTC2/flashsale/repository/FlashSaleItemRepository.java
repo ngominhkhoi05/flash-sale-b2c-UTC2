@@ -193,4 +193,17 @@ public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Lo
         AND sl.status = 'ACTIVE'
         """)
     List<Long> findProductIdsWithActiveFlashSale(@Param("productIds") java.util.Collection<Long> productIds);
+
+    @Query("""
+        SELECT 
+            fsi.slot.id,
+            SUM(CASE WHEN fsi.status = 'APPROVED' THEN 1L ELSE 0L END),
+            SUM(CASE WHEN fsi.status = 'PENDING_APPROVAL' OR fsi.status = 'PENDING' THEN 1L ELSE 0L END),
+            COUNT(fsi),
+            COALESCE(SUM(CASE WHEN fsi.status = 'APPROVED' THEN CAST(fsi.allocatedStock AS long) ELSE 0L END), 0L),
+            COALESCE(SUM(CASE WHEN fsi.status = 'APPROVED' THEN CAST(fsi.allocatedStock - fsi.availableStock AS long) ELSE 0L END), 0L)
+        FROM FlashSaleItem fsi
+        GROUP BY fsi.slot.id
+    """)
+    List<Object[]> getSlotSkuStats();
 }
