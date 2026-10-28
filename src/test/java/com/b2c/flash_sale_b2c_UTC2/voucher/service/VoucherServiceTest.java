@@ -65,7 +65,7 @@ class VoucherServiceTest {
     @BeforeEach
     void setUp() {
         sampleUser = User.builder().id(1L).email("user@example.com").build();
-        sampleStore = Store.builder().id(10L).user(sampleUser).storeName("Shop UTC2").build();
+        sampleStore = Store.builder().id(10L).user(sampleUser).storeName("Shop UTC2").status("APPROVED").build();
 
         sampleVoucher = Voucher.builder()
                 .id(100L)
@@ -446,7 +446,7 @@ class VoucherServiceTest {
         when(voucherRepository.findById(200L)).thenReturn(Optional.of(otherVoucher));
 
         BusinessException ex = assertThrows(BusinessException.class, () -> voucherService.getSellerVoucherDetail(1L, 200L));
-        assertEquals(VoucherErrorCode.VOUCHER_STORE_MISMATCH, ex.getErrorCode());
+        assertEquals(com.b2c.flash_sale_b2c_UTC2.store.exception.StoreErrorCode.STORE_ACCESS_DENIED, ex.getErrorCode());
     }
 
     @Test
