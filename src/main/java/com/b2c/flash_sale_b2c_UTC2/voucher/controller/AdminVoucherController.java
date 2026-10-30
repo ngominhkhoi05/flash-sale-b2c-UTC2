@@ -96,4 +96,13 @@ public class AdminVoucherController {
         VoucherResponse response = voucherService.updateVoucher(id, request);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật mã giảm giá thành công", response));
     }
+
+    @Operation(summary = "Lấy lịch sử sử dụng của Voucher sàn", description = "Admin xem chi tiết các đơn hàng và người dùng đã áp mã voucher này")
+    @GetMapping("/{id}/usages")
+    public ResponseEntity<ApiResponse<java.util.List<com.b2c.flash_sale_b2c_UTC2.voucher.dto.VoucherUsageHistoryResponse>>> getVoucherUsageHistory(
+            @PathVariable Long id
+    ) {
+        java.util.List<com.b2c.flash_sale_b2c_UTC2.voucher.dto.VoucherUsageHistoryResponse> response = voucherService.getVoucherUsageHistory(id);
+        return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử sử dụng voucher thành công", response));
+    }
 }
