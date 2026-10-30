@@ -15,6 +15,8 @@ import com.b2c.flash_sale_b2c_UTC2.voucher.dto.VoucherCalculationResponse;
 import com.b2c.flash_sale_b2c_UTC2.voucher.dto.VoucherResponse;
 import com.b2c.flash_sale_b2c_UTC2.voucher.entity.UserVoucher;
 import com.b2c.flash_sale_b2c_UTC2.voucher.entity.Voucher;
+import com.b2c.flash_sale_b2c_UTC2.voucher.entity.VoucherUsage;
+import com.b2c.flash_sale_b2c_UTC2.voucher.dto.VoucherUsageHistoryResponse;
 import com.b2c.flash_sale_b2c_UTC2.voucher.exception.VoucherErrorCode;
 import com.b2c.flash_sale_b2c_UTC2.voucher.mapper.VoucherMapper;
 import com.b2c.flash_sale_b2c_UTC2.common.api.PageResponse;
@@ -635,5 +637,35 @@ public class VoucherServiceImpl implements VoucherService {
         voucher = voucherRepository.save(voucher);
         log.info("Cập nhật voucher id={} thành công", voucherId);
         return voucherMapper.toResponse(voucher);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<VoucherUsageHistoryResponse> getVoucherUsageHistory(Long voucherId) {
+        voucherRepository.findById(voucherId)
+                .orElseThrow(() -> new BusinessException(VoucherErrorCode.VOUCHER_NOT_FOUND));
+
+        List<VoucherUsage> usages = voucherUsageRepository.findByVoucherIdWithDetails(voucherId);
+        return usages.stream().map(u -> {
+            String customerName = u.getUser() != null ? u.getUser().getFullName() : "Khách hàng";
+            String customerEmail = u.getUser() != null ? u.getUser().getEmail() : "";
+            String customerAvatar = "";
+            String orderCode = u.getOrder() != null ? u.getOrder().getOrderCode() : "";
+            String status = (u.getOrder() != null && ("CANCELLED_USER".equalsIgnoreCase(u.getOrder().getStatus()) || "CANCELLED_TIMEOUT".equalsIgnoreCase(u.getOrder().getStatus()))) 
+                    ? "REFUNDED" : "SUCCESS";
+
+            return VoucherUsageHistoryResponse.builder()
+                    .id(String.valueOf(u.getId()))
+                    .voucherId(String.valueOf(voucherId))
+                    .voucherCode(u.getVoucher() != null ? u.getVoucher().getCode() : "")
+                    .customerName(customerName)
+                    .customerEmail(customerEmail)
+                    .customerAvatar(customerAvatar)
+                    .orderCode(orderCode)
+                    .discountAmount(u.getDiscountAmount())
+                    .usedAt(u.getUsedAt())
+                    .status(status)
+                    .build();
+        }).toList();
     }
 }

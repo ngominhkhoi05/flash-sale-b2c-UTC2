@@ -97,4 +97,5 @@ public interface VoucherService {
             Long voucherId,
             com.b2c.flash_sale_b2c_UTC2.voucher.dto.UpdateVoucherRequest request
     );
+    java.util.List<com.b2c.flash_sale_b2c_UTC2.voucher.dto.VoucherUsageHistoryResponse> getVoucherUsageHistory(Long voucherId);
 }
