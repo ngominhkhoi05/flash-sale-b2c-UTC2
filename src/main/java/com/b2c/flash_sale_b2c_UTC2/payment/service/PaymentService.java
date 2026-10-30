@@ -9,6 +9,7 @@ public interface PaymentService {
     PaymentResponse getOrderPayment(Long buyerId, Long orderId);
     PaymentResponse createZaloPayPayment(Long buyerId, Long orderId);
     PaymentResponse confirmCodPayment(Long buyerId, Long orderId);
+    PaymentResponse confirmCodPaymentByCode(Long buyerId, String orderCode);
 
     Map<String, Object> handleZaloPayCallback(ZaloPayCallbackDto cb);
 

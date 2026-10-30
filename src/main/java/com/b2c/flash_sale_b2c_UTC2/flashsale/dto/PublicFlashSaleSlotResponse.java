@@ -29,9 +29,14 @@ public class PublicFlashSaleSlotResponse {
     public static class PublicFlashSaleItemResponse {
         private Long id;
         private Long slotId;
+        private Long productId;
         private Long variantId;
+        private Integer categoryId;
+        private String categoryName;
+        private String categorySlug;
         private String sku;
         private String variantName;
+        private java.util.Map<String, String> attributes;
         private String productName;
         private String imageUrl;
         private BigDecimal originalPrice;

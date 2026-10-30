@@ -6,6 +6,7 @@ import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.BatchApproveFailedItem;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.BatchApproveFlashSaleItemsRequest;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.BatchApproveFlashSaleItemsResponse;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.FlashSaleItemResponse;
+import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.PublicFlashSaleItemDetailResponse;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.PublicFlashSaleSlotResponse;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.RegisterFlashSaleItemRequest;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.dto.RejectFlashSaleItemRequest;
@@ -18,8 +19,11 @@ import com.b2c.flash_sale_b2c_UTC2.flashsale.repository.FlashSaleItemRepository;
 import com.b2c.flash_sale_b2c_UTC2.flashsale.repository.FlashSaleSlotRepository;
 import com.b2c.flash_sale_b2c_UTC2.image.enums.ImageOwnerType;
 import com.b2c.flash_sale_b2c_UTC2.image.service.ImageService;
+import com.b2c.flash_sale_b2c_UTC2.product.entity.Category;
+import com.b2c.flash_sale_b2c_UTC2.product.entity.Product;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.ProductVariant;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductVariantRepository;
+import com.b2c.flash_sale_b2c_UTC2.review.repository.ProductReviewRepository;
 import com.b2c.flash_sale_b2c_UTC2.store.entity.Store;
 import com.b2c.flash_sale_b2c_UTC2.store.repository.StoreRepository;
 import lombok.RequiredArgsConstructor;
@@ -50,10 +54,16 @@ public class FlashSaleItemService {
     private final ImageService imageService;
 
     @Autowired(required = false)
+    private ProductReviewRepository productReviewRepository;
+
+    @Autowired(required = false)
     private StringRedisTemplate redisTemplate;
 
     @Autowired(required = false)
     private FlashSaleOrderPort orderPort;
+
+    @Autowired(required = false)
+    private com.b2c.flash_sale_b2c_UTC2.flashsale.realtime.FlashSaleWsBroadcaster wsBroadcaster;
 
     public static final String STOCK_KEY_PREFIX = "flash_sale:stock:";
 
@@ -109,11 +119,22 @@ public class FlashSaleItemService {
                 .createdAt(Instant.now())
                 .build();
 
-        return itemMapper.toResponse(itemRepository.save(item));
+        FlashSaleItem saved = itemRepository.save(item);
+        if (wsBroadcaster != null) {
+            try {
+                long pendingCount = itemRepository.countByStatus("PENDING_APPROVAL");
+                String prodName = variant.getProduct() != null ? variant.getProduct().getName() : null;
+                String stName = store.getStoreName();
+                wsBroadcaster.broadcastAdminApprovalEvent("ITEM_REGISTERED", slot.getId(), saved.getId(), prodName, stName, pendingCount);
+            } catch (Exception ex) {
+                log.warn("Failed to broadcast ITEM_REGISTERED: {}", ex.getMessage());
+            }
+        }
+        return itemMapper.toResponse(saved);
     }
 
     @Transactional
-    public FlashSaleItemResponse approveItem(Long itemId) {
+    public FlashSaleItemResponse approveItem(Long itemId, java.math.BigDecimal commissionRateOverride) {
         FlashSaleItem item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.ITEM_NOT_FOUND));
 
@@ -130,20 +151,42 @@ public class FlashSaleItemService {
             throw new BusinessException(FlashSaleErrorCode.INSUFFICIENT_BASE_STOCK);
         }
 
+        if (commissionRateOverride != null) {
+            java.math.BigDecimal normalized = commissionRateOverride.compareTo(java.math.BigDecimal.ONE) > 0
+                    ? commissionRateOverride.divide(new java.math.BigDecimal("100"), 4, java.math.RoundingMode.HALF_UP)
+                    : commissionRateOverride;
+            item.setCommissionRateOverride(normalized);
+        }
+
         item.setStatus("APPROVED");
         item.setAvailableStock(item.getAllocatedStock());
         FlashSaleItem savedItem = itemRepository.save(item);
 
-        log.info("Admin approved FlashSaleItem ID: {}, deducted {} base stock from variant ID: {}",
-                savedItem.getId(), savedItem.getAllocatedStock(), savedItem.getVariant().getId());
+        if (wsBroadcaster != null) {
+            try {
+                long pendingCount = itemRepository.countByStatus("PENDING_APPROVAL");
+                wsBroadcaster.broadcastAdminApprovalEvent("ITEM_APPROVED", savedItem.getSlot().getId(), savedItem.getId(), null, null, pendingCount);
+            } catch (Exception ex) {
+                log.warn("Failed to broadcast ITEM_APPROVED: {}", ex.getMessage());
+            }
+        }
+
+        log.info("Admin approved FlashSaleItem ID: {}, commission: {}, deducted {} base stock from variant ID: {}",
+                savedItem.getId(), savedItem.getCommissionRateOverride(), savedItem.getAllocatedStock(), savedItem.getVariant().getId());
 
         return itemMapper.toResponse(savedItem);
     }
 
+    @Transactional
+    public FlashSaleItemResponse approveItem(Long itemId) {
+        return approveItem(itemId, null);
+    }
+
     @Transactional(readOnly = true)
     public List<PublicFlashSaleSlotResponse> getPublicSlots() {
-        List<FlashSaleSlot> slots = slotRepository.findByStatusInOrderByStartTimeAsc(List.of("ACTIVE", "UPCOMING"));
+        List<FlashSaleSlot> slots = slotRepository.findByStatusInOrderByStartTimeAsc(List.of("ACTIVE", "UPCOMING", "PAUSED"));
         List<PublicFlashSaleSlotResponse> responseList = new ArrayList<>();
+
 
         for (FlashSaleSlot slot : slots) {
             List<FlashSaleItem> approvedItems = itemRepository.findApprovedItemsWithDetailsBySlotId(slot.getId());
@@ -165,6 +208,10 @@ public class FlashSaleItemService {
                 int displayStock = getRealtimeStock(item);
                 Long vId = item.getVariant().getId();
                 Long pId = item.getVariant().getProduct().getId();
+                com.b2c.flash_sale_b2c_UTC2.product.entity.Category cat = item.getVariant().getProduct().getCategory();
+                Integer catId = cat != null ? cat.getId() : null;
+                String catName = cat != null ? cat.getName() : null;
+                String catSlug = cat != null ? cat.getSlug() : null;
                 String imageUrl = variantImageMap.get(vId);
                 if (imageUrl == null) {
                     imageUrl = productImageMap.get(pId);
@@ -173,9 +220,14 @@ public class FlashSaleItemService {
                 itemDtos.add(PublicFlashSaleSlotResponse.PublicFlashSaleItemResponse.builder()
                         .id(item.getId())
                         .slotId(slot.getId())
+                        .productId(pId)
                         .variantId(vId)
+                        .categoryId(catId)
+                        .categoryName(catName)
+                        .categorySlug(catSlug)
                         .sku(item.getVariant().getSku())
                         .variantName(item.getVariant().getVariantName())
+                        .attributes(item.getVariant().getAttributes())
                         .productName(item.getVariant().getProduct().getName())
                         .imageUrl(imageUrl)
                         .originalPrice(item.getVariant().getOriginalPrice())
@@ -207,6 +259,127 @@ public class FlashSaleItemService {
                 .filter(slot -> "ACTIVE".equalsIgnoreCase(slot.getStatus()))
                 .flatMap(slot -> slot.getItems().stream())
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PublicFlashSaleItemDetailResponse getPublicItemDetail(Long itemId) {
+        FlashSaleItem item = itemRepository.findByIdWithDetails(itemId)
+                .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.ITEM_NOT_FOUND));
+
+        int displayStock = getRealtimeStock(item);
+
+        ProductVariant variant = item.getVariant();
+        Product product = variant.getProduct();
+        Store store = product.getStore();
+        Category category = product.getCategory();
+        FlashSaleSlot slot = item.getSlot();
+
+        int discountPercent = 0;
+        if (variant.getOriginalPrice() != null && variant.getOriginalPrice().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal diff = variant.getOriginalPrice().subtract(item.getFlashSalePrice());
+            discountPercent = diff.multiply(BigDecimal.valueOf(100))
+                    .divide(variant.getOriginalPrice(), 0, java.math.RoundingMode.HALF_UP)
+                    .intValue();
+        }
+
+        List<String> imageUrls = new ArrayList<>();
+        String primaryImageUrl = null;
+
+        try {
+            var variantPrimary = imageService.getPrimaryImage(ImageOwnerType.VARIANT, variant.getId());
+            if (variantPrimary != null && variantPrimary.getUrl() != null) {
+                primaryImageUrl = variantPrimary.getUrl();
+            }
+
+            var variantImages = imageService.listImages(ImageOwnerType.VARIANT, variant.getId());
+            if (variantImages != null) {
+                for (var img : variantImages) {
+                    if (img.getUrl() != null && !imageUrls.contains(img.getUrl())) {
+                        imageUrls.add(img.getUrl());
+                    }
+                }
+            }
+
+            if (primaryImageUrl == null) {
+                var prodPrimary = imageService.getPrimaryImage(ImageOwnerType.PRODUCT, product.getId());
+                if (prodPrimary != null && prodPrimary.getUrl() != null) {
+                    primaryImageUrl = prodPrimary.getUrl();
+                }
+            }
+
+            var prodImages = imageService.listImages(ImageOwnerType.PRODUCT, product.getId());
+            if (prodImages != null) {
+                for (var img : prodImages) {
+                    if (img.getUrl() != null && !imageUrls.contains(img.getUrl())) {
+                        imageUrls.add(img.getUrl());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load images for FlashSaleItem ID: {}, error: {}", itemId, e.getMessage());
+        }
+
+        if (primaryImageUrl != null && !imageUrls.contains(primaryImageUrl)) {
+            imageUrls.add(0, primaryImageUrl);
+        }
+
+        String storeLogoUrl = null;
+        try {
+            var storeLogo = imageService.getPrimaryImage(ImageOwnerType.STORE, store.getId());
+            if (storeLogo != null) {
+                storeLogoUrl = storeLogo.getUrl();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load store logo for store ID: {}, error: {}", store.getId(), e.getMessage());
+        }
+
+        Double avgRating = null;
+        long ratingCount = 0;
+        if (productReviewRepository != null) {
+            try {
+                avgRating = productReviewRepository.avgRatingByProductId(product.getId());
+                ratingCount = productReviewRepository.countByProductIdAndVisible(product.getId());
+            } catch (Exception e) {
+                log.warn("Failed to load review stats for product ID: {}, error: {}", product.getId(), e.getMessage());
+            }
+        }
+
+        return PublicFlashSaleItemDetailResponse.builder()
+                .id(item.getId())
+                .slotId(slot.getId())
+                .slotTitle(slot.getTitle())
+                .slotStartTime(slot.getStartTime())
+                .slotEndTime(slot.getEndTime())
+                .slotStatus(slot.getStatus())
+                .reservationTtlSeconds(slot.getReservationTtlSeconds())
+                .originalPrice(variant.getOriginalPrice())
+                .flashSalePrice(item.getFlashSalePrice())
+                .discountPercent(discountPercent)
+                .allocatedStock(item.getAllocatedStock())
+                .availableStock(displayStock)
+                .userPurchaseLimit(item.getUserPurchaseLimit())
+                .status(item.getStatus())
+                .productId(product.getId())
+                .productName(product.getName())
+                .productDescription(product.getDescription())
+                .productSlug(product.getSlug())
+                .totalSold(product.getTotalSold())
+                .ratingAvg(avgRating != null ? Math.round(avgRating * 10.0) / 10.0 : 5.0)
+                .ratingCount(ratingCount)
+                .categoryId(category != null ? category.getId() : null)
+                .categoryName(category != null ? category.getName() : null)
+                .categorySlug(category != null ? category.getSlug() : null)
+                .storeId(store.getId())
+                .storeName(store.getStoreName())
+                .storeTier(store.getTier() != null ? store.getTier().name() : "NORMAL")
+                .storeLogoUrl(storeLogoUrl)
+                .variantId(variant.getId())
+                .sku(variant.getSku())
+                .variantName(variant.getVariantName())
+                .attributes(variant.getAttributes())
+                .primaryImageUrl(primaryImageUrl)
+                .imageUrls(imageUrls)
+                .build();
     }
 
     public int getRealtimeStock(FlashSaleItem item) {
@@ -352,6 +525,14 @@ public class FlashSaleItemService {
 
         item.setStatus("REJECTED");
         FlashSaleItem savedItem = itemRepository.save(item);
+        if (wsBroadcaster != null) {
+            try {
+                long pendingCount = itemRepository.countByStatus("PENDING_APPROVAL");
+                wsBroadcaster.broadcastAdminApprovalEvent("ITEM_REJECTED", savedItem.getSlot().getId(), savedItem.getId(), null, null, pendingCount);
+            } catch (Exception ex) {
+                log.warn("Failed to broadcast ITEM_REJECTED: {}", ex.getMessage());
+            }
+        }
         log.info("Admin rejected FlashSaleItem ID: {}, reason: {}", savedItem.getId(), request != null ? request.getReason() : "None");
         return itemMapper.toResponse(savedItem);
     }
@@ -364,7 +545,7 @@ public class FlashSaleItemService {
         if (request != null && request.getItemIds() != null) {
             for (Long itemId : request.getItemIds()) {
                 try {
-                    approveItem(itemId);
+                    approveItem(itemId, request.getCommissionRateOverride());
                     approvedItemIds.add(itemId);
                 } catch (BusinessException ex) {
                     failedReasons.add(BatchApproveFailedItem.builder()

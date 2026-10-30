@@ -446,7 +446,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public QrOrderDetailResponse getOrderQrDetail(Long buyerId, String orderCode) {
         if (orderCode == null || orderCode.isBlank()) {
             throw new BusinessException(OrderErrorCode.ORDER_NOT_FOUND);

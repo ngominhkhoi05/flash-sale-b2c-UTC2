@@ -15,7 +15,7 @@ import java.util.Optional;
 @Repository
 public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Long> {
 
-    @Query("SELECT fsi FROM FlashSaleItem fsi JOIN FETCH fsi.slot s JOIN FETCH fsi.variant v JOIN FETCH v.product p JOIN FETCH p.store st WHERE fsi.id = :id")
+    @Query("SELECT fsi FROM FlashSaleItem fsi JOIN FETCH fsi.slot s JOIN FETCH fsi.variant v JOIN FETCH v.product p LEFT JOIN FETCH p.category c JOIN FETCH p.store st WHERE fsi.id = :id")
     Optional<FlashSaleItem> findByIdWithDetails(@Param("id") Long id);
 
     Optional<FlashSaleItem> findBySlotIdAndVariantId(Long slotId, Long variantId);
@@ -29,6 +29,7 @@ public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Lo
         SELECT fsi FROM FlashSaleItem fsi
         JOIN FETCH fsi.variant v
         JOIN FETCH v.product p
+        LEFT JOIN FETCH p.category c
         WHERE fsi.slot.id = :slotId
         AND fsi.status = 'APPROVED'
     """)
@@ -193,4 +194,17 @@ public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Lo
         AND sl.status = 'ACTIVE'
         """)
     List<Long> findProductIdsWithActiveFlashSale(@Param("productIds") java.util.Collection<Long> productIds);
+
+    @Query("""
+        SELECT 
+            fsi.slot.id,
+            SUM(CASE WHEN fsi.status = 'APPROVED' THEN 1L ELSE 0L END),
+            SUM(CASE WHEN fsi.status = 'PENDING_APPROVAL' OR fsi.status = 'PENDING' THEN 1L ELSE 0L END),
+            COUNT(fsi),
+            COALESCE(SUM(CASE WHEN fsi.status = 'APPROVED' THEN CAST(fsi.allocatedStock AS long) ELSE 0L END), 0L),
+            COALESCE(SUM(CASE WHEN fsi.status = 'APPROVED' THEN CAST(fsi.allocatedStock - fsi.availableStock AS long) ELSE 0L END), 0L)
+        FROM FlashSaleItem fsi
+        GROUP BY fsi.slot.id
+    """)
+    List<Object[]> getSlotSkuStats();
 }

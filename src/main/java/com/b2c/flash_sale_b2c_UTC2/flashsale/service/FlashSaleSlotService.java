@@ -27,12 +27,16 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class FlashSaleSlotService {
+
+    private record SlotStats(Long approved, Long pending, Long total, Integer allocated, Integer sold) {}
 
     public static final String STOCK_KEY_PREFIX = "flash_sale:stock:";
 
@@ -111,13 +115,66 @@ public class FlashSaleSlotService {
                 && slot.getEndTime() != null && slot.getEndTime().isAfter(now)) {
             resp.setStatus("ACTIVE");
         }
+
+        // Lấy thống kê cho slot này
+        try {
+            List<FlashSaleItem> items = itemRepository.findBySlotId(slotId);
+            long approved = 0;
+            long pending = 0;
+            int allocated = 0;
+            int sold = 0;
+            for (FlashSaleItem item : items) {
+                if ("APPROVED".equals(item.getStatus())) {
+                    approved++;
+                    int alloc = item.getAllocatedStock() != null ? item.getAllocatedStock() : 0;
+                    int avail = item.getAvailableStock() != null ? item.getAvailableStock() : 0;
+                    allocated += alloc;
+                    sold += Math.max(0, alloc - avail);
+                } else if ("PENDING_APPROVAL".equals(item.getStatus()) || "PENDING".equals(item.getStatus())) {
+                    pending++;
+                }
+            }
+            resp.setApprovedSkusCount(approved);
+            resp.setPendingSkusCount(pending);
+            resp.setTotalSkusCount((long) items.size());
+            resp.setAllocatedQuantity(allocated);
+            resp.setSoldQuantity(sold);
+        } catch (Exception ex) {
+            log.warn("Không thể tính thống kê SKU cho slot {}: {}", slotId, ex.getMessage());
+            resp.setApprovedSkusCount(0L);
+            resp.setPendingSkusCount(0L);
+            resp.setTotalSkusCount(0L);
+            resp.setAllocatedQuantity(0);
+            resp.setSoldQuantity(0);
+        }
         return resp;
     }
 
     @Transactional(readOnly = true)
     public List<FlashSaleSlotResponse> getAllSlots() {
         Instant now = Instant.now();
-        return slotRepository.findAll().stream()
+        List<FlashSaleSlot> slots = slotRepository.findAll();
+
+        // 1 Query tổng hợp duy nhất cho toàn bộ các slot (tránh N+1)
+        Map<Long, SlotStats> statsMap = new HashMap<>();
+        try {
+            List<Object[]> stats = itemRepository.getSlotSkuStats();
+            for (Object[] row : stats) {
+                if (row != null && row.length >= 6 && row[0] != null) {
+                    Long slotId = ((Number) row[0]).longValue();
+                    Long approved = row[1] != null ? ((Number) row[1]).longValue() : 0L;
+                    Long pending = row[2] != null ? ((Number) row[2]).longValue() : 0L;
+                    Long total = row[3] != null ? ((Number) row[3]).longValue() : 0L;
+                    Integer allocated = row[4] != null ? ((Number) row[4]).intValue() : 0;
+                    Integer sold = row[5] != null ? ((Number) row[5]).intValue() : 0;
+                    statsMap.put(slotId, new SlotStats(approved, pending, total, allocated, sold));
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("Lỗi lấy getSlotSkuStats: {}", ex.getMessage());
+        }
+
+        return slots.stream()
                 .map(slot -> {
                     FlashSaleSlotResponse resp = slotMapper.toResponse(slot);
                     if (!"ENDED".equals(slot.getStatus()) && slot.getEndTime() != null && !slot.getEndTime().isAfter(now)) {
@@ -126,6 +183,21 @@ public class FlashSaleSlotService {
                             && slot.getStartTime() != null && !slot.getStartTime().isAfter(now)
                             && slot.getEndTime() != null && slot.getEndTime().isAfter(now)) {
                         resp.setStatus("ACTIVE");
+                    }
+
+                    SlotStats s = statsMap.get(slot.getId());
+                    if (s != null) {
+                        resp.setApprovedSkusCount(s.approved());
+                        resp.setPendingSkusCount(s.pending());
+                        resp.setTotalSkusCount(s.total());
+                        resp.setAllocatedQuantity(s.allocated());
+                        resp.setSoldQuantity(s.sold());
+                    } else {
+                        resp.setApprovedSkusCount(0L);
+                        resp.setPendingSkusCount(0L);
+                        resp.setTotalSkusCount(0L);
+                        resp.setAllocatedQuantity(0);
+                        resp.setSoldQuantity(0);
                     }
                     return resp;
                 })
@@ -168,7 +240,6 @@ public class FlashSaleSlotService {
         slotRepository.delete(slot);
         log.info("Admin đã xóa hoàn toàn phiên Flash Sale ID: {} ({}) khỏi cơ sở dữ liệu", slotId, slot.getTitle());
     }
-
 
     @Transactional(readOnly = true)
     public RealtimeTelemetryResponse getSlotTelemetry(Long slotId) {
@@ -341,6 +412,47 @@ public class FlashSaleSlotService {
                 .build();
     }
 
+    @Transactional
+    public FlashSaleSlotResponse resumeSlot(Long slotId) {
+        FlashSaleSlot slot = slotRepository.findById(slotId)
+                .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.SLOT_NOT_FOUND));
+
+        if (!"PAUSED".equals(slot.getStatus())) {
+            throw new BusinessException(FlashSaleErrorCode.SLOT_NOT_ACTIVE);
+        }
+
+        // 1. Remove pause flags in Redis
+        if (redisTemplate != null) {
+            try {
+                redisTemplate.delete("flash_sale:slot:" + slotId + ":paused");
+                redisTemplate.delete("flashsale:slot:" + slotId + ":paused");
+            } catch (Exception e) {
+                log.error("Failed to delete pause flag in Redis for slot {}: {}", slotId, e.getMessage());
+            }
+        }
+
+        // 2. Determine appropriate status (ACTIVE if within time, otherwise ENDED)
+        Instant now = Instant.now();
+        if (now.isAfter(slot.getEndTime())) {
+            slot.setStatus("ENDED");
+        } else if (now.isBefore(slot.getStartTime())) {
+            slot.setStatus("UPCOMING");
+        } else {
+            slot.setStatus("ACTIVE");
+        }
+
+        slotRepository.save(slot);
+
+        // 3. Broadcast WebSocket
+        try {
+            wsBroadcaster.broadcastSlotStatus(slot.getId(), slot.getStatus());
+        } catch (Exception e) {
+            log.warn("Failed to broadcast slot resumed event: {}", e.getMessage());
+        }
+
+        return slotMapper.toResponse(slot);
+    }
+
     @Transactional(readOnly = true)
     public List<LiveSkuInventoryResponse> getLiveSkus(Long slotId) {
         FlashSaleSlot slot = slotRepository.findById(slotId)
@@ -374,6 +486,8 @@ public class FlashSaleSlotService {
                             ? item.getVariant().getProduct().getName() : "Sản phẩm Flash Sale";
                     String storeName = (item.getVariant() != null && item.getVariant().getProduct() != null && item.getVariant().getProduct().getStore() != null)
                             ? item.getVariant().getProduct().getStore().getStoreName() : "Gian hàng";
+                    String categoryName = (item.getVariant() != null && item.getVariant().getProduct() != null && item.getVariant().getProduct().getCategory() != null)
+                            ? item.getVariant().getProduct().getCategory().getName() : "Khác";
 
                     return LiveSkuInventoryResponse.builder()
                             .id(item.getId())
@@ -381,6 +495,7 @@ public class FlashSaleSlotService {
                             .productName(productName)
                             .variantName(variantName)
                             .storeName(storeName)
+                            .categoryName(categoryName)
                             .allocatedStock(allocatedStock)
                             .availableStock(availableStock)
                             .holdingStock(0)
@@ -398,4 +513,3 @@ public class FlashSaleSlotService {
         }
     }
 }
-
