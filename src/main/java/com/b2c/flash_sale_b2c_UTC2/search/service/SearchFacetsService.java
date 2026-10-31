@@ -4,7 +4,9 @@ import com.b2c.flash_sale_b2c_UTC2.product.dto.FacetItemDto;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.ProductFilterRequest;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.SearchFacetsDto;
 import com.b2c.flash_sale_b2c_UTC2.product.dto.SearchRequest;
+import com.b2c.flash_sale_b2c_UTC2.product.entity.Category;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.Product;
+import com.b2c.flash_sale_b2c_UTC2.product.repository.CategoryRepository;
 import com.b2c.flash_sale_b2c_UTC2.product.repository.ProductRepository;
 import com.b2c.flash_sale_b2c_UTC2.product.spec.ProductSpecifications;
 import lombok.RequiredArgsConstructor;
@@ -12,10 +14,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
- * Dựng facets (subcategories, cities, ratings, services) cho kết quả tìm kiếm.
+ * Dựng facets (subcategories, ratings) cho kết quả tìm kiếm.
  *
  * <p>Facets luôn đến từ PostgreSQL — kể cả khi nhánh chính là OpenSearch.
  * Nhờ vậy số đếm ở 2 nhánh không lệch nhau do cách đếm khác nhau.
@@ -26,72 +31,81 @@ import java.util.List;
 public class SearchFacetsService {
 
     private final ProductRepository productRepository;
+    private final CategoryRepository categoryRepository;
 
     /**
-     * Dựng facets 4 nhóm từ request tìm kiếm.
+     * Dựng facets các nhóm từ request tìm kiếm.
      *
      * @param req request tìm kiếm.
      * @return facets đầy đủ.
      */
     public SearchFacetsDto buildFacets(SearchRequest req) {
-        long baseCount = computeFacetBaseCount(req);
+        String keyword = req.getQ() != null ? req.getQ().trim() : "";
 
-        List<FacetItemDto> subcategories = List.of(
-                FacetItemDto.builder().key("true-wireless").label("True Wireless").count(0).build(),
-                FacetItemDto.builder().key("over-ear").label("Over-ear").count(0).build(),
-                FacetItemDto.builder().key("sport-waterproof").label("Sport & Waterproof").count(0).build(),
-                FacetItemDto.builder().key("gaming-mic").label("Gaming & Mic").count(0).build(),
-                FacetItemDto.builder().key("accessories").label("Phụ kiện").count(0).build()
-        );
+        // 1. Subcategories facet: Lấy danh mục thật từ DB kèm số lượng sản phẩm khớp keyword
+        List<FacetItemDto> subcategories = new ArrayList<>();
+        try {
+            List<Object[]> rows = productRepository.countProductsByCategoryWithKeyword(keyword);
+            Map<String, FacetItemDto> found = new LinkedHashMap<>();
+            for (Object[] row : rows) {
+                Integer id = (Integer) row[0];
+                String name = (String) row[1];
+                String slug = (String) row[2];
+                Number count = (Number) row[3];
+                String key = slug != null && !slug.isBlank() ? slug : String.valueOf(id);
+                found.put(key, FacetItemDto.builder()
+                        .key(key)
+                        .label(name != null ? name : key)
+                        .count(count != null ? count.longValue() : 0L)
+                        .build());
+            }
 
-        List<FacetItemDto> cities = List.of(
-                FacetItemDto.builder().key("HCM").label("TP. Hồ Chí Minh").count(baseCount).build(),
-                FacetItemDto.builder().key("HN").label("Hà Nội").count(baseCount).build(),
-                FacetItemDto.builder().key("DN").label("Đà Nẵng").count(baseCount).build(),
-                FacetItemDto.builder().key("BD").label("Bình Dương").count(baseCount).build()
-        );
+            // Bổ sung các categories còn lại trong DB để người dùng thấy đầy đủ các ngành hàng
+            List<Category> allCategories = categoryRepository.findAll();
+            for (Category c : allCategories) {
+                String key = c.getSlug() != null && !c.getSlug().isBlank() ? c.getSlug() : String.valueOf(c.getId());
+                if (!found.containsKey(key)) {
+                    found.put(key, FacetItemDto.builder()
+                            .key(key)
+                            .label(c.getName() != null ? c.getName() : key)
+                            .count(0L)
+                            .build());
+                }
+            }
+            subcategories.addAll(found.values());
+        } catch (Exception e) {
+            log.warn("[SearchFacetsService] subcategories facet failed: {}", e.getMessage());
+        }
 
+        // 2. Ratings facet: 5 sao, 4 sao trở lên, 3 sao trở lên
         List<FacetItemDto> ratings = List.of(
-                FacetItemDto.builder().key("5").label("5 sao").count(0).build(),
-                FacetItemDto.builder().key("4").label("4 sao trở lên").count(0).build(),
-                FacetItemDto.builder().key("3").label("3 sao trở lên").count(0).build()
+                FacetItemDto.builder().key("5").label("5 sao").count(countByRating(req, 5)).build(),
+                FacetItemDto.builder().key("4").label("4 sao trở lên").count(countByRating(req, 4)).build(),
+                FacetItemDto.builder().key("3").label("3 sao trở lên").count(countByRating(req, 3)).build()
         );
 
-        List<FacetItemDto> services = List.of(
-                FacetItemDto.builder().key(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.FLASH_SALE.getKey())
-                        .label(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.FLASH_SALE.getLabel()).count(0).build(),
-                FacetItemDto.builder().key(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.VOUCHER.getKey())
-                        .label(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.VOUCHER.getLabel()).count(0).build(),
-                FacetItemDto.builder().key(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.FREESHIP.getKey())
-                        .label(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.FREESHIP.getLabel()).count(0).build(),
-                FacetItemDto.builder().key(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.OFFICIAL.getKey())
-                        .label(com.b2c.flash_sale_b2c_UTC2.product.enums.SearchService.OFFICIAL.getLabel()).count(0).build()
-        );
-
+        // Cities & Services: Lược bỏ theo yêu cầu, trả về danh sách rỗng
         return SearchFacetsDto.builder()
                 .subcategories(subcategories)
-                .cities(cities)
+                .cities(List.of())
                 .ratings(ratings)
-                .services(services)
+                .services(List.of())
                 .build();
     }
 
-    /**
-     * Số lượng sản phẩm khớp keyword + price + rating (không tính subcategory/service).
-     */
-    private long computeFacetBaseCount(SearchRequest req) {
+    private long countByRating(SearchRequest req, int minRating) {
         try {
             ProductFilterRequest filter = ProductFilterRequest.builder()
                     .keyword(req.getQ())
+                    .categories(req.getSubcategories())
                     .minPrice(req.getPriceMin())
                     .maxPrice(req.getPriceMax())
-                    .rating(req.getRating())
+                    .rating(minRating)
                     .build();
-            Specification<Product> spec = ProductSpecifications.fromFilterRequest(filter)
-                    .and(ProductSpecifications.isActiveWithApprovedStore());
+            Specification<Product> spec = ProductSpecifications.fromFilterRequest(filter);
             return productRepository.count(spec);
         } catch (Exception e) {
-            log.warn("[SearchFacetsService] facet base count failed: {}", e.getMessage());
+            log.warn("[SearchFacetsService] countByRating failed: {}", e.getMessage());
             return 0L;
         }
     }

@@ -6,10 +6,13 @@ import com.b2c.flash_sale_b2c_UTC2.product.entity.Product;
 import com.b2c.flash_sale_b2c_UTC2.product.entity.ProductVariant;
 import com.b2c.flash_sale_b2c_UTC2.review.entity.ProductReview;
 import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Spring Data JPA Specification builders for Product filters.
@@ -42,6 +45,39 @@ public class ProductSpecifications {
             }
             Join<Object, Object> category = root.join("category");
             return cb.equal(category.get("id"), categoryId);
+        };
+    }
+
+    /**
+     * Filter by category slug or id list.
+     */
+    public static Specification<Product> categoryIn(List<String> categories) {
+        return (root, query, cb) -> {
+            if (categories == null || categories.isEmpty()) {
+                return cb.conjunction();
+            }
+            Join<Object, Object> category = root.join("category");
+            List<String> slugs = new ArrayList<>();
+            List<Integer> ids = new ArrayList<>();
+            for (String c : categories) {
+                if (c == null || c.isBlank()) continue;
+                try {
+                    ids.add(Integer.parseInt(c.trim()));
+                } catch (NumberFormatException ignored) {
+                    slugs.add(c.trim());
+                }
+            }
+            List<Predicate> predicates = new ArrayList<>();
+            if (!slugs.isEmpty()) {
+                predicates.add(category.get("slug").in(slugs));
+            }
+            if (!ids.isEmpty()) {
+                predicates.add(category.get("id").in(ids));
+            }
+            if (predicates.isEmpty()) {
+                return cb.conjunction();
+            }
+            return predicates.size() == 1 ? predicates.get(0) : cb.or(predicates.toArray(new Predicate[0]));
         };
     }
 
@@ -101,6 +137,36 @@ public class ProductSpecifications {
                     cb.equal(v.get("status"), "ACTIVE"),
                     cb.lessThanOrEqualTo(v.get("originalPrice"), maxPrice)
             ));
+            return cb.exists(sq);
+        };
+    }
+
+    /**
+     * Filter: at least one ACTIVE variant has price between minPrice and maxPrice.
+     * Uses a single unified EXISTS subquery to prevent false positives when one
+     * variant satisfies minPrice and another variant satisfies maxPrice.
+     */
+    public static Specification<Product> hasVariantWithPriceBetween(BigDecimal minPrice, BigDecimal maxPrice) {
+        return (root, query, cb) -> {
+            boolean hasMin = minPrice != null && minPrice.compareTo(BigDecimal.ZERO) >= 0;
+            boolean hasMax = maxPrice != null && maxPrice.compareTo(BigDecimal.ZERO) >= 0;
+            if (!hasMin && !hasMax) {
+                return cb.conjunction();
+            }
+            Subquery<Long> sq = query.subquery(Long.class);
+            var v = sq.from(ProductVariant.class);
+            sq.select(v.get("id"));
+
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.equal(v.get("product"), root));
+            predicates.add(cb.equal(v.get("status"), "ACTIVE"));
+            if (hasMin) {
+                predicates.add(cb.greaterThanOrEqualTo(v.get("originalPrice"), minPrice));
+            }
+            if (hasMax) {
+                predicates.add(cb.lessThanOrEqualTo(v.get("originalPrice"), maxPrice));
+            }
+            sq.where(predicates.toArray(new Predicate[0]));
             return cb.exists(sq);
         };
     }
@@ -184,14 +250,45 @@ public class ProductSpecifications {
     }
 
     /**
+     * Sắp xếp theo giá biến thể thực tế (dành cho DB fallback khi sort theo price_asc hoặc price_desc).
+     */
+    public static Specification<Product> withSort(String sortKey) {
+        return (root, query, cb) -> {
+            if (sortKey == null || query.getResultType() != Product.class) {
+                return cb.conjunction();
+            }
+            if ("price_asc".equals(sortKey)) {
+                Subquery<BigDecimal> minPriceSub = query.subquery(BigDecimal.class);
+                var vMin = minPriceSub.from(ProductVariant.class);
+                minPriceSub.select(cb.min(vMin.get("originalPrice")));
+                minPriceSub.where(cb.and(
+                        cb.equal(vMin.get("product"), root),
+                        cb.equal(vMin.get("status"), "ACTIVE")
+                ));
+                query.orderBy(cb.asc(minPriceSub), cb.asc(root.get("id")));
+            } else if ("price_desc".equals(sortKey)) {
+                Subquery<BigDecimal> minPriceSub = query.subquery(BigDecimal.class);
+                var vMin = minPriceSub.from(ProductVariant.class);
+                minPriceSub.select(cb.min(vMin.get("originalPrice")));
+                minPriceSub.where(cb.and(
+                        cb.equal(vMin.get("product"), root),
+                        cb.equal(vMin.get("status"), "ACTIVE")
+                ));
+                query.orderBy(cb.desc(minPriceSub), cb.asc(root.get("id")));
+            }
+            return cb.conjunction();
+        };
+    }
+
+    /**
      * Build combined Specification from ProductFilterRequest.
      */
     public static Specification<Product> fromFilterRequest(ProductFilterRequest filter) {
         Specification<Product> spec = Specification.where(isActiveWithApprovedStore())
                 .and(categoryEquals(filter.getCategoryId()))
+                .and(categoryIn(filter.getCategories()))
                 .and(nameContains(filter.getKeyword()))
-                .and(hasVariantWithPriceGte(filter.getMinPrice()))
-                .and(hasVariantWithPriceLte(filter.getMaxPrice()))
+                .and(hasVariantWithPriceBetween(filter.getMinPrice(), filter.getMaxPrice()))
                 .and(soldCountGte(filter.getMinSold()))
                 .and(ratingAverageGte(filter.getRating()));
 

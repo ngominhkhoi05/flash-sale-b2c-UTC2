@@ -259,5 +259,18 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
             Pageable pageable
     );
 
+    @Query(value = """
+        SELECT c.id, c.name, c.slug, count(p.id)
+        FROM Product p
+        JOIN p.category c
+        JOIN p.store s
+        WHERE p.status = 'ACTIVE'
+        AND s.status = 'APPROVED'
+        AND (:keyword IS NULL OR :keyword = '' OR LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%')))
+        GROUP BY c.id, c.name, c.slug
+        ORDER BY count(p.id) DESC
+    """)
+    List<Object[]> countProductsByCategoryWithKeyword(@Param("keyword") String keyword);
+
     boolean existsByCategoryId(Integer categoryId);
 }

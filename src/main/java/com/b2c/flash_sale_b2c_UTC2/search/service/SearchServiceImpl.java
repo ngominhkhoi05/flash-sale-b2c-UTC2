@@ -64,12 +64,15 @@ public class SearchServiceImpl implements SearchService {
     private final ProductVariantRepository productVariantRepository;
     private final ImageService imageService;
     private final SearchFacetsService searchFacetsService;
+    private final com.b2c.flash_sale_b2c_UTC2.product.repository.CategoryRepository categoryRepository;
 
     @Override
     public SearchResponse search(SearchRequest request, String cursorToken) {
-        int size = properties.getSearch().getPageSize() > 0
-                ? properties.getSearch().getPageSize()
-                : DEFAULT_PAGE_SIZE;
+        int size = request.getSize() != null && request.getSize() > 0
+                ? request.getSize()
+                : (properties.getSearch().getPageSize() > 0
+                        ? properties.getSearch().getPageSize()
+                        : DEFAULT_PAGE_SIZE);
         String sortKey = request.getSort() == null ? "relevance" : request.getSort().getValue();
         String fingerprint = buildFingerprint(request, sortKey);
 
@@ -82,6 +85,16 @@ public class SearchServiceImpl implements SearchService {
         if (cursor != null && !sortKey.equals(cursor.sortKey())) {
             log.info("[SearchServiceImpl] cursor sort mismatch - restarting from first page");
             cursor = null;
+        }
+
+        if (cursor == null && request.getPage() != null && request.getPage() >= 0) {
+            cursor = cursorCodec.newCursor(
+                    SearchCursor.CursorMode.DB_OFFSET,
+                    null,
+                    List.of(),
+                    request.getPage() * size,
+                    sortKey,
+                    fingerprint);
         }
 
         try {
@@ -100,9 +113,18 @@ public class SearchServiceImpl implements SearchService {
                                                int size,
                                                String sortKey,
                                                String fingerprint) {
+        List<Integer> categoryIds = List.of();
+        if (request.getSubcategories() != null && !request.getSubcategories().isEmpty()) {
+            categoryIds = categoryRepository.findAll().stream()
+                    .filter(c -> request.getSubcategories().contains(c.getSlug())
+                            || request.getSubcategories().contains(String.valueOf(c.getId())))
+                    .map(com.b2c.flash_sale_b2c_UTC2.product.entity.Category::getId)
+                    .toList();
+        }
+
         SearchQuerySpec spec = new SearchQuerySpec(
                 normalizeKeyword(request.getQ()),
-                List.of(),
+                categoryIds,
                 request.getPriceMin(),
                 request.getPriceMax(),
                 request.getRating(),
@@ -140,10 +162,16 @@ public class SearchServiceImpl implements SearchService {
             nextCursor = cursorCodec.encode(payload);
         }
 
+        int pageNumber = request.getPage() != null
+                ? request.getPage()
+                : (cursor != null && size > 0 ? cursor.offset() / size : 0);
+
         return SearchResponse.builder()
                 .items(items)
                 .total(result.totalHits())
                 .size(size)
+                .page(pageNumber)
+                .pageSize(size)
                 .nextCursor(nextCursor)
                 .hasMore(hasMore)
                 .totalIsExact(totalIsExact)
@@ -164,7 +192,8 @@ public class SearchServiceImpl implements SearchService {
 
         Pageable pageable = PageRequest.of(offset / size, size, buildDbSort(sortKey));
         Specification<Product> spec = ProductSpecifications.fromFilterRequest(buildFilter(request))
-                .and(ProductSpecifications.isActiveWithApprovedStore());
+                .and(ProductSpecifications.isActiveWithApprovedStore())
+                .and(ProductSpecifications.withSort(sortKey));
 
         List<Product> products = productRepository.findAll(spec, pageable).getContent();
         List<Long> ids = products.stream().map(Product::getId).toList();
@@ -189,10 +218,16 @@ public class SearchServiceImpl implements SearchService {
 
         long total = countForFacets(request);
 
+        int pageNumber = request.getPage() != null
+                ? request.getPage()
+                : (cursor != null && size > 0 ? cursor.offset() / size : 0);
+
         return SearchResponse.builder()
                 .items(items)
                 .total(total)
                 .size(size)
+                .page(pageNumber)
+                .pageSize(size)
                 .nextCursor(nextCursor)
                 .hasMore(hasMore)
                 .totalIsExact(true)
@@ -249,6 +284,7 @@ public class SearchServiceImpl implements SearchService {
     private ProductFilterRequest buildFilter(SearchRequest req) {
         ProductFilterRequest.ProductFilterRequestBuilder builder = ProductFilterRequest.builder()
                 .keyword(req.getQ())
+                .categories(req.getSubcategories())
                 .minPrice(req.getPriceMin())
                 .maxPrice(req.getPriceMax())
                 .rating(req.getRating());
@@ -339,8 +375,7 @@ public class SearchServiceImpl implements SearchService {
         return switch (sortKey) {
             case "newest" -> Sort.by(Sort.Order.desc("createdAt"));
             case "best_selling" -> Sort.by(Sort.Order.desc("totalSold"));
-            case "price_asc" -> Sort.by(Sort.Order.asc("id"));
-            case "price_desc" -> Sort.by(Sort.Order.desc("id"));
+            case "price_asc", "price_desc" -> Sort.unsorted();
             default -> Sort.by(Sort.Order.desc("createdAt"));
         };
     }

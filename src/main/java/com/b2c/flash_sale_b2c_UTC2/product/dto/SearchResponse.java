@@ -44,6 +44,12 @@ public class SearchResponse {
     /** Số item tối đa mỗi trang. */
     private int size;
 
+    /** Số trang hiện tại (0-based, phục vụ FE page-based pagination). */
+    private Integer page;
+
+    /** Kích thước trang (phục vụ FE page-based pagination). */
+    private Integer pageSize;
+
     /**
      * Cursor opaque cho trang tiếp theo — {@code null} nghĩa là đã hết kết quả.
      */

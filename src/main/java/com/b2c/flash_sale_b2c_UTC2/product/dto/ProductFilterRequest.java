@@ -17,6 +17,8 @@ import java.math.BigDecimal;
 public class ProductFilterRequest {
 
     private Integer categoryId;
+    /** Danh sách category slug hoặc id để lọc nhiều danh mục cùng lúc. */
+    private java.util.List<String> categories;
     private String keyword;
     private BigDecimal minPrice;
     private BigDecimal maxPrice;
