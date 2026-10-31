@@ -196,7 +196,6 @@ class FlashSaleItemServiceTest {
     @DisplayName("batchApproveItems: admin duyet danh sach item thanh cong")
     void batchApproveItems_Success() {
         when(itemRepository.findById(1L)).thenReturn(java.util.Optional.of(item));
-        when(variantRepository.deductStockQuantityConditionally(1000L, 10)).thenReturn(1);
         when(itemRepository.save(org.mockito.ArgumentMatchers.any())).thenReturn(item);
         when(itemMapper.toResponse(org.mockito.ArgumentMatchers.any())).thenReturn(
                 com.b2c.flash_sale_b2c_UTC2.flashsale.dto.FlashSaleItemResponse.builder()
@@ -218,7 +217,6 @@ class FlashSaleItemServiceTest {
     @DisplayName("batchApproveItems: xu ly lo chua item hop le va item khong hop le (best-effort)")
     void batchApproveItems_PartialSuccessAndFailedReasons() {
         when(itemRepository.findById(1L)).thenReturn(java.util.Optional.of(item));
-        when(variantRepository.deductStockQuantityConditionally(1000L, 10)).thenReturn(1);
         when(itemRepository.save(org.mockito.ArgumentMatchers.any())).thenReturn(item);
         when(itemMapper.toResponse(org.mockito.ArgumentMatchers.any())).thenReturn(
                 com.b2c.flash_sale_b2c_UTC2.flashsale.dto.FlashSaleItemResponse.builder()
