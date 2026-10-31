@@ -84,6 +84,8 @@ class ProductSearchCursorContractTest {
                 .items(List.of(item))
                 .total(120)
                 .size(24)
+                .page(0)
+                .pageSize(20)
                 .nextCursor("payload.signature")
                 .hasMore(true)
                 .totalIsExact(true)
@@ -102,9 +104,24 @@ class ProductSearchCursorContractTest {
                 .andExpect(jsonPath("$.data.nextCursor").value("payload.signature"))
                 .andExpect(jsonPath("$.data.hasMore").value(true))
                 .andExpect(jsonPath("$.data.totalIsExact").value(true))
-                // Contract m뿯ẽi b뿯ẽ page/pageSize -> kh뿯½ng đ뿯ƽ뿯ẽc xu뿯ẽt hi뿯ẽn.
-                .andExpect(jsonPath("$.data.page").doesNotExist())
-                .andExpect(jsonPath("$.data.pageSize").doesNotExist());
+                .andExpect(jsonPath("$.data.page").value(0))
+                .andExpect(jsonPath("$.data.pageSize").value(20));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/products/search?page=1&size=20 -> forward page va size xuong SearchService")
+    void searchProducts_ShouldForwardPageAndSizeToService() throws Exception {
+        ArgumentCaptor<SearchRequest> captor = ArgumentCaptor.forClass(SearchRequest.class);
+        when(searchService.search(captor.capture(), isNull()))
+                .thenReturn(SearchResponse.builder().build());
+
+        mockMvc.perform(get("/api/v1/products/search")
+                        .param("page", "1")
+                        .param("size", "20"))
+                .andExpect(status().isOk());
+
+        assertEquals(1, captor.getValue().getPage());
+        assertEquals(20, captor.getValue().getSize());
     }
 
     @Test

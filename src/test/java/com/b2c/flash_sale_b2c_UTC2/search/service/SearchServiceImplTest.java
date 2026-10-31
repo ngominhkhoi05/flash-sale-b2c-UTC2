@@ -78,6 +78,9 @@ class SearchServiceImplTest {
     @Mock
     private SearchFacetsService searchFacetsService;
 
+    @Mock
+    private com.b2c.flash_sale_b2c_UTC2.product.repository.CategoryRepository categoryRepository;
+
     private CursorCodec cursorCodec;
     private SearchServiceImpl searchService;
 
@@ -96,7 +99,8 @@ class SearchServiceImplTest {
                 productRepository,
                 productVariantRepository,
                 imageService,
-                searchFacetsService);
+                searchFacetsService,
+                categoryRepository);
 
         when(productVariantRepository.aggregatePriceAndStockByProductIds(anyList()))
                 .thenReturn(List.of());

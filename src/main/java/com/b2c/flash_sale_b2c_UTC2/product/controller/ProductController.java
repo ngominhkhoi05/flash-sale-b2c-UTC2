@@ -146,6 +146,12 @@ public class ProductController {
                     schema = @Schema(implementation = SearchSortKey.class))
             @RequestParam(value = "sort", required = false) String sort,
 
+            @Parameter(description = "Số trang (0-based, tuỳ chọn khi dùng page-based pagination)")
+            @RequestParam(value = "page", required = false) Integer page,
+
+            @Parameter(description = "Số lượng sản phẩm mỗi trang (tuỳ chọn khi dùng page-based pagination)")
+            @RequestParam(value = "size", required = false) Integer size,
+
             @Parameter(description = "Cursor opaque cho trang tiếp theo (lấy từ nextCursor của response trước)")
             @RequestParam(value = "cursor", required = false) String cursor
     ) {
@@ -167,6 +173,8 @@ public class ProductController {
                 .priceMax(priceMax)
                 .rating(rating)
                 .sort(SearchSortKey.fromValue(sort))
+                .page(page)
+                .size(size)
                 .build();
 
         SearchResponse response = searchService.search(req, cursor);

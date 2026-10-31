@@ -44,4 +44,10 @@ public class SearchRequest {
     private Integer rating;
 
     private SearchSortKey sort;
+
+    /** Phân trang theo trang (0-based, tuỳ chọn khi không dùng cursor). */
+    private Integer page;
+
+    /** Kích thước trang (tuỳ chọn khi không dùng cursor). */
+    private Integer size;
 }

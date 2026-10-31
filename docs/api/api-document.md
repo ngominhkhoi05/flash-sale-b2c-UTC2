@@ -1255,6 +1255,7 @@ Chặn nếu ngành hàng đang có ngành hàng con.
 |---|---|---|---|
 | `GET` | `/api/v1/products/recommended` | Public | SP đề xuất (For You / Best Seller / Hot Deal) cho trang chủ |
 | `GET` | `/api/v1/products` | Public | Tìm kiếm, lọc, phân trang |
+| `GET` | `/api/v1/products/search` | Public | Tìm kiếm sản phẩm toàn sàn kèm bộ lọc facets và phân trang kép |
 | `GET` | `/api/v1/products/{id}` | Public | Chi tiết sản phẩm + SKU |
 
 ### 13.1 `GET /api/v1/products/recommended`
@@ -1475,6 +1476,71 @@ Lấy danh sách sản phẩm đề xuất theo 3 tab cho trang chủ (For You /
 > **Public API** — Tra cứu chi tiết sản phẩm theo SEO `slug`. Hệ thống hỗ trợ cả dạng Path Variable `/slug/{slug}` lẫn Query Param `?slug=`.
 
 **Response:** `ProductDetailResponse` (bao gồm đầy đủ các trường `specs`, `features`, `commitments`, `sizeChart`, `shipping`, `storeProfile`, `vouchers`, `descriptionRich`, `ratingDistribution`).
+
+---
+
+### 13.5 `GET /api/v1/products/search`
+
+> **Public API** — Tìm kiếm sản phẩm toàn sàn dành cho storefront `/search?q=...`. Hỗ trợ tìm kiếm theo từ khóa (OpenSearch + PostgreSQL fallback), bộ lọc đa danh mục, khoảng giá, mức đánh giá sao, và phân trang kép (Cursor-based kết hợp Page-based).
+
+**Query params:**
+
+| Tham số | Kiểu dữ liệu | Bắt buộc | Mô tả |
+|---|---|---|---|
+| `q` | `String` | Không | Từ khóa tìm kiếm theo tên sản phẩm |
+| `subcategory` | `List<String>` | Không | Danh sách slug hoặc ID danh mục (hỗ trợ multi-select) |
+| `priceMin` | `BigDecimal` | Không | Giá tối thiểu (VND) |
+| `priceMax` | `BigDecimal` | Không | Giá tối đa (VND) |
+| `rating` | `Integer` | Không | Đánh giá tối thiểu (3, 4, 5) |
+| `sort` | `String` | Không | `relevance` (mặc định), `newest`, `best_selling`, `price_asc`, `price_desc` |
+| `page` | `Integer` | Không | Số trang (0-based) dành cho phân trang số |
+| `size` | `Integer` | Không | Kích thước trang (mặc định 24/20) |
+| `cursor` | `String` | Không | Token opaque phân trang cursor |
+
+**Response:** `SearchResponse`
+
+```json
+{
+  "success": true,
+  "message": "Tìm kiếm sản phẩm thành công",
+  "data": {
+    "items": [
+      {
+        "id": 101,
+        "storeId": 1,
+        "storeName": "Sony Audio Official Store",
+        "name": "Tai nghe Bluetooth Sony WF-C500 Chính Hãng",
+        "imageUrl": "https://...",
+        "minPrice": 990000,
+        "maxPrice": 1520000,
+        "totalStock": 100,
+        "totalSold": 1800,
+        "label": "freeship"
+      }
+    ],
+    "total": 120,
+    "size": 24,
+    "page": 0,
+    "pageSize": 24,
+    "nextCursor": "eyJ2IjoxLCJtb2RlIjoiT1NfUElUIn0...",
+    "hasMore": true,
+    "totalIsExact": true,
+    "facets": {
+      "subcategories": [
+        { "key": "thoi-trang-nam", "label": "Thời Trang Nam", "count": 42 },
+        { "key": "dien-thoai", "label": "Điện Thoại & Phụ Kiện", "count": 28 }
+      ],
+      "ratings": [
+        { "key": "5", "label": "5 sao", "count": 15 },
+        { "key": "4", "label": "4 sao trở lên", "count": 68 },
+        { "key": "3", "label": "3 sao trở lên", "count": 110 }
+      ],
+      "cities": [],
+      "services": []
+    }
+  }
+}
+```
 
 ---
 
