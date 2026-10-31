@@ -26,6 +26,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/seller/flash-sales")
 @RequiredArgsConstructor
@@ -45,13 +47,23 @@ public class SellerFlashSaleController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 
+    @PostMapping("/items/batch")
+    @Operation(summary = "Đăng ký hàng loạt biến thể Flash Sale", description = "Seller nộp đơn đăng ký đồng thời nhiều SKU vào phiên Flash Sale siêu tốc")
+    public ResponseEntity<ApiResponse<List<FlashSaleItemResponse>>> registerItemsBatch(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @Valid @RequestBody List<RegisterFlashSaleItemRequest> requests
+    ) {
+        List<FlashSaleItemResponse> response = itemService.registerItemsBatch(userDetails.getUser().getId(), requests);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+    }
+
     @GetMapping("/items")
     @Operation(summary = "Danh sách sản phẩm Flash Sale của shop", description = "Lấy danh sách các biến thể SKU đã nộp đơn đăng ký Flash Sale")
     public ResponseEntity<ApiResponse<PageResponse<FlashSaleItemResponse>>> getMyItems(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @RequestParam(required = false) Long slotId,
             @RequestParam(required = false) String status,
-            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+            @PageableDefault(size = 1000, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         PageResponse<FlashSaleItemResponse> response = itemService.getSellerItems(
                 userDetails.getUser().getId(),
