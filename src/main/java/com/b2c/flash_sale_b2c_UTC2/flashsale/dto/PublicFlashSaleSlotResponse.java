@@ -20,6 +20,8 @@ public class PublicFlashSaleSlotResponse {
     private Instant endTime;
     private Integer reservationTtlSeconds;
     private String status;
+    private Long participatingStoresCount;
+    private Integer totalItemsCount;
     private List<PublicFlashSaleItemResponse> items;
 
     @Data

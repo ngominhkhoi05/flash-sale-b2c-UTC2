@@ -33,6 +33,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -224,12 +225,25 @@ public class ReviewServiceImpl implements ReviewService {
 
         List<ProductReview> reviews = reviewPage.getContent();
         Map<Long, List<Image>> reviewImagesMap;
+        Map<Long, String> productCoverMap;
         if (reviews.isEmpty()) {
             reviewImagesMap = Collections.emptyMap();
+            productCoverMap = Collections.emptyMap();
         } else {
             List<Long> reviewIds = reviews.stream().map(ProductReview::getId).toList();
             List<Image> images = imageRepository.findByOwnerTypeAndOwnerIdIn(ImageOwnerType.REVIEW, reviewIds);
             reviewImagesMap = images.stream().collect(Collectors.groupingBy(Image::getOwnerId));
+
+            List<Long> productIds = reviews.stream()
+                    .map(r -> r.getProduct() != null ? r.getProduct().getId() : null)
+                    .filter(Objects::nonNull).distinct().toList();
+            if (productIds.isEmpty()) {
+                productCoverMap = Collections.emptyMap();
+            } else {
+                List<Image> pImages = imageRepository.findByOwnerTypeAndOwnerIdIn(ImageOwnerType.PRODUCT, productIds);
+                productCoverMap = pImages.stream()
+                        .collect(Collectors.toMap(Image::getOwnerId, Image::getUrl, (existing, replace) -> existing));
+            }
         }
 
         List<SellerReviewItemResponse> items = reviews.stream().map(r -> {
@@ -249,7 +263,7 @@ public class ReviewServiceImpl implements ReviewService {
                     .id(r.getId())
                     .productId(r.getProduct() != null ? r.getProduct().getId() : null)
                     .productName(r.getProduct() != null ? r.getProduct().getName() : "")
-                    .productImage(null)
+                    .productImage(r.getProduct() != null ? productCoverMap.get(r.getProduct().getId()) : null)
                     .variantSku(r.getOrderItem() != null && r.getOrderItem().getVariant() != null
                             ? r.getOrderItem().getVariant().getSku() : null)
                     .variantName(r.getOrderItem() != null && r.getOrderItem().getVariant() != null

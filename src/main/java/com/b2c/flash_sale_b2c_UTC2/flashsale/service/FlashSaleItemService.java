@@ -40,6 +40,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -90,10 +91,6 @@ public class FlashSaleItemService {
             throw new BusinessException(FlashSaleErrorCode.NOT_STORE_OWNER);
         }
 
-        if (itemRepository.existsBySlotIdAndVariantId(slot.getId(), variant.getId())) {
-            throw new BusinessException(FlashSaleErrorCode.ITEM_ALREADY_REGISTERED);
-        }
-
         if (request.getFlashSalePrice().compareTo(BigDecimal.ZERO) <= 0 ||
                 request.getFlashSalePrice().compareTo(variant.getOriginalPrice()) >= 0) {
             throw new BusinessException(FlashSaleErrorCode.INVALID_FLASH_SALE_PRICE);
@@ -107,22 +104,41 @@ public class FlashSaleItemService {
             throw new BusinessException(FlashSaleErrorCode.INVALID_PURCHASE_LIMIT);
         }
 
-        FlashSaleItem item = FlashSaleItem.builder()
-                .slot(slot)
-                .variant(variant)
-                .flashSalePrice(request.getFlashSalePrice())
-                .allocatedStock(request.getAllocatedStock())
-                .availableStock(request.getAllocatedStock())
-                .userPurchaseLimit(request.getUserPurchaseLimit() != null ? request.getUserPurchaseLimit() : 1)
-                .commissionRateOverride(request.getCommissionRateOverride())
-                .status("PENDING_APPROVAL")
-                .createdAt(Instant.now())
-                .build();
+        Optional<FlashSaleItem> existingOpt = itemRepository.findBySlotIdAndVariantId(slot.getId(), variant.getId());
+        FlashSaleItem item;
+        if (existingOpt.isPresent()) {
+            FlashSaleItem existing = existingOpt.get();
+            // Nếu biến thể đang chờ duyệt hoặc đã duyệt thì không cho đăng ký trùng
+            if ("PENDING_APPROVAL".equals(existing.getStatus()) || "APPROVED".equals(existing.getStatus())) {
+                throw new BusinessException(FlashSaleErrorCode.ITEM_ALREADY_REGISTERED);
+            }
+            // Nếu trước đó bị từ chối (REJECTED), cho phép cập nhật lại cấu hình và nộp lại
+            existing.setFlashSalePrice(request.getFlashSalePrice());
+            existing.setAllocatedStock(request.getAllocatedStock());
+            existing.setAvailableStock(request.getAllocatedStock());
+            existing.setUserPurchaseLimit(request.getUserPurchaseLimit() != null ? request.getUserPurchaseLimit() : 1);
+            existing.setCommissionRateOverride(request.getCommissionRateOverride());
+            existing.setStatus("PENDING_APPROVAL");
+            existing.setCreatedAt(Instant.now());
+            item = existing;
+        } else {
+            item = FlashSaleItem.builder()
+                    .slot(slot)
+                    .variant(variant)
+                    .flashSalePrice(request.getFlashSalePrice())
+                    .allocatedStock(request.getAllocatedStock())
+                    .availableStock(request.getAllocatedStock())
+                    .userPurchaseLimit(request.getUserPurchaseLimit() != null ? request.getUserPurchaseLimit() : 1)
+                    .commissionRateOverride(request.getCommissionRateOverride())
+                    .status("PENDING_APPROVAL")
+                    .createdAt(Instant.now())
+                    .build();
+        }
 
         FlashSaleItem saved = itemRepository.save(item);
         if (wsBroadcaster != null) {
             try {
-                long pendingCount = itemRepository.countByStatus("PENDING_APPROVAL");
+                long pendingCount = itemRepository.countPendingProducts();
                 String prodName = variant.getProduct() != null ? variant.getProduct().getName() : null;
                 String stName = store.getStoreName();
                 wsBroadcaster.broadcastAdminApprovalEvent("ITEM_REGISTERED", slot.getId(), saved.getId(), prodName, stName, pendingCount);
@@ -134,6 +150,18 @@ public class FlashSaleItemService {
     }
 
     @Transactional
+    public List<FlashSaleItemResponse> registerItemsBatch(Long sellerUserId, List<RegisterFlashSaleItemRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        List<FlashSaleItemResponse> responses = new ArrayList<>();
+        for (RegisterFlashSaleItemRequest req : requests) {
+            responses.add(registerItem(sellerUserId, req));
+        }
+        return responses;
+    }
+
+    @Transactional
     public FlashSaleItemResponse approveItem(Long itemId, java.math.BigDecimal commissionRateOverride) {
         FlashSaleItem item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.ITEM_NOT_FOUND));
@@ -142,12 +170,8 @@ public class FlashSaleItemService {
             throw new BusinessException(FlashSaleErrorCode.ITEM_NOT_PENDING_APPROVAL);
         }
 
-        int updated = variantRepository.deductStockQuantityConditionally(
-                item.getVariant().getId(),
-                item.getAllocatedStock()
-        );
-
-        if (updated == 0) {
+        // Không trừ tồn kho thực tế khi duyệt Flash Sale (tồn kho gốc chỉ trừ khi khách đặt mua)
+        if (item.getVariant().getStockQuantity() < item.getAllocatedStock()) {
             throw new BusinessException(FlashSaleErrorCode.INSUFFICIENT_BASE_STOCK);
         }
 
@@ -164,7 +188,7 @@ public class FlashSaleItemService {
 
         if (wsBroadcaster != null) {
             try {
-                long pendingCount = itemRepository.countByStatus("PENDING_APPROVAL");
+                long pendingCount = itemRepository.countPendingProducts();
                 wsBroadcaster.broadcastAdminApprovalEvent("ITEM_APPROVED", savedItem.getSlot().getId(), savedItem.getId(), null, null, pendingCount);
             } catch (Exception ex) {
                 log.warn("Failed to broadcast ITEM_APPROVED: {}", ex.getMessage());
@@ -239,7 +263,11 @@ public class FlashSaleItemService {
                         .build());
             }
 
+            long participatingStoresCount = itemRepository.countDistinctStoresBySlotId(slot.getId());
+
             responseList.add(PublicFlashSaleSlotResponse.builder()
+                    .participatingStoresCount(participatingStoresCount)
+                    .totalItemsCount(approvedItems.size())
                     .id(slot.getId())
                     .title(slot.getTitle())
                     .startTime(slot.getStartTime())
@@ -433,8 +461,12 @@ public class FlashSaleItemService {
         }
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public PageResponse<FlashSaleItemResponse> getSellerItems(Long sellerUserId, Long slotId, String status, Pageable pageable) {
+        try {
+            itemRepository.deletePastPendingRegistrations(Instant.now());
+        } catch (Exception ignored) {}
+
         Store store = storeRepository.findByUserId(sellerUserId)
                 .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.NOT_STORE_OWNER));
 
@@ -485,8 +517,15 @@ public class FlashSaleItemService {
         return PageResponse.of(page, dtos);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public java.util.Map<String, Long> getAdminItemCounts(Long slotId) {
+        Instant now = Instant.now();
+        try {
+            itemRepository.deletePastPendingRegistrations(now);
+        } catch (Exception e) {
+            log.warn("Lỗi dọn dẹp các đăng ký quá hạn: {}", e.getMessage());
+        }
+
         if (slotId != null) {
             slotRepository.findById(slotId)
                     .orElseThrow(() -> new BusinessException(FlashSaleErrorCode.SLOT_NOT_FOUND));
@@ -498,7 +537,7 @@ public class FlashSaleItemService {
         long rejected = 0;
         for (Object[] row : rows) {
             String status = (String) row[0];
-            Long count = (Long) row[1];
+            Long count = row[1] != null ? ((Number) row[1]).longValue() : 0L;
             if ("PENDING_APPROVAL".equalsIgnoreCase(status) || "PENDING".equalsIgnoreCase(status)) {
                 pending += (count != null ? count : 0);
             } else if ("APPROVED".equalsIgnoreCase(status)) {
@@ -527,7 +566,7 @@ public class FlashSaleItemService {
         FlashSaleItem savedItem = itemRepository.save(item);
         if (wsBroadcaster != null) {
             try {
-                long pendingCount = itemRepository.countByStatus("PENDING_APPROVAL");
+                long pendingCount = itemRepository.countPendingProducts();
                 wsBroadcaster.broadcastAdminApprovalEvent("ITEM_REJECTED", savedItem.getSlot().getId(), savedItem.getId(), null, null, pendingCount);
             } catch (Exception ex) {
                 log.warn("Failed to broadcast ITEM_REJECTED: {}", ex.getMessage());

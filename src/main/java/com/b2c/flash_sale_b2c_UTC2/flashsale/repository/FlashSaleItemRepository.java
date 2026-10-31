@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,6 +36,13 @@ public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Lo
         AND fsi.status = 'APPROVED'
     """)
     List<FlashSaleItem> findApprovedItemsWithDetailsBySlotId(@Param("slotId") Long slotId);
+
+    @Query("""
+        SELECT COUNT(DISTINCT fsi.variant.product.store.id)
+        FROM FlashSaleItem fsi
+        WHERE fsi.slot.id = :slotId
+    """)
+    long countDistinctStoresBySlotId(@Param("slotId") Long slotId);
 
     boolean existsBySlotIdAndVariantId(Long slotId, Long variantId);
 
@@ -168,10 +177,41 @@ public interface FlashSaleItemRepository extends JpaRepository<FlashSaleItem, Lo
             Pageable pageable
     );
 
+    @Modifying
+    @Transactional
     @Query("""
-        SELECT fsi.status, COUNT(fsi)
+        DELETE FROM FlashSaleItem fsi
+        WHERE fsi.status = 'PENDING_APPROVAL'
+        AND fsi.slot.id IN (
+            SELECT sl.id FROM FlashSaleSlot sl
+            WHERE sl.startTime <= :now
+               OR sl.status IN ('ACTIVE', 'ENDED', 'CLOSED')
+        )
+    """)
+    int deletePastPendingRegistrations(@Param("now") Instant now);
+
+    @Query("""
+        SELECT COUNT(DISTINCT fsi.variant.product.id)
         FROM FlashSaleItem fsi
-        WHERE (:slotId IS NULL OR fsi.slot.id = :slotId)
+        JOIN fsi.slot sl
+        WHERE fsi.status = 'PENDING_APPROVAL'
+          AND sl.startTime > CURRENT_TIMESTAMP
+          AND sl.status IN ('UPCOMING', 'REGISTRATION_OPEN')
+    """)
+    long countPendingProducts();
+
+    @Query("""
+        SELECT fsi.status, COUNT(DISTINCT fsi.variant.product.id)
+        FROM FlashSaleItem fsi
+        JOIN fsi.slot sl
+        WHERE (:slotId IS NULL OR sl.id = :slotId)
+          AND (
+            fsi.status != 'PENDING_APPROVAL'
+            OR (
+              sl.startTime > CURRENT_TIMESTAMP
+              AND sl.status IN ('UPCOMING', 'REGISTRATION_OPEN')
+            )
+          )
         GROUP BY fsi.status
     """)
     List<Object[]> countStatusBySlotId(@Param("slotId") Long slotId);
