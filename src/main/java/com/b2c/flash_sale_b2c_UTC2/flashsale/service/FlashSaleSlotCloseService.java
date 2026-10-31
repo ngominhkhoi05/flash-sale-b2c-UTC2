@@ -73,22 +73,8 @@ public class FlashSaleSlotCloseService {
         for (FlashSaleItem item : items) {
             if ("APPROVED".equals(item.getStatus())) {
                 int unsoldStock = item.getAvailableStock();
-                if (unsoldStock > 0) {
-                    variantRepository.replenishStockQuantityConditionally(
-                            item.getVariant().getId(),
-                            unsoldStock
-                    );
-                    log.info("Returned {} unsold stock to variant ID: {} from FlashSaleItem ID: {}",
-                            unsoldStock, item.getVariant().getId(), item.getId());
-                }
-
-                try {
-                    wsBroadcaster.broadcastUnsoldStockReturned(slot.getId(), item.getId(), 0);
-                } catch (Exception e) {
-                    log.warn("[WS] Failed to broadcast unsold stock returned for itemId={}: {}",
-                            item.getId(), e.getMessage());
-                }
-
+                // Khong hoan ton kho chua ban ve kho goc vi khi dang ky/duyet khong tru ton kho goc (chi tru khi ban duoc hang)
+                log.info("Closing FlashSaleItem ID: {}, unsold quota: {} (base stock was not deducted on registration)", item.getId(), unsoldStock);
                 item.setStatus("ENDED");
                 itemRepository.save(item);
 

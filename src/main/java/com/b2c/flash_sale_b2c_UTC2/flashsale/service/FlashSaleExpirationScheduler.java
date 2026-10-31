@@ -43,6 +43,9 @@ public class FlashSaleExpirationScheduler {
     @Autowired(required = false)
     private FlashSaleItemService itemService;
 
+    @Autowired(required = false)
+    private com.b2c.flash_sale_b2c_UTC2.product.repository.ProductVariantRepository productVariantRepository;
+
     /**
      * Job 1: Quét các đơn Flash Sale PENDING_PAYMENT hết hạn giữ chỗ (quá 300s).
      * Chạy định kỳ mỗi 15 giây.
@@ -86,6 +89,13 @@ public class FlashSaleExpirationScheduler {
                 ref.orderId(), ref.flashSaleItemId(), ref.quantity());
 
         itemRepository.replenishAvailableStockConditionally(ref.flashSaleItemId(), ref.quantity());
+
+        if (productVariantRepository != null) {
+            FlashSaleItem fsi = itemRepository.findById(ref.flashSaleItemId()).orElse(null);
+            if (fsi != null && fsi.getVariant() != null) {
+                productVariantRepository.replenishStockQuantityConditionally(fsi.getVariant().getId(), ref.quantity());
+            }
+        }
 
         try {
             FlashSaleItem refreshed = itemRepository.findById(ref.flashSaleItemId()).orElse(null);
@@ -185,5 +195,26 @@ public class FlashSaleExpirationScheduler {
             log.error("Error in processEndedSlotsAndReturnUnsoldStock scheduled task: {}", e.getMessage(), e);
         }
     }
+    /**
+     * Job 3: Tự động xóa các đăng ký Flash Sale chưa duyệt (PENDING_APPROVAL)
+     * khi slot đã bắt đầu hoặc kết thúc, tồn kho gốc không bị ảnh hưởng.
+     * Chạy định kỳ mỗi 10 giây.
+     */
+    @Scheduled(fixedDelay = 10000)
+    @Transactional
+    public void cleanupExpiredPendingRegistrations() {
+        try {
+            Instant now = Instant.now();
+            int deleted = itemRepository.deletePastPendingRegistrations(now);
+            if (deleted > 0) {
+                log.info("Tự động xóa {} đăng ký Flash Sale chưa duyệt của các slot đã quá hạn", deleted);
+                if (wsBroadcaster != null) {
+                    long pendingCount = itemRepository.countPendingProducts();
+                    wsBroadcaster.broadcastAdminApprovalEvent("ITEM_CLEANED", null, null, null, null, pendingCount);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Lỗi khi tự động dọn dẹp đăng ký quá hạn: {}", e.getMessage());
+        }
+    }
 }
-

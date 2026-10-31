@@ -112,6 +112,15 @@ public class RealFlashSaleOrderPort implements FlashSaleOrderPort {
 
         orderItemRepository.save(orderItem);
 
+        // Trừ tồn kho thực tế khi đã bán (đã tạo đơn mua hàng)
+        int updatedStock = productVariantRepository.deductStockQuantityConditionally(cmd.variantId(), cmd.quantity());
+        if (updatedStock == 0) {
+            log.warn("[RealFlashSaleOrderPort] Base stock insufficient for variant ID: {}", cmd.variantId());
+            throw new com.b2c.flash_sale_b2c_UTC2.common.exception.BusinessException(
+                    com.b2c.flash_sale_b2c_UTC2.order.exception.OrderErrorCode.INSUFFICIENT_VARIANT_STOCK
+            );
+        }
+
         log.info("[RealFlashSaleOrderPort] Đã tạo đơn giữ chỗ thực tế trong DB: orderId={}, orderCode={}", order.getId(), order.getOrderCode());
         return new OrderRef(order.getId(), order.getOrderCode());
     }
